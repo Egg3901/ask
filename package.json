@@ -1,0 +1,16 @@
+{
+  "name": "lakeside-ask-site",
+  "version": "1.0.0",
+  "description": "Grounded Q&A over a live game's source, docs, and state.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0"
+  }
+}

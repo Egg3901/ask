@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Runtime data (contains player questions / PII)
+ask.db
+ask.db-shm
+ask.db-wal
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Retrieval index build artifacts
+index/
+*.index
+
+# Dependencies
+node_modules/
+
+# Logs / OS cruft
+*.log
+.DS_Store

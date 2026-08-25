@@ -1,0 +1,408 @@
+// Per-user persistence: quota accounting, conversation history, answer cache.
+// Keyed by "<provider>:<id>" so a Discord and an AHD login are never conflated
+// (the broker deliberately refuses to merge them by email).
+const path = require("node:path");
+const Database = require("better-sqlite3");
+
+const db = new Database(process.env.ASK_DB_PATH || path.join(__dirname, "ask.db"));
+db.pragma("journal_mode = WAL");
+db.exec(`
+CREATE TABLE IF NOT EXISTS asks(
+  id INTEGER PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  username TEXT,
+  conv_id TEXT NOT NULL,
+  question TEXT NOT NULL,
+  answer TEXT,
+  areas TEXT,
+  citations TEXT,
+  used_mcp INTEGER DEFAULT 0,
+  cached INTEGER DEFAULT 0,
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_asks_user ON asks(user_key, ts);
+CREATE INDEX IF NOT EXISTS idx_asks_conv ON asks(conv_id, ts);
+
+CREATE TABLE IF NOT EXISTS convs(
+  id TEXT PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  title TEXT,
+  created INTEGER NOT NULL,
+  updated INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_convs_user ON convs(user_key, updated DESC);
+
+CREATE TABLE IF NOT EXISTS user_profiles(
+  user_key TEXT PRIMARY KEY,
+  username TEXT,
+  provider TEXT,
+  role TEXT,
+  tier TEXT,
+  character_name TEXT,
+  country TEXT,
+  party TEXT,
+  corporation_name TEXT,
+  corporation_role TEXT,
+  is_admin INTEGER DEFAULT 0,
+  first_seen INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS answer_cache(
+  q TEXT PRIMARY KEY, answer TEXT, areas TEXT, citations TEXT, ts INTEGER);
+
+-- Code is authoritative; the wiki and docs are written by humans and lag it.
+-- When an answer notices the two disagree, the discrepancy is recorded here so
+-- stale documentation becomes a work queue instead of an invisible failure.
+CREATE TABLE IF NOT EXISTS doc_conflicts(
+  id INTEGER PRIMARY KEY,
+  source TEXT NOT NULL,          -- 'wiki' | 'docs'
+  page TEXT,                     -- title or url of the stale page
+  claim TEXT NOT NULL,           -- what the doc says
+  actual TEXT NOT NULL,          -- what the code does
+  evidence TEXT,                 -- file path / line backing the 'actual' column
+  question TEXT,
+  user_key TEXT,
+  status TEXT DEFAULT 'open',    -- open | confirmed | dismissed | fixed
+  seen INTEGER DEFAULT 1,
+  first_ts INTEGER NOT NULL,
+  last_ts INTEGER NOT NULL,
+  UNIQUE(source, claim, actual));
+CREATE INDEX IF NOT EXISTS idx_conflicts_status ON doc_conflicts(status, last_ts DESC);
+
+-- Staff-verified corrections: the system's long-term memory. Each row is a
+-- lesson from a wrong or reported answer, embedded at insert time and injected
+-- into future prompts when a semantically similar question arrives.
+CREATE TABLE IF NOT EXISTS corrections(
+  id INTEGER PRIMARY KEY,
+  question TEXT NOT NULL,        -- the question class this lesson applies to
+  correction TEXT NOT NULL,      -- the verified truth, written for the model
+  vec BLOB,                      -- nomic embedding of the question
+  source_answer_id INTEGER,      -- the reported answer that taught the lesson
+  added_by TEXT,
+  active INTEGER DEFAULT 1,
+  created INTEGER NOT NULL);
+
+-- Generated report pages. A report is a deep, live-data answer given a
+-- standalone shareable page; the unguessable token is the permission, same
+-- model as shared conversations.
+CREATE TABLE IF NOT EXISTS reports(
+  token TEXT PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  username TEXT,
+  answer_id INTEGER,
+  title TEXT NOT NULL,
+  question TEXT NOT NULL,
+  body TEXT NOT NULL,
+  model TEXT,
+  created INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_reports_user ON reports(user_key, created DESC);
+`);
+
+// Follow-ups are half price, so the budget is spent in fractions and must be
+// summed rather than counted.
+try { db.exec("ALTER TABLE asks ADD COLUMN cost REAL DEFAULT 1.0"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN followup INTEGER DEFAULT 0"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN model TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN feedback_rating TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN feedback_reason TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN feedback_ts INTEGER"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN feedback_source TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN plan TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN validation TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN evidence TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE answer_cache ADD COLUMN model TEXT"); } catch { /* already migrated */ }
+// Every answer predating request routing was produced by the single Flash
+// model, so backfilling is factual rather than inferred.
+db.exec("UPDATE asks SET model='deepseek-v4-flash' WHERE model IS NULL");
+db.exec("UPDATE answer_cache SET model='deepseek-v4-flash' WHERE model IS NULL");
+// Sharing is opt-in per conversation: a random token, revocable, never the
+// conversation id itself (ids appear in the owner's own URLs).
+try { db.exec("ALTER TABLE convs ADD COLUMN share_token TEXT"); } catch { /* already migrated */ }
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_convs_share ON convs(share_token)"); } catch {}
+// Preserve the history that existed before profile snapshots were introduced.
+// Rich character context fills in the next time each person signs in.
+db.exec(`INSERT OR IGNORE INTO user_profiles(user_key,username,provider,first_seen,last_seen)
+  SELECT user_key,MAX(username),substr(user_key,1,instr(user_key,':')-1),MIN(ts),MAX(ts)
+  FROM asks GROUP BY user_key`);
+
+const S = {
+  insertAsk: db.prepare(`INSERT INTO asks(user_key,username,conv_id,question,answer,areas,citations,used_mcp,cached,tokens_in,tokens_out,cost,followup,model,plan,validation,evidence,ts)
+    VALUES(@user_key,@username,@conv_id,@question,@answer,@areas,@citations,@used_mcp,@cached,@tokens_in,@tokens_out,@cost,@followup,@model,@plan,@validation,@evidence,@ts)`),
+  countToday: db.prepare("SELECT COALESCE(SUM(cost),0) c FROM asks WHERE user_key=? AND ts>? AND cached=0"),
+  convTurnCount: db.prepare("SELECT COUNT(*) c FROM asks WHERE conv_id=? AND user_key=?"),
+  convHistory: db.prepare("SELECT question,answer FROM asks WHERE conv_id=? AND user_key=? ORDER BY ts DESC LIMIT ?"),
+  countMcpToday: db.prepare("SELECT COUNT(*) c FROM asks WHERE user_key=? AND ts>? AND used_mcp=1"),
+  upsertConv: db.prepare(`INSERT INTO convs(id,user_key,title,created,updated) VALUES(@id,@user_key,@title,@ts,@ts)
+    ON CONFLICT(id) DO UPDATE SET updated=@ts, title=COALESCE(convs.title,@title)`),
+  listConvs: db.prepare("SELECT id,title,created,updated FROM convs WHERE user_key=? ORDER BY updated DESC LIMIT 40"),
+  convTurns: db.prepare("SELECT id,question,answer,areas,citations,used_mcp,cached,model,plan,validation,evidence,feedback_rating,feedback_reason,feedback_ts,feedback_source,ts FROM asks WHERE conv_id=? AND user_key=? ORDER BY ts ASC LIMIT 100"),
+  deleteConv: db.prepare("DELETE FROM convs WHERE id=? AND user_key=?"),
+  deleteConvAsks: db.prepare("DELETE FROM asks WHERE conv_id=? AND user_key=?"),
+  getCache: db.prepare("SELECT answer,areas,citations,model,ts FROM answer_cache WHERE q=?"),
+  putCache: db.prepare(`INSERT INTO answer_cache(q,answer,areas,citations,model,ts) VALUES(?,?,?,?,?,?)
+    ON CONFLICT(q) DO UPDATE SET answer=excluded.answer,areas=excluded.areas,citations=excluded.citations,model=excluded.model,ts=excluded.ts`),
+  upsertProfile: db.prepare(`INSERT INTO user_profiles(user_key,username,provider,role,tier,character_name,country,party,corporation_name,corporation_role,is_admin,first_seen,last_seen)
+    VALUES(@user_key,@username,@provider,@role,@tier,@character_name,@country,@party,@corporation_name,@corporation_role,@is_admin,@ts,@ts)
+    ON CONFLICT(user_key) DO UPDATE SET username=excluded.username,provider=excluded.provider,role=excluded.role,tier=excluded.tier,
+      character_name=excluded.character_name,country=excluded.country,party=excluded.party,corporation_name=excluded.corporation_name,
+      corporation_role=excluded.corporation_role,is_admin=excluded.is_admin,last_seen=excluded.last_seen`),
+  adminUserList: db.prepare(`SELECT p.*, COUNT(a.id) question_count,
+      COALESCE(SUM(a.used_mcp),0) live_count,
+      COALESCE(SUM(CASE WHEN a.feedback_rating='down' THEN 1 ELSE 0 END),0) report_count,
+      COALESCE(SUM(a.tokens_in),0) tokens_in,
+      COALESCE(SUM(a.tokens_out),0) tokens_out,
+      COALESCE(SUM(CASE WHEN a.cached=1 THEN 0
+        WHEN a.model LIKE '%:free' OR a.model LIKE 'stealth/%' THEN 0
+        WHEN lower(a.model) LIKE '%pro%' THEN
+        (a.tokens_in*1.32+a.tokens_out*3.96)/1000000.0 ELSE
+        (a.tokens_in*0.44+a.tokens_out*1.32)/1000000.0 END),0) estimated_cost,
+      MIN(a.ts) first_question, MAX(a.ts) last_question
+    FROM user_profiles p LEFT JOIN asks a ON a.user_key=p.user_key
+    GROUP BY p.user_key ORDER BY COALESCE(MAX(a.ts),p.last_seen) DESC`),
+  adminProfile: db.prepare("SELECT * FROM user_profiles WHERE user_key=?"),
+  adminQuestions: db.prepare(`SELECT id,conv_id,question,answer,used_mcp,cached,tokens_in,tokens_out,model,plan,validation,evidence,feedback_rating,feedback_reason,feedback_ts,feedback_source,ts
+    FROM asks WHERE user_key=? ORDER BY ts DESC LIMIT 500`),
+  adminReports: db.prepare(`SELECT a.id,a.user_key,a.question,a.answer,a.used_mcp,a.model,a.plan,a.validation,a.evidence,a.feedback_reason,a.feedback_source,a.feedback_ts,a.ts,p.username
+    FROM asks a LEFT JOIN user_profiles p ON p.user_key=a.user_key
+    WHERE a.feedback_rating='down' ORDER BY COALESCE(a.feedback_ts,a.ts) DESC LIMIT ?`),
+  feedbackByOwner: db.prepare(`UPDATE asks SET feedback_rating=?,feedback_reason=?,feedback_ts=?,feedback_source='owner'
+    WHERE id=? AND user_key=?`),
+  feedbackByShare: db.prepare(`UPDATE asks SET feedback_rating=?,feedback_reason=?,feedback_ts=?,feedback_source='shared'
+    WHERE id=? AND conv_id=(SELECT id FROM convs WHERE share_token=?)`),
+};
+
+// Repeat sightings bump `seen` rather than creating duplicates, so the review
+// queue ranks by how often players actually hit the stale page.
+S.upsertConflict = db.prepare(`INSERT INTO doc_conflicts(source,page,claim,actual,evidence,question,user_key,first_ts,last_ts)
+  VALUES(@source,@page,@claim,@actual,@evidence,@question,@user_key,@ts,@ts)
+  ON CONFLICT(source,claim,actual) DO UPDATE SET seen=doc_conflicts.seen+1, last_ts=@ts,
+    evidence=COALESCE(excluded.evidence,doc_conflicts.evidence)`);
+S.listConflicts = db.prepare(`SELECT source,page,claim,actual,evidence,seen,status,first_ts,last_ts
+  FROM doc_conflicts WHERE status=? ORDER BY seen DESC, last_ts DESC LIMIT ?`);
+
+function recordConflicts(list, meta = {}) {
+  const ts = Date.now();
+  for (const c of list || []) {
+    if (!c || !c.claim || !c.actual) continue;
+    try {
+      S.upsertConflict.run({
+        source: c.source === "docs" ? "docs" : "wiki",
+        page: c.page || null,
+        claim: String(c.claim).slice(0, 400),
+        actual: String(c.actual).slice(0, 400),
+        evidence: c.evidence ? String(c.evidence).slice(0, 300) : null,
+        question: (meta.question || "").slice(0, 300),
+        user_key: meta.user_key || null,
+        ts,
+      });
+    } catch { /* a malformed conflict must never fail the answer */ }
+  }
+}
+function conflicts(status = "open", limit = 50) { return S.listConflicts.all(status, limit); }
+
+const userKey = id => `${id.provider}:${id.id}`;
+
+/** Quota window resets at 00:00 UTC, so "resets in" is a real wall-clock answer. */
+function windowStart() {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+function resetAt() { return windowStart() + 86400000; }
+
+// A thread gets up to MAX_FOLLOWUPS cheap follow-ups; past that a question is
+// a fresh line of enquiry and costs full price again.
+const MAX_FOLLOWUPS = 3;
+const FOLLOWUP_COST = 0.5;
+
+/** Cost of the next question in this conversation, and how many cheap ones remain. */
+function nextCost(convId, key) {
+  if (!convId) return { cost: 1, followup: 0, followupsLeft: MAX_FOLLOWUPS };
+  const prior = S.convTurnCount.get(convId, key).c;
+  if (prior === 0) return { cost: 1, followup: 0, followupsLeft: MAX_FOLLOWUPS };
+  const idx = prior;                                  // 1-based position among follow-ups
+  if (idx <= MAX_FOLLOWUPS) {
+    return { cost: FOLLOWUP_COST, followup: idx, followupsLeft: MAX_FOLLOWUPS - idx };
+  }
+  return { cost: 1, followup: 0, followupsLeft: MAX_FOLLOWUPS };
+}
+
+/** Prior turns as chat messages, oldest first, for follow-up continuity. */
+function history(convId, key, turns = 3) {
+  if (!convId) return [];
+  const rows = S.convHistory.all(convId, key, turns).reverse();
+  const out = [];
+  for (const r of rows) {
+    out.push({ role: "user", content: r.question });
+    if (r.answer) out.push({ role: "assistant", content: r.answer });
+  }
+  return out;
+}
+
+function usage(key, ent) {
+  const since = windowStart();
+  const used = S.countToday.get(key, since).c;
+  const mcpUsed = S.countMcpToday.get(key, since).c;
+  const r = n => Math.round(n * 2) / 2;
+  return {
+    used: r(used), limit: ent.questions, remaining: r(Math.max(0, ent.questions - used)),
+    mcpUsed, mcpLimit: ent.mcp, mcpRemaining: Math.max(0, ent.mcp - mcpUsed),
+    resetAt: resetAt(), tier: ent.label, maxFollowups: MAX_FOLLOWUPS, followupCost: FOLLOWUP_COST,
+  };
+}
+
+function record(row) {
+  row.plan = row.plan || null;
+  row.validation = row.validation || null;
+  row.evidence = row.evidence || null;
+  const inserted = S.insertAsk.run(row);
+  S.upsertConv.run({ id: row.conv_id, user_key: row.user_key, title: row.question.slice(0, 70), ts: row.ts });
+  return Number(inserted.lastInsertRowid);
+}
+
+function feedback({ answerId, userKey = null, shareToken = null, rating, reason = "" }) {
+  if (!Number.isInteger(Number(answerId))) return false;
+  if (!["up", "down", null].includes(rating)) return false;
+  const cleanReason = String(reason || "").trim().slice(0, 500) || null;
+  const args = [rating, cleanReason, Date.now(), Number(answerId)];
+  const result = userKey
+    ? S.feedbackByOwner.run(...args, userKey)
+    : shareToken ? S.feedbackByShare.run(...args, String(shareToken)) : null;
+  return Boolean(result?.changes);
+}
+
+// Discord bot answers are not normal browser turns, but they belong in the
+// same review queue. Recording them as a zero-cost Discord turn makes the
+// admin console, report clustering, and replay flow work without a second
+// analytics silo.
+function recordDiscordFeedback({ discordId, username, question, answer, rating, reason = "", usedMcp = false }) {
+  const id = String(discordId || "").slice(0, 100);
+  if (!id || !["up", "down"].includes(rating)) return null;
+  const key = `discord:${id}`;
+  touchUser(key, { provider: "discord", id, username }, { username });
+  const answerId = record({
+    user_key: key, username: String(username || "Discord user").slice(0, 100),
+    conv_id: `discord-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    question: String(question || "").slice(0, 2000), answer: String(answer || "").slice(0, 30000),
+    areas: "[]", citations: "[]", used_mcp: usedMcp ? 1 : 0, cached: 0,
+    tokens_in: 0, tokens_out: 0, cost: 0, followup: 0, model: "discord-ask",
+    plan: JSON.stringify({ id: "discord-ask" }), validation: JSON.stringify({ issues: [] }),
+    evidence: JSON.stringify({ tools: [], visualizations: [] }), ts: Date.now(),
+  });
+  feedback({ answerId, userKey: key, rating, reason });
+  return answerId;
+}
+
+function touchUser(key, identity, context) {
+  const c = context?.character || {};
+  const corp = context?.corporation || {};
+  S.upsertProfile.run({
+    user_key: key,
+    username: context?.username || identity?.username || null,
+    provider: identity?.provider || null,
+    role: context?.role || null,
+    tier: context?.tierActive ? context?.tier || null : null,
+    character_name: c.name || null,
+    country: c.country || null,
+    party: c.party || null,
+    corporation_name: corp.name || null,
+    corporation_role: corp.role || null,
+    is_admin: context?.isAdmin === true ? 1 : 0,
+    ts: Date.now(),
+  });
+}
+
+const PRICE = {
+  flash: { input: 0.44, output: 1.32 },
+  pro: { input: 1.32, output: 3.96 },
+  free: { input: 0, output: 0 },
+};
+// OpenRouter free and stealth slugs bill nothing, so they must not inherit the
+// DeepSeek list rate. Anything else keeps the old estimate, which is what every
+// historic row was priced at.
+function rateFor(model) {
+  const m = String(model || "");
+  if (/:free$/.test(m) || m.startsWith("stealth/")) return PRICE.free;
+  return /pro/i.test(m) ? PRICE.pro : PRICE.flash;
+}
+function estimateCost(row) {
+  if (row.cached) return 0;
+  const rate = rateFor(row.model);
+  return (Number(row.tokens_in || 0) * rate.input + Number(row.tokens_out || 0) * rate.output) / 1_000_000;
+}
+function adminUsers() {
+  return S.adminUserList.all();
+}
+function adminUser(key) {
+  const profile = S.adminProfile.get(key);
+  if (!profile) return null;
+  const questions = S.adminQuestions.all(key).map(row => ({
+    ...row, plan: safeJson(row.plan), validation: safeJson(row.validation), evidence: safeJson(row.evidence),
+    estimated_cost: estimateCost(row),
+  }));
+  return { profile, questions, estimated_cost: questions.reduce((sum, row) => sum + row.estimated_cost, 0) };
+}
+function reportCategory(row) {
+  const text = `${row.feedback_reason || ""} ${row.question || ""} ${row.answer || ""}`.toLowerCase();
+  if (/chart|graph|visual|map|gdp|metric|render|label|fit/.test(text)) return "visualization or evidence mismatch";
+  if (/live|current|fresh|lookup|mcp|state/.test(text)) return "live-data retrieval";
+  if (/name|named|found|entity|corporation|player|match/.test(text)) return "entity resolution";
+  if (/private|exploit|unfair|opponent|hidden/.test(text)) return "fair-play boundary";
+  if (/wrong|not answer|irrelevant|unsatisfactory|trash/.test(text)) return "answer relevance";
+  return "uncategorized";
+}
+function reportClusters(limit = 100) {
+  const groups = new Map();
+  for (const row of S.adminReports.all(limit)) {
+    const category = reportCategory(row);
+    const group = groups.get(category) || { category, count: 0, reports: [] };
+    group.count += 1;
+    if (group.reports.length < 5) group.reports.push({
+      ...row, plan: safeJson(row.plan), validation: safeJson(row.validation), evidence: safeJson(row.evidence),
+    });
+    groups.set(category, group);
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+}
+function conversations(key) { return S.listConvs.all(key); }
+function turns(convId, key) {
+  return S.convTurns.all(convId, key).map(t => ({
+    ...t, areas: safeJson(t.areas), citations: safeJson(t.citations), plan: safeJson(t.plan),
+    validation: safeJson(t.validation), evidence: safeJson(t.evidence),
+  }));
+}
+function removeConv(convId, key) { S.deleteConvAsks.run(convId, key); S.deleteConv.run(convId, key); }
+
+const crypto = require("node:crypto");
+S.setShare = db.prepare("UPDATE convs SET share_token=? WHERE id=? AND user_key=?");
+S.getShare = db.prepare("SELECT share_token FROM convs WHERE id=? AND user_key=?");
+S.byShare  = db.prepare("SELECT id, user_key, title, updated FROM convs WHERE share_token=?");
+
+/** Create (or return) a share token. Idempotent so re-clicking Share is safe. */
+function share(convId, key) {
+  const cur = S.getShare.get(convId, key);
+  if (!cur) return null;
+  if (cur.share_token) return cur.share_token;
+  const tok = crypto.randomBytes(9).toString("base64url");
+  S.setShare.run(tok, convId, key);
+  return tok;
+}
+function unshare(convId, key) { S.setShare.run(null, convId, key); }
+
+/** Read-only view of a shared conversation, for anyone holding the link. */
+function shared(token) {
+  const c = S.byShare.get(token);
+  if (!c) return null;
+  return { title: c.title, updated: c.updated, shareToken: token, turns: turns(c.id, c.user_key) };
+}
+function safeJson(s) { try { return JSON.parse(s || "[]"); } catch { return []; } }
+
+S.putReport = db.prepare("INSERT INTO reports(token,user_key,username,answer_id,title,question,body,model,created) VALUES(?,?,?,?,?,?,?,?,?)");
+S.getReport = db.prepare("SELECT * FROM reports WHERE token=?");
+S.userReports = db.prepare("SELECT token,title,created FROM reports WHERE user_key=? ORDER BY created DESC LIMIT 40");
+function putReport({ token, userKey, username, answerId, title, question, body, model }) {
+  S.putReport.run(token, userKey, username || null, answerId || null, title, question, body, model || null, Date.now());
+}
+function getReport(token) { return S.getReport.get(token) || null; }
+function userReports(key) { return S.userReports.all(key); }
+
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, reportClusters, estimateCost, putReport, getReport, userReports };
