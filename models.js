@@ -79,9 +79,30 @@ const CATALOG = {
   },
   "deepseek-v4-flash:cloud": {
     display: "DeepSeek Flash",
-    provider: "ollama", tier: "flash", score: null, ttftP50Ms: 900,
+    provider: "ollama", tier: "flash", score: null, ttftP50Ms: 17514,
     efforts: null,
-    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25.",
+    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25. ttft re-measured 2026-08-27 on the REAL prompt at 17.5s; the previous 900ms here was a short-prompt reading and badly understated it.",
+  },
+  "glm-5.3-flash:cloud": {
+    display: "GLM 5.3 Flash",
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 24195,
+    efforts: null,
+    // Measured 2026-08-27 on the real prompt over four cross-system questions:
+    // ttft 13.6/23.9/24.5/48.1s, 1520-2076 chars, follow-up marker 4/4, cites a
+    // real path 4/4, never narrated its evidence bundle, never truncated.
+    note: "GLM 5.3 Flash via the Ollama cloud tag — FREE, loopback. Pro-tier lead from 2026-08-27 (owner call). Best contract compliance of the benched set (4/4 follow-up marker, 4/4 real path citation) and the slowest to first token: ~24s median, 48s worst. Fine for pro, which tolerates a 60s first-token leash; do NOT put it on flash. score is null pending a full judged bench, so it is set via ASK_CHAIN_PRO rather than the in-repo default.",
+  },
+  "gpt-oss:120b-cloud": {
+    display: "GPT-OSS 120B",
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 6497,
+    efforts: null,
+    note: "GPT-OSS 120B via the Ollama cloud tag — FREE, loopback. Benched 2026-08-27: fastest of the pro candidates (6.5s ttft, very consistent), longest answers (2260 chars avg), follow-up marker 4/4. Not routed by default; the standing alternate if GLM 5.3 Flash's first-token latency proves too slow in production.",
+  },
+  "deepseek-v4-pro:cloud": {
+    display: "DeepSeek Pro",
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 10661,
+    efforts: null,
+    note: "DeepSeek V4 Pro via the Ollama cloud tag — FREE, loopback. Benched 2026-08-27: 10.7s ttft, shortest answers of the pro candidates (1323 chars), follow-up marker 3/4. Beaten by both GLM 5.3 Flash and GPT-OSS 120B; kept visible so it is not re-tested expecting better.",
   },
   "mimo-v2.5-free": {
     display: "Mimo V2.5",
@@ -124,8 +145,9 @@ const CATALOG = {
 // Benched, then excluded. Kept visible so the next person does not re-test them
 // expecting a different answer.
 const EXCLUDED = {
-  "z-ai/glm-5.2:free": "0 of 5 requests succeeded — provider returned 429 through three backed-off retries.",
+  "z-ai/glm-5.2:free": "0 of 5 requests succeeded — provider returned 429 through three backed-off retries. Note the Ollama cloud tag glm-5.3-flash:cloud is a different route to a newer model and DOES work; this exclusion is about the OpenRouter free lane only.",
   "google/gemma-4-31b-it:free": "0 of 5 requests succeeded — provider returned 429 through three backed-off retries.",
+  "qwen3-coder:480b-cloud": "HTTP 410 Gone on all 4 attempts 2026-08-27 — the Ollama cloud tag has been withdrawn. Kept here as the reminder that :cloud tags can vanish without notice, which is why every chain that leads with one needs a fallback behind it.",
 };
 
 // Three tiers.
