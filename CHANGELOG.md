@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.1.1 — 2026-08-27
+
+### Added
+- Automated answer quality checks: a sample of answers is re-read to catch cases where Ask dodged or refused a question it could have answered.
+
 ## 1.1.0 — 2026-08-27
 
 ### Added

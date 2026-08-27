@@ -96,6 +96,24 @@ CREATE TABLE IF NOT EXISTS reports(
   model TEXT,
   created INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_reports_user ON reports(user_key, created DESC);
+
+-- Automated answer audits: a free model re-reads a random sample of shipped
+-- answers and judges whether they actually answered the question. Advisory
+-- only — it never blocks or rewrites a response, it just gives staff a signal
+-- for where the system is refusing or dodging.
+CREATE TABLE IF NOT EXISTS answer_audits(
+  id INTEGER PRIMARY KEY,
+  answer_id INTEGER,
+  question TEXT NOT NULL,
+  answered INTEGER,              -- 1 answered, 0 did not, NULL undecided
+  refused INTEGER,               -- 1 if the answer refused/deflected
+  had_live INTEGER,              -- was live data available on this answer
+  confidence REAL,
+  note TEXT,
+  model TEXT,                    -- the judge model
+  created INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_audits_created ON answer_audits(created DESC);
+CREATE INDEX IF NOT EXISTS idx_audits_flagged ON answer_audits(answered, created DESC);
 `);
 
 // Follow-ups are half price, so the budget is spent in fractions and must be
@@ -169,7 +187,43 @@ const S = {
     WHERE id=? AND user_key=?`),
   feedbackByShare: db.prepare(`UPDATE asks SET feedback_rating=?,feedback_reason=?,feedback_ts=?,feedback_source='shared'
     WHERE id=? AND conv_id=(SELECT id FROM convs WHERE share_token=?)`),
+  insertAudit: db.prepare(`INSERT INTO answer_audits(answer_id,question,answered,refused,had_live,confidence,note,model,created)
+    VALUES(@answer_id,@question,@answered,@refused,@had_live,@confidence,@note,@model,@created)`),
+  recentAudits: db.prepare(`SELECT id,answer_id,question,answered,refused,had_live,confidence,note,model,created
+    FROM answer_audits ORDER BY created DESC LIMIT ?`),
+  auditSummary: db.prepare(`SELECT
+      COUNT(*) total,
+      COALESCE(SUM(CASE WHEN answered=0 THEN 1 ELSE 0 END),0) not_answered,
+      COALESCE(SUM(CASE WHEN refused=1 THEN 1 ELSE 0 END),0) refused
+    FROM answer_audits WHERE created>?`),
 };
+
+// Persist one automated audit verdict. Advisory telemetry: never throws into
+// the request path, always returns silently.
+function recordAudit(row) {
+  try {
+    S.insertAudit.run({
+      answer_id: row.answerId ?? null,
+      question: String(row.question || "").slice(0, 1000),
+      answered: row.answered == null ? null : (row.answered ? 1 : 0),
+      refused: row.refused == null ? null : (row.refused ? 1 : 0),
+      had_live: row.hadLive ? 1 : 0,
+      confidence: row.confidence == null ? null : Number(row.confidence),
+      note: String(row.note || "").slice(0, 500),
+      model: row.model || null,
+      created: Date.now(),
+    });
+  } catch (e) { console.error("[ask] recordAudit failed:", String(e?.message || e)); }
+}
+
+function recentAudits(limit = 100) {
+  try { return S.recentAudits.all(Math.min(Number(limit) || 100, 500)); } catch { return []; }
+}
+
+function auditSummary(sinceMs) {
+  try { return S.auditSummary.get(Number(sinceMs) || 0) || { total: 0, not_answered: 0, refused: 0 }; }
+  catch { return { total: 0, not_answered: 0, refused: 0 }; }
+}
 
 // Repeat sightings bump `seen` rather than creating duplicates, so the review
 // queue ranks by how often players actually hit the stale page.
@@ -456,4 +510,4 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports };
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary };

@@ -23,6 +23,7 @@ const visualization = require("./visualization");
 const mapVisualization = require("./map-visualization");
 const askPlan = require("./ask-plan");
 const answerGuard = require("./answer-guard");
+const answerAudit = require("./answer-audit");
 const ogImage = require("./og-image");
 
 const PORT = Number(process.env.PORT || 9749);
@@ -272,6 +273,18 @@ const server = http.createServer(async (req, res) => {
             modelStats: store.adminModelStats(),
             correctionRows: corrections.list(),
           }));
+    }
+
+    // Automated answer-audit log: the free-model QA sampler's verdicts, newest
+    // first, plus a 7-day rollup. Staff-only, read-only telemetry.
+    if (req.method === "GET" && p === "/console/audits.json") {
+      if (!session || session.context?.isAdmin !== true) return json(res, session ? 403 : 401, { error: "Staff only." });
+      const limit = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
+      return json(res, 200, {
+        sampleRate: answerAudit.SAMPLE_RATE,
+        summary7d: store.auditSummary(Date.now() - 7 * 864e5),
+        audits: store.recentAudits(limit),
+      });
     }
 
     // Everything below requires a signed-in, entitled user.
@@ -711,6 +724,10 @@ const server = http.createServer(async (req, res) => {
           liveHint: !useMcp && usage.mcpRemaining > 0 && mcp.looksLive(question),
           validation,
         });
+        // Random-sample QA: a free model re-reads this answer and logs whether
+        // it actually answered. Fire-and-forget — must not delay res.end().
+        answerAudit.maybeAudit({ answerId, question, answer, hadLive: useMcp });
+
         try { res.end(); } catch {}
         return;
       }
