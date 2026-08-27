@@ -2,6 +2,16 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.5.1 - 2026-08-27
+
+### Added
+- Ask will now suggest which corporations are worth buying. It reads the live public exchange, names the companies and the figures behind each one, and says plainly that markets move. It used to decline this as "investment advice", which made no sense: these are fictional companies and every number it uses is already on the stock market page you can open yourself.
+
+### Changed
+- Buy and investment questions now pull the live exchange rankings instead of explaining how to read the stock list.
+
+Planning trades to damage a specific player is still off the table, as is anything using non-public figures.
+
 ## 1.5.0 - 2026-08-27
 
 ### Fixed

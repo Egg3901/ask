@@ -66,3 +66,42 @@ test("removes an invented leaderboard when its required live dataset is unavaila
   assert.doesNotMatch(outcome.answer, /mermaid|bar \[/);
   assert.deepEqual(outcome.issues, ["required_live_dataset_unavailable"]);
 });
+
+test("a buy question reaches the live exchange instead of a lecture", () => {
+  // Both of these were refused as "investment advice" on a game's fictional
+  // stock exchange, using figures already on the public stock market page.
+  for (const q of [
+    "What corporations have shares available that you think I should purchase?",
+    "Can you generally advise me what corporations I should buy?",
+    "what stocks should i buy",
+    "is tinky winky a good buy right now",
+  ]) {
+    const request = plan.create(q);
+    assert.equal(request.intent, "corporation_investment", q);
+    assert.equal(request.live, "required", q);
+  }
+});
+
+test("a buy question answers in prose unless a chart was asked for", () => {
+  assert.equal(plan.create("what stocks should i buy").visual, "none");
+  assert.equal(plan.create("chart the stocks I should buy").visual, "required");
+});
+
+test("buying something that is not equity stays an ordinary question", () => {
+  for (const q of [
+    "I want to buy a plant for my corporation",
+    "what can i do to improve my company that i run as ceo",
+    "how much does it cost to co-sponsor",
+    "which bond maturity is better 2 year 5 year 7 year",
+  ]) {
+    assert.notEqual(plan.create(q).intent, "corporation_investment", q);
+  }
+});
+
+test("the fair-play rules permit in-game investment suggestions", () => {
+  const system = require("./prompt").build({ liveData: true });
+  assert.match(system, /IN-GAME INVESTMENT SUGGESTIONS ARE ALLOWED/);
+  // The boundary that stays: public data only, and no trading against a person.
+  assert.match(system, /only public, exchange-visible data/);
+  assert.match(system, /planning trades to damage a named player/);
+});

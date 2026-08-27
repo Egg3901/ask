@@ -10,6 +10,11 @@ const ELECTION_RULES = /\b(?:house|lower chamber|senate|district|constituen|seat
 const ELECTION_QUESTION = /\b(?:can |how |which |what |one person|multiple|same party|at-large|single.member)\b/i;
 const CORP = /\b(?:corporation|corp|company|public peer|peer(?:s)?|revenue per stake|valuation|valued|stock)\b/i;
 const CORP_LEADERBOARD = /^(?=[\s\S]*\b(?:largest|biggest|top|rank|ranking|leaderboard)\b)(?=[\s\S]*\bpublic\b)(?=[\s\S]*\b(?:corporations?|corps?|companies|businesses)\b)[\s\S]*$/i;
+// "Which corporations should I buy" is an ordinary question about a game's
+// public stock exchange, and it must reach the live exchange data or the answer
+// is a lecture about how to read the stock list. Deliberately requires an equity
+// context so "buy a plant for my corporation" stays a build question.
+const CORP_INVESTMENT = /\b(?:(?:which|what)\s+(?:\w+\s+){0,3}(?:corporations?|corps?|companies|stocks?|shares?)\b[\s\S]{0,60}\b(?:buy|purchase|invest|acquire|own)|(?:corporations?|corps?|companies|stocks?|shares?)\s+(?:\w+\s+){0,4}?(?:to|should\s+i|i\s+should)\s+(?:buy|purchase|invest|acquire|own)|(?:buy|buying|purchase|purchasing|invest(?:ing)?)\s+(?:in\s+)?(?:\w+\s+){0,3}\b(?:shares?|stocks?|equity|stake)\b|\b(?:good|smart|worth|bad|solid|safe)\s+(?:buy|investment|purchase|pick)\b|\bshares?\s+available\b|\bwhat\s+(?:should|do)\s+i\s+invest\b|\b(?:stock|investment)\s+(?:tips?|picks?|advice|recommendations?)\b)/i;
 const PLAYER_WEALTH = /\b(?:net[\s-]?worth|player wealth|wealth (?:distribution|inequality|gap|ranking)|inequality|richest|poorest|wealthiest|savings|my (?:money|cash|wealth|holdings|balance|assets|portfolio)|how much (?:am i worth|money do i have|do i have)|rich(?:er)?(?: am i| than| are (?:we|players|the players)))\b/i;
 const FISCAL = /\b(?:budget|deficit|surplus|fiscal|debt[\s-]?to[\s-]?gdp|national debt|credit rating|government spending|govt spending|tax revenue|(?:pushing|driving|fueling|behind|causing) (?:[a-z]{2,}\s+){0,3}inflation)\b/i;
 const ESTIMATION = /\b(?:how much would|how much does it cost|what would it cost|how expensive|how long until|how long would|how many turns|what would happen if|what happens if|what would .{0,40} do to)\b/i;
@@ -23,6 +28,7 @@ function create(question, context = {}) {
   const fx = FX.test(text);
   const electionRules = !map && ELECTION_RULES.test(text) && ELECTION_QUESTION.test(text);
   const corporationLeaderboard = !map && CORP_LEADERBOARD.test(text);
+  const corporationInvestment = !map && CORP_INVESTMENT.test(text);
   const corporation = !map && CORP.test(text);
 
   if (candidateMap) return {
@@ -48,6 +54,14 @@ function create(question, context = {}) {
     display: { kind: "prose", metric: null, canonical: false },
     visual: "none", suppressGenericCountryEconomy: true,
     status: "Checking the relevant election rules…", context,
+  };
+  if (corporationInvestment) return {
+    id: "public-corporation-investment", intent: "corporation_investment", live: "required",
+    display: { kind: "comparison", metric: "market_cap_anchor", canonical: true },
+    // A buy question wants named companies and figures, not a chart. The chart
+    // only appears if the player actually asked for one.
+    visual: explicitVisual ? "required" : "none", suppressGenericCountryEconomy: true,
+    status: "Reading the public exchange…", context,
   };
   if (corporationLeaderboard) return {
     id: "public-corporation-leaderboard", intent: "corporation_leaderboard", live: "required",

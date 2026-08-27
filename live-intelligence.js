@@ -432,7 +432,11 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
   const usedTools = [];
   const candidateMapRequested = plan?.intent === "candidate_roster" || mapMetric(text, "country") === "candidate_roster";
   const aggregateMapRequested = MAP_WORDS.test(text) && Boolean(geoAggregateMetric(text));
-  const corporationLeaderboardRequested = plan?.intent === "corporation_leaderboard";
+  // A "which corporations should I buy" question needs the same live exchange
+  // ranking a leaderboard question does. Without it the answer is a lecture on
+  // how to read the stock list instead of named companies with figures.
+  const corporationLeaderboardRequested = plan?.intent === "corporation_leaderboard"
+    || plan?.intent === "corporation_investment";
   const call = async (name, args = {}, server = "gamestate", preserveToolError = false) => {
     usedTools.push(`${server}:${name}`);
     return callTool(name, args, server, preserveToolError).catch(() => null);
@@ -468,7 +472,9 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
     const country = namedCountryId(text);
     const ranking = await call("corporation_rankings", {
       metric,
-      limit: requestedRankingLimit(text),
+      // A buy question needs breadth to choose from; the top few by market cap
+      // are the mega-caps, which is not the same as the best purchase.
+      limit: plan?.intent === "corporation_investment" ? 25 : requestedRankingLimit(text),
       ...(country ? { country } : {}),
     });
     const data = payload(ranking);

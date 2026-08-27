@@ -74,6 +74,16 @@ const CHECKS = {
     return /SEEDED CONFIGURATION IS NOT THE LIVE WORLD/.test(p) && /live NEGATIVE/.test(p);
   },
 
+  // Owner ruled 2026-08-27 that recommending public-exchange buys is fair, since
+  // any player can read the same figures off the stock market page.
+  investment_allowed: () => {
+    const p = require("../prompt.js").build({ liveData: true });
+    const askPlan = require("../ask-plan.js");
+    return /IN-GAME INVESTMENT SUGGESTIONS ARE ALLOWED/.test(p)
+      && /only public, exchange-visible data/.test(p)
+      && askPlan.create("what corporations should I buy").live === "required";
+  },
+
   // Genuinely absent: no war or military tool exists on the gamestate server.
   missing_data_plane: () => null,
 
