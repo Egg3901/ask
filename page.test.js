@@ -230,8 +230,20 @@ test("overrides the dashboard palette with white and OLED black", () => {
 
   assert.ok(inheritedBlue > -1 && oledOverride > inheritedBlue);
   assert.ok(whiteOverride > oledOverride);
-  assert.doesNotMatch(html, /radial-gradient/);
-  assert.doesNotMatch(html, /linear-gradient\(135deg/);
+  // Depth comes from monochrome gradients only: the accent stays pure white on
+  // black (dark) and pure black on white (light), never a dashboard hue.
+  assert.match(html, /--accent:#fff/);
+  assert.match(html, /--accent:#050505/);
+  const gradients = html.match(/(?:radial|linear)-gradient\([^)]*\)/g) || [];
+  for (const g of gradients) {
+    for (const hex of g.match(/#[0-9a-f]{3,8}\b/gi) || []) {
+      const h = hex.slice(1);
+      const [r, gg, b] = h.length < 6
+        ? [h[0] + h[0], h[1] + h[1], h[2] + h[2]]
+        : [h.slice(0, 2), h.slice(2, 4), h.slice(4, 6)];
+      assert.ok(r === gg && gg === b, `colored gradient stop ${hex} in ${g}`);
+    }
+  }
 });
 
 test("surfaces live-data mode beside the composer and labels corporation context", () => {

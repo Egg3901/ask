@@ -17,6 +17,10 @@ const cites = require("./citations");
 // blurb on hover/tap, link to the source. The glossary is the same doc/wiki
 // index the citations use, so every link resolves.
 const glossaryJson = () => { try { return JSON.stringify(cites.glossary()).replace(/</g, "\\u003c"); } catch { return "[]"; } };
+
+// The game's own mark (Liberty Bell), served from /ahd-logo.png. Used wherever
+// the page identifies itself: header brand, landing, gates, shared pages.
+const mark = size => `<img class="brandmark" src="/ahd-logo.png" alt="" width="${size}" height="${size}">`;
 const jargonScripts = () => `<script>window.__JARGON=${glossaryJson()};</script><script>${JARGON_JS}</script>`;
 
 // Self-contained rich renderer for the static shared/report pages: the same
@@ -122,7 +126,12 @@ const ASK_THEME_CSS = `
   --field-bg:#090909;--info:#fff;--info-soft:rgba(255,255,255,.1);
   --e1:0 1px 2px rgba(0,0,0,.7);--e2:0 16px 44px rgba(0,0,0,.45);--e3:0 28px 80px rgba(0,0,0,.7);
   --hi:inset 0 1px 0 rgba(255,255,255,.055);--ring:0 0 0 3px rgba(255,255,255,.2);
-  --scroll:rgba(255,255,255,.16);--scroll-h:rgba(255,255,255,.3)
+  --scroll:rgba(255,255,255,.16);--scroll-h:rgba(255,255,255,.3);
+  --glow-1:rgba(255,255,255,.055);--glow-2:rgba(255,255,255,.025);
+  --edge:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.045));
+  --edge-focus:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,.14));
+  --send-grad:linear-gradient(180deg,#fff,#d7d7d7);
+  --send-hi:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(0,0,0,.14)
 }
 :root[data-theme="light"]{
   --bg-0:#fff;--bg-1:#fafafa;--surface:#fff;--surface-2:#f5f5f5;--surface-3:#ececec;
@@ -132,7 +141,12 @@ const ASK_THEME_CSS = `
   --accent:#050505;--accent-2:#050505;--accent-soft:rgba(0,0,0,.075);--accent-hover:#222;--on-accent:#fff;
   --field-bg:#fff;--info:#050505;--info-soft:rgba(0,0,0,.075);
   --e1:0 1px 2px rgba(0,0,0,.08);--e2:0 16px 44px rgba(0,0,0,.1);--e3:0 28px 80px rgba(0,0,0,.14);
-  --hi:none;--ring:0 0 0 3px rgba(0,0,0,.14);--scroll:rgba(0,0,0,.16);--scroll-h:rgba(0,0,0,.3)
+  --hi:inset 0 1px 0 rgba(255,255,255,.65);--ring:0 0 0 3px rgba(0,0,0,.14);--scroll:rgba(0,0,0,.16);--scroll-h:rgba(0,0,0,.3);
+  --glow-1:rgba(0,0,0,.035);--glow-2:rgba(0,0,0,.018);
+  --edge:linear-gradient(180deg,rgba(0,0,0,.17),rgba(0,0,0,.06));
+  --edge-focus:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,.16));
+  --send-grad:linear-gradient(180deg,#3d3d3d,#050505);
+  --send-hi:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(0,0,0,.5)
 }`;
 
 // Component CSS lifted from ask-page.js so the answer body, code blocks and
@@ -145,9 +159,8 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
   padding:14px clamp(16px,4vw,24px);border-bottom:1px solid var(--border);
   background:color-mix(in srgb,var(--bg-0) 82%,transparent);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
 .ask-brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.02em;font-size:1rem}
-.ask-brand .av{width:26px;height:26px;border-radius:var(--r-sm);background:var(--accent);
-  display:flex;align-items:center;justify-content:center}
-.ask-brand .av svg{width:15px;height:15px;color:var(--on-accent)}
+.brandmark{display:block;flex-shrink:0}
+.gate-card .brandmark{margin:0 auto 16px}
 .ask-brand em{font-style:normal;color:var(--text-3);font-weight:500}
 .ask-head-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .who{display:inline-flex;align-items:center;gap:7px;font-size:.8125rem;color:var(--text-2);
@@ -165,22 +178,21 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .ask-col{max-width:820px;margin:0 auto;padding:26px clamp(18px,4vw,32px) 48px;display:flex;flex-direction:column;gap:24px;min-width:0}
 
 .hero{padding:clamp(36px,8vh,76px) 0 8px;text-align:left}
-.hero-kicker{margin-bottom:14px;color:var(--text-3);font-size:.68rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+.hero-kicker{display:flex;align-items:center;gap:10px;margin-bottom:14px;color:var(--text-3);font-size:.68rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+.hero-kicker::before{content:'';width:20px;height:1px;background:var(--text-3)}
 .hero h1{font-size:clamp(3.6rem,8vw,5.9rem);font-weight:800;line-height:.92;letter-spacing:-.072em;margin:0 0 22px}
 .hero p{color:var(--text-2);font-size:clamp(1.02rem,2.2vw,1.2rem);line-height:1.5;max-width:42ch;letter-spacing:-.02em}
 .hero .ctx{display:flex;align-items:center;gap:7px;margin-top:16px;color:var(--text-3);font-size:.76rem;line-height:1.4}
 .hero .ctx svg{width:12px;height:12px;color:var(--text-3)}
 
 .ask-turn{display:flex;flex-direction:column;gap:14px;animation:rise .34s var(--ease) both;min-width:0}
+.ask-turn+.ask-turn{border-top:1px solid var(--border);padding-top:26px}
+/* The question is the headline of its turn: display serif, no chrome. */
 .ask-q{display:flex;gap:12px;align-items:flex-start}
-.ask-q .qmark{width:26px;height:26px;border-radius:var(--r-sm);background:var(--glass-3);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-2);font-weight:700;font-size:.8125rem}
-.ask-q .qt{font-size:1.1rem;font-weight:600;letter-spacing:-.015em;line-height:1.45;color:var(--text);min-width:0;overflow-wrap:anywhere}
-.ask-ans-head{display:flex;align-items:center;gap:9px;padding:0 0 10px}
-.ask-ans-head .av{width:22px;height:22px;border-radius:var(--r-xs);background:var(--accent);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.ask-ans-head .av svg{width:13px;height:13px;color:var(--on-accent)}
-.ask-ans-head .lbl{font-size:.8125rem;font-weight:600;color:var(--text-2)}
+.ask-q .qmark{display:none}
+.ask-q .qt{font-size:clamp(1.25rem,2.6vw,1.55rem);font-weight:700;letter-spacing:-.03em;line-height:1.28;color:var(--text);min-width:0;overflow-wrap:anywhere}
+.ask-ans-head{display:flex;align-items:center;gap:9px;padding:0 0 9px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.ask-ans-head .lbl{font-size:.66rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.11em}
 .ask-ans-head .flag{padding:2px 6px;border:1px solid var(--border);border-radius:var(--r-full);
   color:var(--text-3);font-size:.58rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .ask-ans-head .flag:empty{display:none}
@@ -205,7 +217,8 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .ask-direct blockquote{border-left:2px solid var(--accent);padding:.25rem .7rem;margin:.45rem 0;color:var(--text-2);
   background:var(--accent-soft);border-radius:0 var(--r-xs) var(--r-xs) 0}
 .ask-direct hr{border:none;border-top:1px solid var(--border);margin:.65rem 0}
-.ask-direct h2{font-size:1.14rem;font-weight:700;margin:1rem 0 .35rem;letter-spacing:-.015em}
+.ask-direct h1{font-size:1.5rem;font-weight:800;margin:.3rem 0 .55rem;letter-spacing:-.035em;line-height:1.15}
+.ask-direct h2{font-size:1.16rem;font-weight:700;margin:1.05rem 0 .38rem;letter-spacing:-.02em}
 .ask-direct h2:first-child{margin-top:0}
 .ask-direct h4{font-size:.9rem;font-weight:700;margin:.6rem 0 .2rem;color:var(--text-2)}
 .ask-direct em{font-style:italic}
@@ -295,8 +308,11 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
   border:1px solid var(--border);background:var(--surface);color:var(--text-2);
   font-size:.83rem;line-height:1.38;text-align:left;cursor:pointer;transition:all var(--t);font-family:var(--font)}
 .ask-follow .starter-card:hover{background:var(--glass-hover);border-color:var(--border-2);color:var(--text);transform:translateY(-1px)}
-.ask-follow .starter-card>svg{grid-column:2;grid-row:1 / span 2;width:15px;height:15px;align-self:center;color:var(--text-3)}
-.starter-explorer .starter-card:first-child{grid-row:span 2;min-height:153px;padding:19px;font-size:1rem;line-height:1.38}
+.ask-follow .starter-card>svg{grid-column:2;grid-row:1 / span 2;width:15px;height:15px;align-self:center;color:var(--text-3);transition:transform var(--t),color var(--t)}
+.ask-follow .starter-card:hover>svg{transform:translateX(3px);color:var(--text)}
+.starter-explorer .starter-card:first-child{grid-row:span 2;min-height:153px;padding:19px;font-size:1rem;line-height:1.38;
+  background:linear-gradient(135deg,var(--glass-3),transparent 52%),var(--surface)}
+.starter-explorer .starter-card:first-child:hover{background:linear-gradient(135deg,var(--glass-3),transparent 52%),var(--glass-hover)}
 .starter-explorer .starter-card:first-child .starter-copy{align-self:end;max-width:24ch}
 .starter-copy{grid-column:1;grid-row:2;overflow-wrap:anywhere}
 .starter-meta{display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:.62rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
@@ -310,18 +326,23 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .ask-composer{flex:0 0 auto;padding:12px clamp(14px,4vw,24px) 18px;
   padding-bottom:max(18px,env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg-0) 22%)}
 .ask-comp-inner{max-width:820px;margin:0 auto}
-.ask-comp-box{position:relative;display:flex;align-items:flex-end;gap:10px;padding:7px 7px 7px 16px;border:1px solid var(--border);
-  border-radius:28px;background:color-mix(in srgb,var(--surface) 94%,transparent);box-shadow:0 12px 32px rgba(0,0,0,.14),var(--hi);transition:border-color var(--t),box-shadow var(--t)}
-.ask-comp-box:focus-within{border-color:color-mix(in srgb,var(--accent) 50%,transparent);
+/* Gradient hairline: lit from above, falls off toward the bottom edge. */
+.ask-comp-box{position:relative;display:flex;align-items:flex-end;gap:10px;padding:7px 7px 7px 16px;border:1px solid transparent;
+  border-radius:28px;background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge) border-box;
+  box-shadow:0 12px 32px rgba(0,0,0,.14),var(--hi);transition:box-shadow var(--t)}
+.ask-comp-box:focus-within{background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge-focus) border-box;
   box-shadow:0 14px 38px rgba(0,0,0,.18),0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
 .ask-comp-box textarea{flex:1;width:100%;padding:8px 2px;background:transparent;border:none;color:var(--text);font-family:var(--font);
   font-size:16px;resize:none;outline:none;min-height:24px;max-height:120px;line-height:1.5}
 .ask-comp-box textarea::placeholder{color:var(--text-3)}
 .ask-send{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;
-  border:none;background:var(--accent);color:var(--on-accent);cursor:pointer;box-shadow:var(--e1);
-  transition:filter var(--t),transform var(--t);flex-shrink:0}
-.ask-send:hover:not(:disabled){filter:brightness(1.08);transform:scale(1.05)}
-.ask-send:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;transform:none}
+  border:none;background:var(--send-grad);color:var(--on-accent);cursor:pointer;
+  box-shadow:var(--send-hi),0 2px 10px rgba(0,0,0,.35);
+  transition:filter var(--t),transform var(--t),box-shadow var(--t);flex-shrink:0}
+.ask-send:hover:not(:disabled){filter:brightness(1.05);transform:translateY(-1px);
+  box-shadow:var(--send-hi),0 5px 16px rgba(0,0,0,.42)}
+.ask-send:active:not(:disabled){transform:translateY(0) scale(.94);box-shadow:var(--send-hi),0 1px 5px rgba(0,0,0,.3)}
+.ask-send:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;transform:none}
 .ask-send svg{width:19px;height:19px}
 .seg{display:flex;align-items:center;gap:2px;padding:3px;border-radius:11px;background:var(--glass-2);min-width:0}
 .segbtn{border:0;background:transparent;color:var(--text-3);border-radius:8px;padding:.38rem .72rem;font-size:.7rem;line-height:1;cursor:pointer;white-space:nowrap}
@@ -350,7 +371,7 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .ask-loading .classic i{position:absolute;top:-3.9%;left:-10%;width:24%;height:8%;border-radius:9999px;
   background:currentColor;animation:classic-fade 1.2s linear infinite}
 @keyframes classic-fade{0%{opacity:1}100%{opacity:.15}}
-.ask-loading .shimmer{background:linear-gradient(100deg, var(--text-3) 28%, #fff 50%, var(--text-3) 72%);
+.ask-loading .shimmer{background:linear-gradient(100deg, var(--text-3) 28%, var(--text) 50%, var(--text-3) 72%);
   background-repeat:no-repeat;background-size:220px 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
   animation:shimmer-sweep 2.4s ease-in-out infinite}
 /* Pixel geometry, not percent: the sweep is measured from the text box origin,
@@ -404,7 +425,8 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
   border-radius:var(--r-sm);border:1px solid transparent;background:transparent;color:var(--text-2);cursor:pointer;
   font-size:.8125rem;font-family:var(--font);line-height:1.35}
 .ask-conv:hover{background:var(--glass-2);color:var(--text)}
-.ask-conv.active{background:var(--glass-2);border-color:color-mix(in srgb,var(--accent) 30%,var(--border));color:var(--text)}
+.ask-conv.active{background:var(--glass-2);border-color:color-mix(in srgb,var(--accent) 30%,var(--border));color:var(--text);
+  box-shadow:inset 2px 0 0 var(--accent)}
 .ask-conv .ct{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ask-conv .cx{opacity:0;border:none;background:transparent;color:var(--text-3);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px}
 .ask-conv:hover .cx{opacity:1}
@@ -433,7 +455,8 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .sheet{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px;
   background:color-mix(in srgb,#000 55%,transparent);backdrop-filter:blur(3px)}
 .sheet.open{display:flex}
-.sheet-card{width:100%;max-width:460px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+.sheet-card{width:100%;max-width:460px;border:1px solid transparent;border-radius:var(--r-lg);
+  background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge) border-box;
   box-shadow:var(--e3),var(--hi);overflow:hidden}
 .sheet-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--border);font-weight:700}
 .sheet-head .x{margin-left:auto;background:transparent;border:none;color:var(--text-3);font-size:1.25rem;cursor:pointer;line-height:1}
@@ -477,8 +500,9 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 
 /* ── gate screens ───────────────────────────────────────────────────────── */
 .gate{height:100dvh;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:24px}
-.gate-card{max-width:460px;width:100%;text-align:center;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-lg);box-shadow:var(--e1),var(--hi);padding:34px 30px}
+.gate-card{max-width:460px;width:100%;text-align:center;border:1px solid transparent;
+  background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge) border-box;
+  border-radius:var(--r-lg);box-shadow:var(--e2),var(--hi);padding:34px 30px}
 .gate-card .av{width:46px;height:46px;margin:0 auto 16px;border-radius:var(--r-md);
   background:var(--accent);display:flex;align-items:center;justify-content:center}
 .gate-card .av svg{width:24px;height:24px;color:var(--on-accent)}
@@ -495,13 +519,11 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .lander{min-height:100dvh;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 24px;text-align:center}
 .lander-in{width:100%;max-width:660px;display:flex;flex-direction:column;align-items:center;animation:rise .5s var(--ease,ease) both}
 .lander-brand{display:flex;align-items:center;gap:10px;margin-bottom:32px;font-weight:700;letter-spacing:-.02em;font-size:1.05rem}
-.lander-brand .av{width:34px;height:34px;border-radius:var(--r-md);background:var(--accent);display:flex;align-items:center;justify-content:center}
-.lander-brand .av svg{width:18px;height:18px;color:var(--on-accent)}
 .lander-brand em{font-style:normal;color:var(--text-3);font-weight:500}
 .lander h1{font-size:clamp(1.9rem,5.2vw,2.7rem);line-height:1.07;letter-spacing:-.032em;margin-bottom:16px}
 .lander-sub{color:var(--text-2);font-size:1.02rem;line-height:1.62;max-width:530px;margin-bottom:28px}
 .lander-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:.82rem 1.55rem;border-radius:var(--r-md);
-  background:var(--accent);color:var(--on-accent);font-weight:650;font-size:.95rem;text-decoration:none;box-shadow:var(--e2)}
+  background:var(--accent);color:var(--on-accent);font-weight:600;font-size:.95rem;text-decoration:none;box-shadow:var(--e2)}
 .lander-cta:hover{filter:brightness(1.08)}
 .lander-cta svg{color:var(--on-accent)}
 .lander-note{color:var(--text-3);font-size:.8rem;margin-top:14px;max-width:420px}
@@ -561,7 +583,7 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .livehint .lh-note{font-size:.72rem;color:var(--text-3)}
 .sugg-lbl{width:100%;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:1px}
 /* stop button state */
-.ask-send.stopping{background:var(--red)}
+.ask-send.stopping{background:var(--red);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3)}
 .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:80;background:var(--surface);
   border:1px solid var(--border);color:var(--text);font-size:.8rem;padding:.5rem .9rem;border-radius:var(--r-full);
   box-shadow:var(--e1);opacity:0;pointer-events:none;transition:opacity var(--t)}
@@ -641,18 +663,24 @@ function shell(inner, extraJs = "", head = "") {
 <title>Ask · A House Divided</title>
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Cpath d='M32 14c-10.5 0-19 7.2-19 16 0 5 2.7 9.4 7 12.3V50l7.6-4.4c1.4.3 2.9.4 4.4.4 10.5 0 19-7.2 19-16s-8.5-16-19-16z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/ahd-logo.png">
+<link rel="apple-touch-icon" href="/ahd-logo.png">
 ${head}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>*{margin:0;padding:0;box-sizing:border-box}
 ${TOKENS_CSS}
 ${ASK_THEME_CSS}
 html{-webkit-text-size-adjust:100%}
 body{font-family:var(--font);line-height:1.55;letter-spacing:-.011em;-webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;background:var(--bg-0);color:var(--text)}
-body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--bg-0)}
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+  radial-gradient(1100px 520px at 50% -12%,var(--glow-1),transparent 62%),
+  radial-gradient(900px 620px at 88% 112%,var(--glow-2),transparent 60%),
+  var(--bg-0)}
+body::after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E")}
 ::selection{background:var(--accent-soft);color:var(--text)}
 a{color:var(--accent);text-decoration:none}
 button,input,textarea{font-family:inherit}
@@ -678,7 +706,7 @@ function changelogPage() {
   const inner = `<div class="cl-root">
     <header class="cl-head">
       <a class="cl-back" href="/">${icon("arrow-left", 14) || "←"} Ask</a>
-      <span class="cl-brand"><span class="av">${icon("message", 15)}</span>Ask <em>· What's new</em></span>
+      <span class="cl-brand">${mark(20)}Ask <em>· What's new</em></span>
     </header>
     <main class="cl-body">
       <div class="cl-hero"><h1>Changelog</h1><p>What's changed in Ask, newest first.</p></div>
@@ -714,7 +742,7 @@ function changelogPage() {
 function signedOut({ failed = false, notFound = false } = {}) {
   if (notFound) {
     return shell(`<div class="gate"><div class="gate-card">
-      <div class="av">${icon("message", 24)}</div>
+      ${mark(52)}
       <h1>Link not found</h1>
       <p>This shared conversation no longer exists, or the link was revoked.</p>
       <a class="gate-btn" href="/">Go to Ask</a>
@@ -728,9 +756,9 @@ function signedOut({ failed = false, notFound = false } = {}) {
     "How do tariffs ripple through the economy?",
   ];
   return shell(`<div class="lander"><div class="lander-in">
-    <div class="lander-brand"><span class="av">${icon("message", 18)}</span>Ask <em>· A House Divided</em></div>
+    <div class="lander-brand">${mark(38)}Ask <em>· A House Divided</em></div>
     <h1>Answers about how the game actually works.</h1>
-    <p class="lander-sub">Ask anything about A House Divided and get an answer taken straight from the game's live code — with citations, honest "the code doesn't show this" notes, and optional live game-state lookups.</p>
+    <p class="lander-sub">Ask anything about A House Divided and get an answer taken straight from the game's live code, with citations, honest "the code doesn't show this" notes, and optional live game-state lookups.</p>
     ${failed ? `<div class="gate-err" style="margin-bottom:16px">That sign-in didn't complete. Please try again.</div>` : ""}
     <a class="lander-cta" href="/auth/login">${icon("user", 16)} Sign in with your game account</a>
     <div class="lander-note">Free for every player with a game account. Supporters get a bigger daily budget, plus charts and maps.</div>
@@ -746,7 +774,7 @@ function signedOut({ failed = false, notFound = false } = {}) {
     </div>
   </div></div>`, "", ogHead({
     title: "Ask · A House Divided",
-    description: "Answers about how A House Divided actually works, taken from the game's live code — with citations and live game-state lookups.",
+    description: "Answers about how A House Divided actually works, taken from the game's live code, with citations and live game-state lookups.",
     url: SELF_ORIGIN,
   }));
 }
@@ -824,7 +852,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
   <div class="ask-shell">
     <header class="ask-head">
       <button class="iconbtn menubtn" id="menu" aria-label="Menu">${icon("menu", 16) || "≡"}</button>
-      <span class="ask-brand"><span class="av">${icon("message", 15)}</span>Ask <em>· A House Divided</em></span>
+      <span class="ask-brand">${mark(26)}Ask <em>· A House Divided</em></span>
       <span class="ask-head-right">
         <button class="iconbtn" id="settings" type="button" aria-label="Settings" title="Settings">${icon("settings", 16)}</button>
       </span>
@@ -1540,7 +1568,7 @@ function sharedView(conv) {
   const turns = (conv.turns || []).map(t => `
     <div class="ask-turn">
       <div class="ask-q"><span class="qmark">Q</span><div class="qt">${esc(t.question)}</div></div>
-      <div><div class="ask-ans-head"><span class="av">${icon("message", 13)}</span>
+      <div><div class="ask-ans-head">${mark(20)}
         <span class="lbl">Answer</span><span class="flag">${esc(modelRouter.label(t.model))}</span><span class="flag flag-model">${models.urlFor(t.model)
           ? `<a href="${esc(models.urlFor(t.model))}" target="_blank" rel="noopener">${esc(models.displayFor(t.model))}</a>`
           : esc(models.displayFor(t.model))}</span>
@@ -1552,7 +1580,7 @@ function sharedView(conv) {
     </div>`).join("");
   const inner = `<div class="ask-shell">
     <header class="ask-head">
-      <span class="ask-brand"><span class="av">${icon("message", 15)}</span>Ask <em>· A House Divided</em></span>
+      <span class="ask-brand">${mark(26)}Ask <em>· A House Divided</em></span>
       <span class="ask-head-right"><a class="signin" href="/">Ask your own</a></span>
     </header>
     <div class="ask-body"><div class="ask-col">
@@ -1612,7 +1640,7 @@ function reportView(report) {
   ].filter(Boolean).join(" · ");
   const inner = `<div class="ask-shell">
     <header class="ask-head">
-      <span class="ask-brand"><span class="av">${icon("message", 15)}</span>Ask <em>· A House Divided</em></span>
+      <span class="ask-brand">${mark(26)}Ask <em>· A House Divided</em></span>
       <span class="ask-head-right"><a class="signin" href="/">Ask your own</a></span>
     </header>
     <div class="ask-body"><div class="ask-col">

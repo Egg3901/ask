@@ -125,6 +125,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === "/auth/logout") { auth.invalidate(req); return auth.logout(res); }
 
+    // Brand mark. Public: it is the favicon and appears on signed-out pages.
+    if (req.method === "GET" && p === "/ahd-logo.png") {
+      try {
+        const buf = require("node:fs").readFileSync(require("node:path").join(__dirname, "ahd-logo.png"));
+        res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buf.length,
+          "Cache-Control": "public, max-age=604800", "X-Content-Type-Options": "nosniff" });
+        return res.end(buf);
+      } catch { res.writeHead(404); return res.end(); }
+    }
+
     // Social-card images. Public and unauthenticated by design: an unfurl bot
     // (Discord, Slack, X) fetches these with no session. The unguessable token is
     // still the permission — an unknown token renders the generic card, never

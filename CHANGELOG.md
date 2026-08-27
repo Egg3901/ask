@@ -2,6 +2,13 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.4.1 - 2026-08-27
+
+### Changed
+- The A House Divided logo is now the site's mark: browser tab icon, header, landing page, and shared pages.
+- A visual refresh across the app: subtle depth and grain instead of flat black, gradient hairlines on the composer and dialogs, questions styled as headlines, and a more dimensional send button.
+- Light mode fixes: the loading shimmer is now visible and card shadows render correctly.
+
 ## 1.4.0 - 2026-08-27
 
 ### Added
