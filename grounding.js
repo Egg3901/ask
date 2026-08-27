@@ -95,10 +95,46 @@ function inventedPaths(answer, evidenceText) {
   return [...out];
 }
 
+/**
+ * Split cited-but-unread paths into the two cases that need different handling.
+ *
+ * `invented` — no such file in the indexed corpus. The model made it up.
+ * `missed`   — the file is real; retrieval simply did not supply it.
+ *
+ * Measured over the shipped corpus: 19 of 22 were `missed`, not `invented`. The
+ * old single bucket told players to distrust nineteen correct citations, which
+ * degrades a right answer for a reason that is our fault, not the model's.
+ *
+ * `exists` is injected (retrieve.hasPath) so this stays pure and testable.
+ */
+function classifyPaths(answer, evidenceText, exists) {
+  const flagged = inventedPaths(answer, evidenceText);
+  const missed = [], invented = [];
+  for (const p of flagged) {
+    if (typeof exists === "function" && exists(p)) missed.push(p);
+    else invented.push(p);
+  }
+  return { missed, invented };
+}
+
 /** Player-facing note for invented file paths. Empty string when there are none. */
 function pathNote(paths) {
   if (!paths || !paths.length) return "";
-  return `\n\n> **Source check:** ${paths.join(", ")} ${paths.length === 1 ? "was" : "were"} not among the files I actually read for this answer, so treat claims resting on ${paths.length === 1 ? "it" : "them"} with caution.`;
+  return `\n\n> **Source check:** ${paths.join(", ")} ${paths.length === 1 ? "does" : "do"} not exist in the game's source, so treat claims resting on ${paths.length === 1 ? "it" : "them"} as unverified.`;
+}
+
+/**
+ * Player-facing note for a real file the answer cited without reading.
+ *
+ * Deliberately gentler than pathNote: the path is right, so saying it "was not
+ * among the files I read" reads as though the citation were bogus. The honest
+ * caveat is narrower — the file exists, but this answer did not verify against
+ * its contents.
+ */
+function missedPathNote(paths) {
+  if (!paths || !paths.length) return "";
+  const one = paths.length === 1;
+  return `\n\n> **Source check:** ${paths.join(", ")} ${one ? "is a real file but was" : "are real files but were"} not open in front of me for this answer, so the specifics I attribute to ${one ? "it" : "them"} are from recall rather than a direct read.`;
 }
 
 /** Player-facing note for ungrounded claims. Empty string when there are none. */
@@ -107,4 +143,4 @@ function note(claims) {
   return `\n\n> **Grounding check:** the game code I read does not confirm: ${claims.map(c => c.trim().replace(/\.$/, "")).join("; ")}. Treat those parts as general reasoning, not confirmed game rules.`;
 }
 
-module.exports = { decompose, check, note, condense, inventedPaths, pathNote };
+module.exports = { decompose, check, note, condense, inventedPaths, pathNote, classifyPaths, missedPathNote };

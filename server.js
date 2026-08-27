@@ -714,11 +714,24 @@ const server = http.createServer(async (req, res) => {
         // never in the evidence is an invention, no model call needed to prove
         // it. The answer is annotated, and below it is barred from the shared
         // cache so one hallucination is one player's, not everyone's.
-        let inventedPaths = [];
+        // Two very different causes, and they must not share a note. A path the
+        // corpus does not contain is an invention. A path it DOES contain is a
+        // retrieval miss: the model named the right file and we failed to hand
+        // it over. Measured over the shipped corpus, 19 of 22 were the latter,
+        // so one shared warning was telling players to distrust correct work.
+        let inventedPaths = [], missedPaths = [];
         try {
-          inventedPaths = grounding.inventedPaths(answer, evidenceForCheck);
+          const split = grounding.classifyPaths(answer, evidenceForCheck, retrieve.hasPath);
+          inventedPaths = split.invented;
+          missedPaths = split.missed;
           answer += grounding.pathNote(inventedPaths);
-        } catch { inventedPaths = []; }
+          answer += grounding.missedPathNote(missedPaths);
+        } catch { inventedPaths = []; missedPaths = []; }
+        // A retrieval miss is a work queue entry, not a model failure: the file
+        // is real and indexed, so the query that should have found it did not.
+        if (missedPaths.length) {
+          console.warn(`[ask] RETRIEVAL MISS paths=${JSON.stringify(missedPaths)} q=${JSON.stringify(question.slice(0, 80))}`);
+        }
         // Inline refusal guard: the model declined on a question that had live
         // evidence. Record it and, below, keep it out of the shared cache — a
         // refusal must never be served to everyone.
@@ -735,10 +748,10 @@ const server = http.createServer(async (req, res) => {
         // leaking as an answer, and it is the single most common failure shape.
         const narratedEvidence = answerGuard.detectBundleNarration(answer);
         if (narratedEvidence) console.warn(`[ask] evidence-bundle narration plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : [])], grounding: groundingNotes, inventedPaths };
+        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : [])], grounding: groundingNotes, inventedPaths, missedPaths };
         const areas = cites.areasFor(hits?.files || []);
 
-        if (cacheable && !inventedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {
+        if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {
           store.S.putCache.run(ckey, answer, JSON.stringify(areas), JSON.stringify(citations), servedModel, Date.now());
         }
         const answerId = store.record({

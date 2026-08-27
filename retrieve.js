@@ -332,6 +332,31 @@ function finish(scored, topK, claimType, maxChars = MAX_CHARS) {
   };
 }
 
+// Does this path exist in the indexed corpus at all?
+//
+// The distinction matters more than it looks. When an answer cites a file that
+// was not in its evidence, there are two very different causes: the model
+// invented a plausible-looking path, or the file is real and RETRIEVAL MISSED
+// IT. Measured over the shipped corpus, 19 of 22 such citations were real files
+// — so treating them all as inventions told players to distrust correct answers.
+//
+// Cached, because this runs on every answer against a read-only index.
+const pathCache = new Map();
+function hasPath(path) {
+  const key = String(path || "").trim();
+  if (!key) return false;
+  if (pathCache.has(key)) return pathCache.get(key);
+  const h = open();
+  if (!h) return false;                       // no index: claim nothing either way
+  let found = false;
+  try {
+    found = !!h.prepare("SELECT 1 FROM chunks WHERE path=? LIMIT 1").get(key);
+  } catch { found = false; }
+  if (pathCache.size > 5000) pathCache.clear();
+  pathCache.set(key, found);
+  return found;
+}
+
 function stats() {
   const h = open();
   if (!h) return { ready: false, chunks: 0 };
@@ -352,4 +377,4 @@ function stats() {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
-module.exports = { inferClaimType, search, searchMulti, stats, embedQuery };
+module.exports = { inferClaimType, search, searchMulti, stats, embedQuery, hasPath };

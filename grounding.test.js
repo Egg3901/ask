@@ -114,3 +114,34 @@ test("the investigation prompt block is wired into the answer prompt", () => {
   assert.match(server, /investigation \? `\\n\\n\$\{investigation\.text\}` : ""/);
   assert.match(server, /grounding\.check\(answer, evidenceForCheck\)/);
 });
+
+test("a cited file that really exists is a retrieval miss, not an invention", () => {
+  const grounding = require("./grounding");
+  const evidence = "--- src/lib/turn/bondTurn.ts ---\nstuff";
+  const answer = "Coupons: src/lib/turn/bondTurn.ts. Influence: src/lib/influence/constants.ts. Metrics: src/lib/madeUp.ts.";
+  const exists = p => p === "src/lib/influence/constants.ts";
+  const { missed, invented } = grounding.classifyPaths(answer, evidence, exists);
+  assert.deepEqual(missed, ["src/lib/influence/constants.ts"]);
+  assert.deepEqual(invented, ["src/lib/madeUp.ts"]);
+});
+
+test("the two path notes say different things and neither calls a real file bogus", () => {
+  const grounding = require("./grounding");
+  const invented = grounding.pathNote(["src/lib/madeUp.ts"]);
+  const missed = grounding.missedPathNote(["src/lib/influence/constants.ts"]);
+  assert.match(invented, /does not exist/);
+  assert.match(missed, /is a real file/);
+  // The old wording told players a correct citation was "not among the files I
+  // actually read", which reads as though the path itself were made up.
+  assert.doesNotMatch(missed, /not among the files/);
+  assert.equal(grounding.pathNote([]), "");
+  assert.equal(grounding.missedPathNote([]), "");
+});
+
+test("with no index available nothing is called a retrieval miss", () => {
+  const grounding = require("./grounding");
+  const { missed, invented } = grounding.classifyPaths(
+    "See src/lib/anything.ts.", "no evidence here", undefined);
+  assert.deepEqual(missed, []);
+  assert.deepEqual(invented, ["src/lib/anything.ts"]);
+});
