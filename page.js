@@ -351,9 +351,12 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
   background:currentColor;animation:classic-fade 1.2s linear infinite}
 @keyframes classic-fade{0%{opacity:1}100%{opacity:.15}}
 .ask-loading .shimmer{background:linear-gradient(100deg, var(--text-3) 28%, #fff 50%, var(--text-3) 72%);
-  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  background-repeat:no-repeat;background-size:220px 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
   animation:shimmer-sweep 2.4s ease-in-out infinite}
-@keyframes shimmer-sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
+/* Pixel geometry, not percent: the sweep is measured from the text box origin,
+   so changing the status label's length no longer rescales the gradient and the
+   animation runs continuously instead of jumping each time the phase narrates. */
+@keyframes shimmer-sweep{0%{background-position:-180px 0}100%{background-position:380px 0}}
 @media(prefers-reduced-motion:reduce){
   .ask-loading .classic i{animation:none;opacity:.55}
   .ask-loading .shimmer{animation:none;-webkit-background-clip:unset;background-clip:unset;color:var(--text-2)}
