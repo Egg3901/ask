@@ -898,7 +898,6 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <label class="setting-live${entitlement?.visualizations ? "" : " setting-locked"}"><input type="checkbox" id="visualizations"${entitlement?.visualizations ? "" : " disabled"}><span>Use visualizations<small>${entitlement?.visualizations
       ? "Allow a diagram, chart, or game map when it makes the answer clearer."
       : "Charts, diagrams, and game maps are a supporter feature. Answers stay in prose."}</small></span></label>
-    <div class="setting-group"><label>Answer model</label><div class="seg">${segBtns(require("./models").USER_MODELS, "model", "auto")}</div></div>
     <div class="setting-group"><label>Response style</label><div class="seg">${segBtns(styles, "style", "standard")}</div></div>
     <div class="setting-group"><label>Response length</label><div class="seg">${segBtns(lengths, "length", "standard")}</div></div>
   </div>
@@ -944,7 +943,6 @@ var CONVS=${JSON.stringify((conversations || []).map(c => ({ id: c.id, title: c.
 var STARTERS=${JSON.stringify(starterCatalog).replace(/</g, "\\u003c")};
 var LIVE_ICON=${JSON.stringify(icon("zap", { size: 10 }))},ARROW_ICON=${JSON.stringify(icon("arrow-right", { size: 15 }))};
 var MODEL_NAMES=${JSON.stringify(require("./models").displayMap())};
-var MODEL_TIERS=${JSON.stringify(require("./models").tierMap())};
 var VIZ_ALLOWED=${entitlement?.visualizations ? "true" : "false"};
 var MODEL_URLS=${JSON.stringify(require("./models").urlMap())};
 var f=document.getElementById('f'),q=document.getElementById('q'),go=document.getElementById('go'),
@@ -960,15 +958,15 @@ var f=document.getElementById('f'),q=document.getElementById('q'),go=document.ge
 var DOC_TITLE=document.title;
 var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
-var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard',model:localStorage.getItem('ask.model')||'auto'};
+var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard'};
+localStorage.removeItem('ask.model');
 visualizations.checked=VIZ_ALLOWED&&localStorage.getItem('ask.visualizations')==='true';
 visualizations.addEventListener('change',function(){localStorage.setItem('ask.visualizations',String(visualizations.checked));});
 var replayQuestion=new URLSearchParams(location.search).get('replay');
 if(replayQuestion){q.value=replayQuestion.slice(0,500);setTimeout(function(){q.focus();q.dispatchEvent(new Event('input'));},0);}
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
-function modelBadge(model){var m=String(model||'');if(MODEL_TIERS[m])return MODEL_TIERS[m];if(m==='Flash'||m==='Pro'||m==='Deep')return m;if(/pro/i.test(m))return 'Pro';if(/flash/i.test(m))return 'Flash';return '';}
 function modelName(d){var id=d&&d.modelId?d.modelId:(d&&d.model?d.model:'');if(d&&d.modelName)return d.modelName;return MODEL_NAMES[id]||'';}
-function setFlags(turn,d){if(!turn)return;var f=turn.querySelector('.flag');if(f)f.textContent=modelBadge(d.modelId||d.model);var n=turn.querySelector('.flag-model');if(!n)return;var name=modelName(d),url=MODEL_URLS[d.modelId||d.model];if(!name){n.textContent='';return;}if(url){n.innerHTML='<a href="'+esc(url)+'" target="_blank" rel="noopener" title="About '+esc(name)+'">'+esc(name)+'</a>';}else{n.textContent=name;}}
+function setFlags(turn,d){if(!turn)return;var n=turn.querySelector('.flag-model');if(!n)return;var name=modelName(d),url=MODEL_URLS[d.modelId||d.model];if(!name)return;if(url){n.innerHTML='<a href="'+esc(url)+'" target="_blank" rel="noopener" title="About '+esc(name)+'">'+esc(name)+'</a>';}else{n.textContent=name;}}
 function mermaidCfg(){var light=document.documentElement.getAttribute('data-theme')==='light';
   var v=light
     ?{background:'#ffffff',primaryColor:'#f2f2f3',primaryTextColor:'#0a0a0a',primaryBorderColor:'#b0b0b0',lineColor:'#8a8a8a',secondaryColor:'#e6e6e7',tertiaryColor:'#f6f6f7',mainBkg:'#f2f2f3',nodeBorder:'#b0b0b0',clusterBkg:'#fafafa',clusterBorder:'#d4d4d4',textColor:'#0a0a0a',fontFamily:'Inter, system-ui, sans-serif'}
@@ -1204,7 +1202,7 @@ var ICO={copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 function addTurn(question,res){
   var turn=document.createElement('div');turn.className='ask-turn';
   turn.innerHTML='<div class="ask-q"><span class="qmark">Q</span><div class="qt">'+esc(question)+'</div></div>'+
-    '<div><div class="ask-ans-head"><span class="lbl">Answer</span><span class="flag"></span><span class="flag flag-model"></span></div><div class="ask-direct" data-a></div></div>';
+    '<div><div class="ask-ans-head"><span class="lbl">Answer</span><span class="flag flag-model"></span></div><div class="ask-direct" data-a></div></div>';
   out.appendChild(turn);
   var target=turn.querySelector('[data-a]');
   if(res)fill(turn,target,res);
@@ -1445,7 +1443,7 @@ function submit(){
     else { ctrl.abort(); } };
   fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
     signal:ctrl.signal,
-    body:JSON.stringify({question:text,style:S.style,length:S.length,model:S.model,useMcp:live.checked,visualizations:visualizations.checked,convId:convId})})
+    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId})})
   .then(function(r){
     // Non-streaming replies (cache hits, quota refusals) still come back as JSON.
     var ct=r.headers.get('content-type')||'';
@@ -1569,7 +1567,7 @@ function sharedView(conv) {
     <div class="ask-turn">
       <div class="ask-q"><span class="qmark">Q</span><div class="qt">${esc(t.question)}</div></div>
       <div><div class="ask-ans-head">${mark(20)}
-        <span class="lbl">Answer</span><span class="flag">${esc(modelRouter.label(t.model))}</span><span class="flag flag-model">${models.urlFor(t.model)
+        <span class="lbl">Answer</span><span class="flag flag-model">${models.urlFor(t.model)
           ? `<a href="${esc(models.urlFor(t.model))}" target="_blank" rel="noopener">${esc(models.displayFor(t.model))}</a>`
           : esc(models.displayFor(t.model))}</span>
         ${t.id ? `<span class="ans-tools"><button class="tbtn" type="button" data-shared-report="${Number(t.id)}">Report</button></span>` : ""}</div>

@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.4.2 - 2026-08-27
+
+### Changed
+- Removed the answer-model picker. Ask now always routes each question automatically, degrading through free capacity before paid, so answers stay fast without anyone having to pick a backend.
+- The answer header shows just the model that answered, without the duplicate tier badge next to it.
+
 ## 1.4.1 - 2026-08-27
 
 ### Changed

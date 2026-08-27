@@ -253,7 +253,6 @@ test("surfaces live-data mode beside the composer and labels corporation context
   assert.match(html, /Code sources/);
   assert.match(html, /CEO of Lakeside/);
   assert.match(html, /Compare Lakeside with its public peers/);
-  assert.match(html, /function modelBadge/);
   assert.match(html, /\.flag:empty\{display:none\}/);
 });
 
@@ -287,7 +286,6 @@ test("the client bundle names the answering model without leaking a vendor slug"
   const all = scripts.join("\n");
   const names = all.match(/var MODEL_NAMES=(\{.*?\});/);
   assert.ok(names, "MODEL_NAMES not injected into the client");
-  assert.ok(/var MODEL_TIERS=\{/.test(all), "MODEL_TIERS not injected into the client");
   const map = JSON.parse(names[1]);
   const models = require("./models");
   for (const id of Object.values(models.CHAINS).flat()) {
@@ -295,16 +293,10 @@ test("the client bundle names the answering model without leaking a vendor slug"
     assert.ok(!map[id].includes("/"), `${id} display name leaks a vendor slug`);
   }
 
-  const badge = new Function(names[0] + all.match(/var MODEL_TIERS=\{.*?\};/)[0]
-    + all.match(/function modelBadge[\s\S]*?\n/)[0] + "return modelBadge;")();
-  assert.equal(badge("nvidia/nemotron-3-ultra-550b-a55b:free"), "Pro");
-  assert.equal(badge("nvidia/nemotron-3.5-lightning:free"), "Flash");
-  assert.equal(badge("stealth/ox-alpha"), "Deep");
-  assert.equal(badge("deepseek-v4-pro"), "Pro");
-  for (const lbl of ["Flash", "Pro", "Deep"]) {
-    assert.equal(badge(lbl), lbl, "server-sent tier labels must still render");
-  }
+  // The tier badge is gone: the header shows only the model name chip.
+  assert.ok(!/function modelBadge/.test(all), "tier badge machinery should be removed");
   assert.ok(html.includes("flag flag-model"), "model chip markup missing");
+  assert.ok(!html.includes('<span class="flag"></span>'), "empty tier badge span should be gone");
 });
 
 test("visualizations are locked off for a tier that does not include them", () => {

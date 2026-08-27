@@ -194,20 +194,8 @@ const RETIRED = {
   "discord-ask": "Discord",
 };
 
-// Models a player may pick in Settings. DeepSeek is intentionally absent: it is
-// the reliable paid backstop, always the last link, not a headline choice.
-// "auto" means "use the normal preference chain".
-// Only models that can actually serve are offered. Ox Alpha and Muse Spark were
-// removed 2026-08-25 when the OpenRouter key was rotated (they now 401); re-add
-// them here once a valid OPENROUTER_API_KEY is in place.
-const USER_MODELS = {
-  auto: { label: "Auto" },
-  "minimax/minimax-m3-free": { label: "MiniMax M3" },
-  "deepseek-v4-flash:cloud": { label: "DeepSeek" },
-  "mimo-v2.5-free": { label: "Mimo V2.5" },
-  "ox-alpha-free": { label: "Ox Alpha" },
-  "gemini-3.7-flash": { label: "Gemini 3.7" },
-};
+// The model picker was removed 2026-08-27: every request rides the tier chain
+// (free pool rotation + paid backstop). Auto is the only behavior.
 
 const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai" };
 
@@ -281,4 +269,4 @@ function tierMap() {
   return out;
 }
 
-module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, USER_MODELS, FREE_POOL, PAID_BACKSTOP, chainFrom, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };
+module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, FREE_POOL, PAID_BACKSTOP, chainFrom, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };
