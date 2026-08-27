@@ -449,8 +449,11 @@ const server = http.createServer(async (req, res) => {
         // keeps the tier's effort/token budget; just the lead model changes, with
         // DeepSeek still behind it. An explicit pick bypasses the shared cache so
         // the player actually gets the model they chose.
+        // A pinned model still degrades through the whole verified free pool
+        // before the paid backstop, so a 503 on the pick never costs money
+        // while free endpoints are healthy.
         const pickedModel = models.USER_MODELS[body.model] && body.model !== "auto" ? body.model : null;
-        if (pickedModel) { route.chain = [pickedModel, "deepseek-v4-flash"]; route.model = pickedModel; }
+        if (pickedModel) { route.chain = models.chainFrom(pickedModel); route.model = pickedModel; }
         const cacheable = !wantMcp && !isFollowup && !pickedModel;
 
         // Cache is checked BEFORE quota so re-reading an answer is always free.

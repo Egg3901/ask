@@ -145,6 +145,22 @@ const EXCLUDED = {
 // The deep tier keeps one free step (Ultra) before the paid fallback: Ox Alpha is
 // a preview slug that can vanish, and dropping straight to Flash would take
 // judged grounding from 4.2 to 3.2 on exactly the questions that need it most.
+// Verified free endpoints, in fallback order: every chain (including a
+// player-pinned model) degrades through ALL of these before the paid backstop.
+// llm.js cooldowns make the rotation dynamic: a rate-limited endpoint is benched
+// for 60s and requests route around it automatically.
+const FREE_POOL = (process.env.ASK_FREE_POOL ||
+  "minimax/minimax-m3-free,deepseek-v4-flash:cloud,gemini-3.7-flash,mimo-v2.5-free")
+  .split(",").map(s => s.trim()).filter(Boolean);
+
+// The paid model every chain ends on.
+const PAID_BACKSTOP = "deepseek-v4-flash";
+
+/** lead -> full chain: lead, then the rest of the free pool, then paid. */
+function chainFrom(lead) {
+  return [lead, ...FREE_POOL.filter(m => m !== lead), PAID_BACKSTOP];
+}
+
 const CHAINS = {
   flash: (process.env.ASK_CHAIN_FLASH || "deepseek-v4-flash,nvidia/nemotron-3-ultra-550b-a55b:free").split(",").map(s => s.trim()).filter(Boolean),
   pro: (process.env.ASK_CHAIN_PRO || "nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean),
@@ -265,4 +281,4 @@ function tierMap() {
   return out;
 }
 
-module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, USER_MODELS, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };
+module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, USER_MODELS, FREE_POOL, PAID_BACKSTOP, chainFrom, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };
