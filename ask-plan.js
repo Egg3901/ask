@@ -10,7 +10,7 @@ const ELECTION_RULES = /\b(?:house|lower chamber|senate|district|constituen|seat
 const ELECTION_QUESTION = /\b(?:can |how |which |what |one person|multiple|same party|at-large|single.member)\b/i;
 const CORP = /\b(?:corporation|corp|company|public peer|peer(?:s)?|revenue per stake|valuation|valued|stock)\b/i;
 const CORP_LEADERBOARD = /^(?=[\s\S]*\b(?:largest|biggest|top|rank|ranking|leaderboard)\b)(?=[\s\S]*\bpublic\b)(?=[\s\S]*\b(?:corporations?|corps?|companies|businesses)\b)[\s\S]*$/i;
-const PLAYER_WEALTH = /\b(?:net[\s-]?worth|player wealth|wealth (?:distribution|inequality|gap|ranking)|inequality|richest|poorest|wealthiest|savings)\b/i;
+const PLAYER_WEALTH = /\b(?:net[\s-]?worth|player wealth|wealth (?:distribution|inequality|gap|ranking)|inequality|richest|poorest|wealthiest|savings|my (?:money|cash|wealth|holdings|balance|assets|portfolio)|how much (?:am i worth|money do i have|do i have)|rich(?:er)?(?: am i| than| are (?:we|players|the players)))\b/i;
 const VISUAL = /\b(?:visuali[sz](?:e|ation)|chart|graph|diagram|plot|map|heatmap|choropleth)\b/i;
 
 function create(question, context = {}) {

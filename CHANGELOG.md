@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.2.2 — 2026-08-27
+
+### Fixed
+- More ways of asking about your own wealth ("how rich am I", "am I richer than…", "my holdings") now reach your live figures instead of a generic answer.
+
 ## 1.2.1 — 2026-08-27
 
 ### Fixed

@@ -1,0 +1,28 @@
+{
+  "note": "Deterministic Ask regression corpus. No model calls: every assertion runs against ask-plan routing and answer-guard refusal detection. Ground truth verified against live code 2026-08-27. Add a case here when a routing or guard behavior must never regress.",
+  "routing": [
+    { "category": "visualization", "question": "Map GOP Senate Class 1 candidates, real players only", "expect": { "id": "candidate-roster-map", "live": "required", "kind": "map" } },
+    { "category": "live_facts", "question": "show my net worth", "expect": { "id": "player-wealth", "live": "required", "kind": "comparison" } },
+    { "category": "live_facts", "question": "how rich am I compared to other players", "expect": { "id": "player-wealth", "live": "required", "kind": "comparison" } },
+    { "category": "live_facts", "question": "am I richer than the other players in my country", "expect": { "id": "player-wealth", "live": "required" } },
+    { "category": "live_facts", "question": "poorest states by player wealth", "expect": { "id": "player-wealth", "live": "required", "kind": "comparison" } },
+    { "category": "live_facts", "question": "wealth inequality across states", "expect": { "id": "player-wealth", "live": "required" } },
+    { "category": "live_facts", "question": "what is the USD to JPY exchange rate", "expect": { "id": "fx-quote", "live": "required", "kind": "trend" } },
+    { "category": "live_facts", "question": "largest public corporations by market cap", "expect": { "id": "public-corporation-leaderboard", "live": "required", "kind": "comparison" } },
+    { "category": "live_facts", "question": "why did my corporation revenue drop", "expect": { "id": "public-corporation", "live": "preferred" } },
+    { "category": "mechanics", "question": "can one player hold multiple house seats in a state", "expect": { "id": "election-rules", "live": "preferred", "kind": "prose" } },
+    { "category": "mechanics", "question": "how is inflation calculated", "expect": { "id": "general", "live": "preferred", "kind": "prose" } },
+    { "category": "mechanics", "question": "which country is rich in oil reserves", "expect": { "id": "general" } }
+  ],
+  "guard": [
+    { "category": "fair_play", "answer": "I can't share another player's private balance sheet.", "hasLive": true, "expectRefusal": false },
+    { "category": "live_facts", "answer": "I cannot determine your net worth from what I was given.", "hasLive": true, "expectRefusal": true },
+    { "category": "live_facts", "answer": "I do not have access to that.", "hasLive": true, "expectRefusal": true },
+    { "category": "live_facts", "answer": "Based on the live data, your net worth is 4,200 across savings and holdings.", "hasLive": true, "expectRefusal": false },
+    { "category": "mechanics", "answer": "Inflation is computed from several pressure terms; the exact figure cannot be determined without a specific turn, but the mechanism is a weighted sum of demand, wage, and import pressure applied each turn to the prior level, so the model reads the standing basket and rolls it forward.", "hasLive": false, "expectRefusal": false }
+  ],
+  "known_gaps": [
+    { "question": "what is pushing US inflation", "current": "general", "desired": "country_fiscal", "blockedOn": "WS5a country_fiscal MCP tool + intent" },
+    { "question": "how much would going to war cost", "current": "general", "desired": "estimation", "blockedOn": "WS6 estimation path" }
+  ]
+}
