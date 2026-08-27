@@ -2,6 +2,22 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.5.0 - 2026-08-27
+
+### Fixed
+- Ask no longer tells you what it was handed instead of answering your question. It used to say things like "the supplied source does not include that" even when it had already looked up the live data, which read as a refusal on questions it could answer.
+- Rankings, counts, distributions and candidate maps now work. Asking for the ten largest public companies, active player counts by country, or a map of Senate candidates used to get "that data isn't available"; the data was always there.
+- Corporation names now resolve the way you type them. "Tinky corp", "meyer corp" and misspellings all find the right company instead of "could not be found". When two companies genuinely match, Ask asks which one you meant rather than guessing.
+- "Where do I find it" questions are answered from the game's real menus, with the real labels, instead of a guess at what a button might be called.
+- Answers no longer cut off mid-sentence.
+- A chart is only shown when it is about what you asked. A chart of something else could previously appear above an answer.
+- Figures about a person or company now say whose they are, so a wrong lookup is obvious rather than silent.
+- Ask no longer states what is true in the world today based on how the world started. It used to say a tied state senate was impossible while one was tied.
+- When you ask for a number, you get the number, not the formula for it.
+
+### Known gaps
+- Questions about active wars and military strength still cannot be answered. That data has no read-only lookup yet.
+
 ## 1.4.2 - 2026-08-27
 
 ### Changed
