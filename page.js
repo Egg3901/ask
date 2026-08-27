@@ -1138,9 +1138,11 @@ function fill(turn,target,d){
          ICO.chev+esc(f)+'</button>';}).join('')+'</div>';
   }
   if(d.liveHint){
+    var lh=d.liveHint, lbl=(lh&&lh.label)||'Answer with live game data',
+        note=(lh&&lh.note)||'Looks like a question about your current game.';
     h+='<div class="livehint"><button class="lh-btn" type="button" data-livehint>'+ICO.bolt+
-       'Answer with live game data</button>'+
-       '<span class="lh-note">Looks like a question about your current game.</span></div>';
+       esc(lbl)+'</button>'+
+       '<span class="lh-note">'+esc(note)+'</span></div>';
   }
   target.innerHTML=h+(meta?'<div class="ask-meta">'+meta+'</div>':'');
   renderMermaidIn(target);

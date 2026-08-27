@@ -17,6 +17,7 @@ const COUNTRY_WORDS = /\b(country|countries|economy|gdp|inflation|unemployment|p
 const PEER_WORDS = /\b(compare|comparison|versus|vs\.?|peer|relative|rank|benchmark|better|worse|outperform|underperform|leader)\b/i;
 const MARKET_WORDS = /\b(market|price|commodity|supply|demand|extraction|resource|shortage)\b/i;
 const ELECTION_WORDS = /\b(election|vote|poll|race|campaign|seat)\b/i;
+const LEGISLATION_WORDS = /\b(bill|bills|legislation|legislative|law|laws|statute|propose (?:a )?(?:bill|law)|what can i propose|on the floor|enacted|pending law)\b/i;
 const FX_CODES = "NGN|USD|GBP|JPY|EUR|IEP|CNY|BRL|SUR|DDM|FRF|ITL|ESP|SEK|TRL|GRD|ATS|FIM";
 const COUNTRY_IDS = {
   "united states": "US", america: "US", us: "US", usa: "US",
@@ -500,8 +501,36 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
     }
   }
 
+  // A country's live fiscal position: the decomposition behind budget, deficit,
+  // debt, and "what's pushing inflation" questions, not the formula.
+  if (plan?.intent === "country_fiscal") {
+    const country = namedCountryId(text, focusCountry);
+    if (country) {
+      const fiscal = await call("country_fiscal", { country });
+      const data = payload(fiscal);
+      if (data?.available) parts.push(`LIVE FISCAL POSITION (${country}):\n${cap(fiscal, 6000)}`);
+      else if (fiscal) parts.push(`LIVE FISCAL LOOKUP (${country}):\n${cap(fiscal, 1200)}`);
+    }
+  }
+
+  // Live legislative record for "what bills are on the floor / can I propose".
+  if (LEGISLATION_WORDS.test(text)) {
+    const country = namedCountryId(text, focusCountry);
+    if (country) {
+      const bills = await call("legislation_catalog", { country, limit: 15 });
+      if (bills && !/MCP error/i.test(bills)) parts.push(`LIVE LEGISLATION (${country}):\n${cap(bills, 6000)}`);
+    }
+  }
+
   const charName = context?.character?.name;
   if (charName && /\b(my|mine|i |i'm|am i)\b/i.test(text)) {
+    // The canonical wealth snapshot first (net worth, cash, savings, bonds),
+    // then the recent history — "show my net worth" needs the concrete figure.
+    if (plan?.intent === "player_wealth" || /\b(net[\s-]?worth|wealth|savings|money|holdings|balance|worth)\b/i.test(text)) {
+      const sheet = await call("character_balance_sheet", { character: charName });
+      const data = payload(sheet);
+      if (data?.found) parts.push(`THIS PLAYER'S WEALTH (${charName}) — report these concrete figures:\n${cap(sheet, 3000)}`);
+    }
     const character = await call("trace_character", { character: charName });
     if (character) parts.push(`THIS PLAYER'S RECENT HISTORY (${charName}):\n${cap(character)}`);
   }

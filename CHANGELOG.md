@@ -2,6 +2,15 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.3.0 — 2026-08-27
+
+### Added
+- Budget & inflation questions ("what's pushing US inflation", "what's the deficit") now answer with the live fiscal breakdown — revenue, spending, debt, credit rating — not the formula.
+- "Show my net worth" returns your live wealth snapshot: cash, savings, net worth, and bonds held.
+- Legislation questions ("what bills are on the floor") return the live bill list with status, sponsor, and vote tally.
+- Estimation questions ("how much would X cost", "how long until Y") now calculate the number from the formula and current values instead of just quoting the formula.
+- The "answer with live data" prompt now says what you'll get — "See your live net worth", "See the live fiscal numbers".
+
 ## 1.2.2 — 2026-08-27
 
 ### Fixed

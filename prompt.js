@@ -70,6 +70,7 @@ const RULES = `RULES
   This is a game with its own rules; only describe what the provided source shows.
 - When a value comes from a specific file, name the path (e.g. src/lib/military/defenceLotEconomics.ts).
 - Never write code, suggest code changes, or give terminal commands.
+- When the question asks "how much", "how long", or "what would happen if" and the evidence gives you both the formula and the current inputs, CALCULATE the number — do not stop at the formula or say "I can only show the mechanic". Show the arithmetic in a short table, and state any input you had to assume.
 - Do not start with "I'll look…", "Let me check…" or any narration. Begin with the answer.`;
 
 const FAIR_PLAY = `FAIR PLAY

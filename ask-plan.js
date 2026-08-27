@@ -11,6 +11,8 @@ const ELECTION_QUESTION = /\b(?:can |how |which |what |one person|multiple|same 
 const CORP = /\b(?:corporation|corp|company|public peer|peer(?:s)?|revenue per stake|valuation|valued|stock)\b/i;
 const CORP_LEADERBOARD = /^(?=[\s\S]*\b(?:largest|biggest|top|rank|ranking|leaderboard)\b)(?=[\s\S]*\bpublic\b)(?=[\s\S]*\b(?:corporations?|corps?|companies|businesses)\b)[\s\S]*$/i;
 const PLAYER_WEALTH = /\b(?:net[\s-]?worth|player wealth|wealth (?:distribution|inequality|gap|ranking)|inequality|richest|poorest|wealthiest|savings|my (?:money|cash|wealth|holdings|balance|assets|portfolio)|how much (?:am i worth|money do i have|do i have)|rich(?:er)?(?: am i| than| are (?:we|players|the players)))\b/i;
+const FISCAL = /\b(?:budget|deficit|surplus|fiscal|debt[\s-]?to[\s-]?gdp|national debt|credit rating|government spending|govt spending|tax revenue|(?:pushing|driving|fueling|behind|causing) (?:[a-z]{2,}\s+){0,3}inflation)\b/i;
+const ESTIMATION = /\b(?:how much would|how much does it cost|what would it cost|how expensive|how long until|how long would|how many turns|what would happen if|what happens if|what would .{0,40} do to)\b/i;
 const VISUAL = /\b(?:visuali[sz](?:e|ation)|chart|graph|diagram|plot|map|heatmap|choropleth)\b/i;
 
 function create(question, context = {}) {
@@ -68,6 +70,18 @@ function create(question, context = {}) {
     display: { kind: "comparison", metric: "player_net_worth", canonical: false },
     visual: explicitVisual ? "required" : "optional", suppressGenericCountryEconomy: true,
     status: "Reading live player wealth…", context,
+  };
+  if (ESTIMATION.test(text)) return {
+    id: "estimation", intent: "estimation", live: "preferred",
+    display: { kind: "prose", metric: null, canonical: false },
+    visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: false,
+    status: "Estimating from the formula and current values…", context,
+  };
+  if (!map && FISCAL.test(text)) return {
+    id: "country-fiscal", intent: "country_fiscal", live: "preferred",
+    display: { kind: "prose", metric: null, canonical: false },
+    visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: true,
+    status: "Reading the live fiscal position…", context,
   };
   return {
     id: "general", intent: "general", live: "preferred",

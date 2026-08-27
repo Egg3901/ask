@@ -12,7 +12,11 @@
     { "category": "live_facts", "question": "why did my corporation revenue drop", "expect": { "id": "public-corporation", "live": "preferred" } },
     { "category": "mechanics", "question": "can one player hold multiple house seats in a state", "expect": { "id": "election-rules", "live": "preferred", "kind": "prose" } },
     { "category": "mechanics", "question": "how is inflation calculated", "expect": { "id": "general", "live": "preferred", "kind": "prose" } },
-    { "category": "mechanics", "question": "which country is rich in oil reserves", "expect": { "id": "general" } }
+    { "category": "mechanics", "question": "which country is rich in oil reserves", "expect": { "id": "general" } },
+    { "category": "live_facts", "question": "what is pushing US inflation", "expect": { "id": "country-fiscal", "live": "preferred", "kind": "prose" } },
+    { "category": "live_facts", "question": "what is the US budget deficit", "expect": { "id": "country-fiscal", "live": "preferred" } },
+    { "category": "estimation", "question": "how much would going to war cost", "expect": { "id": "estimation", "live": "preferred", "kind": "prose" } },
+    { "category": "estimation", "question": "how long until my capacity is built", "expect": { "id": "estimation" } }
   ],
   "guard": [
     { "category": "fair_play", "answer": "I can't share another player's private balance sheet.", "hasLive": true, "expectRefusal": false },
@@ -21,8 +25,5 @@
     { "category": "live_facts", "answer": "Based on the live data, your net worth is 4,200 across savings and holdings.", "hasLive": true, "expectRefusal": false },
     { "category": "mechanics", "answer": "Inflation is computed from several pressure terms; the exact figure cannot be determined without a specific turn, but the mechanism is a weighted sum of demand, wage, and import pressure applied each turn to the prior level, so the model reads the standing basket and rolls it forward.", "hasLive": false, "expectRefusal": false }
   ],
-  "known_gaps": [
-    { "question": "what is pushing US inflation", "current": "general", "desired": "country_fiscal", "blockedOn": "WS5a country_fiscal MCP tool + intent" },
-    { "question": "how much would going to war cost", "current": "general", "desired": "estimation", "blockedOn": "WS6 estimation path" }
-  ]
+  "known_gaps": []
 }

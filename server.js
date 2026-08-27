@@ -464,7 +464,7 @@ const server = http.createServer(async (req, res) => {
             usage: u,
             // A "why is MY x so high" question answered from code alone: offer to
             // re-run it against live game state, if the player has live quota left.
-            liveHint: u.mcpRemaining > 0 && mcp.looksLive(question),
+            liveHint: u.mcpRemaining > 0 ? mcp.liveHintFor(plan, question) : null,
           });
         }
 
@@ -754,7 +754,7 @@ const server = http.createServer(async (req, res) => {
           usage: store.usage(key, ent),
           // Answered from code but the question reads like a live-state one, and
           // the player didn't ask for live data and still has some left.
-          liveHint: !useMcp && usage.mcpRemaining > 0 && mcp.looksLive(question),
+          liveHint: (!useMcp && usage.mcpRemaining > 0) ? mcp.liveHintFor(plan, question) : null,
           validation,
         });
         // Random-sample QA: a free model re-reads this answer and logs whether

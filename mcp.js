@@ -80,6 +80,30 @@ function requiresLive(question) {
   return REQUIRED_LIVE_CANDIDATE_MAP.test(question || "");
 }
 
+// A context-aware "answer with live data" suggestion for a code-only answer
+// that could be sharper with the live pass. Returns null when there's nothing
+// worth offering. The label is tuned to the plan intent so the chip reads
+// "See your live net worth" instead of a generic prompt.
+const HINT_BY_INTENT = {
+  player_wealth: { label: "See your live net worth", note: "Your live savings, holdings, and rank." },
+  country_fiscal: { label: "See the live fiscal numbers", note: "Live revenue, spending, debt, and inflation." },
+  corporation_leaderboard: { label: "See the live ranking", note: "Ranked from live exchange data." },
+  corporation_analysis: { label: "Answer with live corporation data", note: "Your corporation's current state." },
+  foreign_exchange: { label: "See the live rate", note: "The current quote and recent history." },
+  estimation: { label: "Estimate with live values", note: "Plug in your current game numbers." },
+};
+function liveHintFor(plan, question) {
+  if (!plan || plan.live === "none") return null;
+  if (!looksLive(question) && !HINT_BY_INTENT[plan.intent]) return null;
+  const preset = HINT_BY_INTENT[plan.intent];
+  return {
+    available: true,
+    intent: plan.intent || "general",
+    label: preset?.label || "Answer with live game data",
+    note: preset?.note || "Looks like a question about your current game.",
+  };
+}
+
 async function liveIntelligence(question, context, callTool = null, plan = null, onAction = null) {
   const base = callTool
     ? (name, args, server) => callTool(name, args, server)
@@ -102,6 +126,7 @@ module.exports = {
   liveIntelligence,
   looksLive,
   requiresLive,
+  liveHintFor,
   namedCorporation: intelligence.namedCorporation,
   namedCorporations: intelligence.namedCorporations,
   namedSectorType: intelligence.namedSectorType,
