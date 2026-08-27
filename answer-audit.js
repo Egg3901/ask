@@ -11,6 +11,11 @@
 // logs nothing and costs the request nothing — it runs after res.end().
 const llm = require("./llm");
 const store = require("./store");
+const corrections = require("./corrections");
+
+// A refusal the grader flagged as correct behavior (declining to leak private
+// or opponent data) is not a quality failure, so it should not seed a draft.
+const LEGIT_REFUSAL = /\bprivate|fair.?play|opponent|not a failure|legitimate|confidential\b/i;
 
 const SAMPLE_RATE = clampRate(process.env.ASK_AUDIT_SAMPLE);
 const MAX_ANSWER_CHARS = 4000;
@@ -82,6 +87,12 @@ function maybeAudit({ answerId = null, question, answer, hadLive = false }) {
       });
       if (verdict.answered === false) {
         console.warn(`[ask] audit FLAG answerId=${answerId ?? "?"} refused=${verdict.refused} live=${hadLive ? 1 : 0} note=${JSON.stringify(verdict.note)}`);
+        // Seed a staff-review draft, unless the grader judged it a correct
+        // refusal of private data. Dedup lives in corrections.draft().
+        if (!LEGIT_REFUSAL.test(verdict.note || "")) {
+          corrections.draft({ question, reason: `sampler: unanswered — ${verdict.note || "no detail"}`, sourceAnswerId: answerId })
+            .catch(() => {});
+        }
       }
     })
     .catch(() => { /* advisory only */ });

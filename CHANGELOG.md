@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.2.0 — 2026-08-27
+
+### Added
+- Reported and flagged answers now become draft fixes automatically, so recurring wrong answers get corrected faster.
+
 ## 1.1.1 — 2026-08-27
 
 ### Added

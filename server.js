@@ -325,6 +325,17 @@ const server = http.createServer(async (req, res) => {
         corrections.setActive(body.id, body.active !== false);
         return json(res, 200, { ok: true });
       }
+      // Turn an auto-drafted correction into a live one: staff writes the
+      // verified truth and it activates in a single step.
+      if (req.method === "POST" && p === "/api/corrections/resolve") {
+        if (session.context?.isAdmin !== true) return json(res, 403, { error: "Staff only." });
+        const body = await readJson(req);
+        if (!body?.id) return json(res, 400, { error: "id required." });
+        try {
+          const out = corrections.resolve(body.id, body.correction, session.identity.username || key);
+          return json(res, out.updated ? 200 : 404, { ok: Boolean(out.updated) });
+        } catch (e) { return json(res, 400, { error: String(e.message || e) }); }
+      }
 
       if (req.method === "GET" && p === "/api/nextcost") {
         return json(res, 200, store.nextCost(url.searchParams.get("convId") || "", key));
@@ -352,12 +363,22 @@ const server = http.createServer(async (req, res) => {
         const b = await readJson(req);
         const rating = b?.rating === "up" ? "up" : b?.rating === "down" ? "down" : null;
         if (!rating) return json(res, 400, { error: "Choose helpful or report." });
+        const reason = String(b?.reason || "");
         const ok = store.feedback({
           answerId: Number(b?.answerId),
           userKey: key,
           rating,
-          reason: String(b?.reason || ""),
+          reason,
         });
+        // A downvote is the strongest wrong-answer signal there is. Seed a
+        // staff-review draft correction from it (dedup'd, fire-and-forget).
+        if (ok && rating === "down") {
+          const brief = store.answerBrief(Number(b?.answerId));
+          if (brief?.question) {
+            corrections.draft({ question: brief.question, reason: `downvote${reason ? `: ${reason}` : ""}`, sourceAnswerId: Number(b?.answerId) })
+              .catch(() => {});
+          }
+        }
         return json(res, ok ? 200 : 404, { ok });
       }
       if (req.method === "GET" && p === "/api/conflicts" && ent.staff) {

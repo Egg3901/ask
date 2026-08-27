@@ -1632,11 +1632,24 @@ function consolePage({ identity, context, users = [], selected = null, reports =
         <textarea name="correction" placeholder="The verified truth, written for the model" required rows="2" style="padding:8px;border:1px solid var(--border);border-radius:6px;background:transparent;color:inherit"></textarea>
         <button class="tbtn" type="submit" style="justify-self:start">Add correction</button>
       </form>
-      ${correctionRows.map(c => `<div class="console-question${c.active ? "" : " console-muted"}">
-        <b>${esc(c.question)}</b>
-        <div class="console-answer">${esc(c.correction)}</div>
-        <small>${esc(when(c.created))} · ${esc(c.added_by || "staff")}${c.active ? "" : " · disabled"} · <a href="#" class="console-replay" data-corr-toggle="${c.id}" data-corr-active="${c.active ? 0 : 1}">${c.active ? "Disable" : "Enable"}</a></small>
-      </div>`).join("") || `<div class="console-question console-muted">No corrections yet.</div>`}
+      ${(() => {
+        const isDraft = c => !c.active && String(c.correction || "").startsWith("[DRAFT]");
+        const drafts = correctionRows.filter(isDraft);
+        const settled = correctionRows.filter(c => !isDraft(c));
+        const draftBlock = drafts.length ? `<div class="console-drafts"><h3 style="font-size:.9rem;margin:6px 0">Review queue — auto-drafted from reports (${drafts.length})</h3>
+        ${drafts.map(c => `<div class="console-question console-draft" data-draft="${c.id}">
+          <b>${esc(c.question)}</b>
+          <div class="console-answer console-muted" style="font-size:.75rem">${esc(c.correction)}</div>
+          <textarea class="draft-body" placeholder="Write the verified truth for the model, then activate." rows="2" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:transparent;color:inherit"></textarea>
+          <small>${esc(when(c.created))} · from answer #${esc(String(c.source_answer_id || "?"))} · <a href="#" class="console-replay draft-activate" data-draft-id="${c.id}">Activate</a> · <a href="#" class="console-replay" data-corr-toggle="${c.id}" data-corr-active="0">Discard</a></small>
+        </div>`).join("")}</div>` : "";
+        const settledBlock = settled.map(c => `<div class="console-question${c.active ? "" : " console-muted"}">
+          <b>${esc(c.question)}</b>
+          <div class="console-answer">${esc(c.correction)}</div>
+          <small>${esc(when(c.created))} · ${esc(c.added_by || "staff")}${c.active ? "" : " · disabled"} · <a href="#" class="console-replay" data-corr-toggle="${c.id}" data-corr-active="${c.active ? 0 : 1}">${c.active ? "Disable" : "Enable"}</a></small>
+        </div>`).join("") || `<div class="console-question console-muted">No corrections yet.</div>`;
+        return draftBlock + settledBlock;
+      })()}
     </section>
     <script>
     document.getElementById('corr-form').addEventListener('submit',function(e){e.preventDefault();
@@ -1648,6 +1661,13 @@ function consolePage({ identity, context, users = [], selected = null, reports =
       fetch('/api/corrections/toggle',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
         body:JSON.stringify({id:Number(a.dataset.corrToggle),active:a.dataset.corrActive==='1'})})
         .then(function(){location.reload();});
+    });});
+    document.querySelectorAll('.draft-activate').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();
+      var card=a.closest('[data-draft]'),ta=card&&card.querySelector('.draft-body'),text=ta?ta.value.trim():'';
+      if(text.length<8){alert('Write the verified truth first.');if(ta)ta.focus();return;}
+      fetch('/api/corrections/resolve',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+        body:JSON.stringify({id:Number(a.dataset.draftId),correction:text})})
+        .then(function(r){return r.json();}).then(function(d){if(d.error)alert(d.error);else location.reload();});
     });});
     </script>
   </div></div>`);

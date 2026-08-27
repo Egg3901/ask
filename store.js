@@ -216,6 +216,11 @@ function recordAudit(row) {
   } catch (e) { console.error("[ask] recordAudit failed:", String(e?.message || e)); }
 }
 
+function answerBrief(answerId) {
+  try { return db.prepare("SELECT id,question,answer,used_mcp FROM asks WHERE id=?").get(Number(answerId)) || null; }
+  catch { return null; }
+}
+
 function recentAudits(limit = 100) {
   try { return S.recentAudits.all(Math.min(Number(limit) || 100, 500)); } catch { return []; }
 }
@@ -510,4 +515,4 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary };
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief };
