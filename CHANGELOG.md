@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.2.1 — 2026-08-27
+
+### Fixed
+- Ask now catches itself when it declines a question that live data could have answered, and keeps that answer out of the shared cache.
+
 ## 1.2.0 — 2026-08-27
 
 ### Added

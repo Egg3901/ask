@@ -703,10 +703,15 @@ const server = http.createServer(async (req, res) => {
           inventedPaths = grounding.inventedPaths(answer, evidenceForCheck);
           answer += grounding.pathNote(inventedPaths);
         } catch { inventedPaths = []; }
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan)], grounding: groundingNotes, inventedPaths };
+        // Inline refusal guard: the model declined on a question that had live
+        // evidence. Record it and, below, keep it out of the shared cache — a
+        // refusal must never be served to everyone.
+        const refusedWithEvidence = answerGuard.detectRefusal(answer, useMcp) && useMcp;
+        if (refusedWithEvidence) console.warn(`[ask] refusal WITH live evidence plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
+        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : [])], grounding: groundingNotes, inventedPaths };
         const areas = cites.areasFor(hits?.files || []);
 
-        if (cacheable && !inventedPaths.length && !groundingNotes.length) {
+        if (cacheable && !inventedPaths.length && !groundingNotes.length && !refusedWithEvidence) {
           store.S.putCache.run(ckey, answer, JSON.stringify(areas), JSON.stringify(citations), servedModel, Date.now());
         }
         const answerId = store.record({
@@ -716,6 +721,13 @@ const server = http.createServer(async (req, res) => {
           tokens_in: Number(llmUsage.prompt_tokens || 0), tokens_out: Number(llmUsage.completion_tokens || 0), model: servedModel,
           plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence), ts: Date.now(),
         });
+
+        // A refusal despite live evidence is a confident failure — seed a
+        // staff-review draft now rather than waiting for the sampler to catch
+        // it. Dedup lives in corrections.draft(); fire-and-forget.
+        if (refusedWithEvidence) {
+          corrections.draft({ question, reason: "refused despite live evidence being available", sourceAnswerId: answerId }).catch(() => {});
+        }
 
         // A report gets its own page. Title comes from the model's own H1, with
         // the question as fallback if it ignored the format.

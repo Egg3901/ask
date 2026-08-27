@@ -20,6 +20,30 @@ function looksLikeToolLeak(answer) {
   return TOOL_LEAK.test(String(answer || ""));
 }
 
+// Deterministic refusal detector — the inline, no-model-call counterpart to the
+// sampled model grader. When the answer model declines ("I can't", "I don't have
+// access", "I do not know") but live evidence WAS injected, that is the #1
+// failure pattern: a refusal on a question the system could answer. We flag it,
+// never rewrite it — the streamed text already reached the player, and a
+// heavy-handed strip risks mangling a legitimately hedged answer.
+//
+// Conservative on purpose: the refusal phrase must appear near the START of a
+// SHORT answer. A long answer that merely contains "cannot determine" mid-way is
+// making a scoped caveat, not refusing.
+const REFUSAL = /\b(?:i (?:can'?t|cannot|am unable to|do not|don'?t) (?:help|answer|access|determine|find|provide|tell|see|know)|i (?:do not|don'?t) have (?:access|the data|that information|that data)|i (?:wasn'?t|was not) (?:given|provided)|(?:that'?s |this is )?not (?:available|something i can|accessible) (?:to me)?|no (?:access|data) (?:to|for|available)|unable to (?:determine|answer|access))\b/i;
+// A refusal that is correct behavior: declining to expose private/opponent data.
+const LEGIT_REFUSAL = /\b(?:private|fair.?play|opponent|another player'?s|confidential|not allowed to (?:share|reveal))\b/i;
+
+function detectRefusal(answer, hasLiveData) {
+  const text = String(answer || "").trim();
+  if (!text) return false;
+  const head = text.slice(0, 240);
+  if (!REFUSAL.test(head)) return false;
+  if (LEGIT_REFUSAL.test(text)) return false;      // correct fair-play refusal
+  if (!hasLiveData && text.length > 600) return false; // long code answer with a caveat, no live data
+  return true;
+}
+
 function matchingMap(datasets, metric) {
   return (datasets || []).find(data => data?.recommended === "map" && (!metric || data.metric === metric)) || null;
 }
@@ -87,4 +111,4 @@ function inspect(answer, plan) {
   return [];
 }
 
-module.exports = { enforce, inspect, stripVisuals, looksLikeToolLeak };
+module.exports = { enforce, inspect, stripVisuals, looksLikeToolLeak, detectRefusal };
