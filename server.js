@@ -15,6 +15,7 @@ const mcp = require("./mcp");
 const retrieve = require("./retrieve");
 const grounding = require("./grounding");
 const investigate = require("./investigate");
+const navigation = require("./navigation");
 const corrections = require("./corrections");
 const llm = require("./llm");
 const models = require("./models");
@@ -616,6 +617,7 @@ const server = http.createServer(async (req, res) => {
         // for 10s+ before its first token).
         status(`Drafting with ${models.displayFor(route.chain[0])}…`);
 
+        const navBlock = navigation.block(question);
         let raw = "", failed = null, failedBusy = false, llmUsage = {}, servedModel = route.model;
         let finishReason = null;
         const genStart = Date.now();
@@ -626,7 +628,9 @@ const server = http.createServer(async (req, res) => {
               + (matchedCorrections.length ? `\n\n${corrections.block(matchedCorrections)}` : "")
               + (hits ? `\n\n${hits.context}` : "")
               + (liveBlock ? `\n\n${liveBlock}` : "")
-              + (investigation ? `\n\n${investigation.text}` : ""),
+              + (investigation ? `\n\n${investigation.text}` : "")
+              // "Where do I find this" is answered from the real menu map, not guessed.
+              + (navBlock ? `\n\n${navBlock}` : ""),
             // Deep answers are for exploring a system across several turns, so
             // they carry more of the thread than a one-shot lookup needs.
             history: store.history(convId, key, deepAnswer ? DEEP_HISTORY_TURNS : 3),
