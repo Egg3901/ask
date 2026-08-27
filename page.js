@@ -567,10 +567,46 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
   box-shadow:var(--e1);opacity:0;pointer-events:none;transition:opacity var(--t)}
 .toast.show{opacity:1}
 @media(min-width:821px){.menubtn{display:none}}
-/* Every turn renders identically — a conversation, not a tree. */
+/* Every turn renders identically, a conversation, not a tree. */
 .thread-cost{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;color:var(--text-3)}
 .thread-cost b{color:var(--text-2);font-weight:600}
 .comp-foot{align-items:center}
+.comp-right{display:inline-flex;align-items:center;gap:10px}
+.qcount{font-variant-numeric:tabular-nums;color:var(--text-3);font-size:.7rem}
+.qcount.max{color:var(--red)}
+
+/* sidebar history groups + empty state */
+.side-group{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-3);padding:14px 8px 5px}
+.side-group:first-child{padding-top:6px}
+.side-empty{display:flex;flex-direction:column;align-items:center;gap:9px;padding:30px 14px;color:var(--text-3);font-size:.78rem;text-align:center;line-height:1.5}
+.side-empty svg{width:18px;height:18px;opacity:.55}
+.ask-conv .cx{flex-shrink:0;border-radius:var(--r-xs);transition:opacity var(--t),color var(--t)}
+.ask-conv .cx.confirm{opacity:1;color:var(--red);font-size:.66rem;font-weight:700;letter-spacing:.02em}
+
+/* jump-to-latest pill */
+.ask-shell{position:relative}
+.jumpbtn{position:absolute;left:50%;bottom:118px;z-index:15;display:inline-flex;align-items:center;gap:6px;
+  border:1px solid var(--border-2);background:var(--surface);color:var(--text);font-size:.75rem;font-weight:600;font-family:var(--font);
+  padding:.44rem .85rem;border-radius:var(--r-full);box-shadow:var(--e2),var(--hi);cursor:pointer;
+  opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity var(--t),transform var(--t)}
+.jumpbtn.show{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+.jumpbtn:hover{background:var(--glass-hover)}
+.jumpbtn svg{width:12px;height:12px}
+@media(max-width:560px){.jumpbtn{bottom:104px}}
+
+/* report-answer dialog + inline form (shared pages) */
+.fb-sub{color:var(--text-2);font-size:.82rem;line-height:1.5;margin:-6px 0 0}
+.fb-tags{display:flex;flex-wrap:wrap;gap:7px}
+.fb-tag{border:1px solid var(--border);background:var(--glass-2);color:var(--text-2);font-size:.76rem;font-family:var(--font);
+  padding:.34rem .7rem;border-radius:var(--r-full);cursor:pointer;transition:all var(--t)}
+.fb-tag:hover{color:var(--text);border-color:var(--border-2)}
+.fb-tag.active{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.fb-text{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--field-bg);
+  color:var(--text);font-family:var(--font);font-size:.85rem;line-height:1.5;resize:vertical;min-height:64px}
+.fb-text:focus{outline:none;border-color:var(--border-2)}
+.fb-actions{display:flex;justify-content:flex-end;gap:8px}
+.fb-inline{display:flex;flex-direction:column;gap:8px;margin:4px 0 10px;padding:12px;border:1px solid var(--border);
+  border-radius:var(--r-md);background:var(--glass-1)}
 
 `;
 
@@ -605,6 +641,7 @@ function shell(inner, extraJs = "", head = "") {
 <title>Ask · A House Divided</title>
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Cpath d='M32 14c-10.5 0-19 7.2-19 16 0 5 2.7 9.4 7 12.3V50l7.6-4.4c1.4.3 2.9.4 4.4.4 10.5 0 19-7.2 19-16s-8.5-16-19-16z' fill='%23fff'/%3E%3C/svg%3E">
 ${head}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -763,10 +800,6 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     ...Object.entries(starterQuestions.CATEGORIES).map(([key, value]) => [key, value.label]),
   ].map(([key, label], index) => `<button class="starter-tab${index === 0 ? " active" : ""}" type="button" role="tab" aria-selected="${index === 0 ? "true" : "false"}" data-starter-category="${key}">${esc(label)}</button>`).join("");
 
-  const convItems = (conversations || []).map(c =>
-    `<button class="ask-conv" data-conv="${esc(c.id)}"><span class="ct">${esc(c.title || "Untitled")}</span><span class="cx" data-del="${esc(c.id)}">×</span></button>`
-  ).join("") || `<div style="padding:8px 8px;font-size:.78rem;color:var(--text-3)">No conversations yet.</div>`;
-
   const segBtns = (obj, group, current) => Object.entries(obj).map(([k, v]) =>
     `<button type="button" class="segbtn${k === current ? " active" : ""}" data-opt="${group}" data-val="${k}">${esc(v.label)}</button>`
   ).join("");
@@ -774,8 +807,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
   const inner = `<div class="ask-root">
   <aside class="ask-side" id="side">
     <div class="side-top"><button class="ask-newq" id="newq">New question</button></div>
-    <div class="side-lbl">Your conversations</div>
-    <div class="side-list" id="convs">${convItems}</div>
+    <div class="side-list" id="convs"></div>
     <div class="side-foot">
       <div class="quota" id="quota"></div>
       ${context?.isAdmin ? `<a class="console-link" href="/console">${icon("terminal", 14) || icon("settings", 14)} Console</a>` : ""}
@@ -813,6 +845,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
       <div id="out"></div>
     </div></div>
 
+    <button class="jumpbtn" id="jump" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>Jump to latest</button>
     <div class="ask-composer"><div class="ask-comp-inner">
       <form id="f"><div class="ask-comp-box">
         <textarea id="q" rows="1" maxlength="500" placeholder="Ask about any part of the game…"></textarea>
@@ -820,7 +853,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
       </div></form>
       <div class="comp-foot">
         <button class="live-mode" id="liveMode" type="button" aria-pressed="false">${icon("zap", { size: 12 })} <span>Code sources</span></button>
-        <span class="thread-cost" id="costlbl"></span>
+        <span class="comp-right"><span class="qcount" id="qcount" hidden></span><span class="thread-cost" id="costlbl"></span></span>
       </div>
     </div></div>
   </div>
@@ -840,6 +873,22 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <div class="setting-group"><label>Answer model</label><div class="seg">${segBtns(require("./models").USER_MODELS, "model", "auto")}</div></div>
     <div class="setting-group"><label>Response style</label><div class="seg">${segBtns(styles, "style", "standard")}</div></div>
     <div class="setting-group"><label>Response length</label><div class="seg">${segBtns(lengths, "length", "standard")}</div></div>
+  </div>
+</div></div>
+
+<div class="sheet" id="fbPanel" role="dialog" aria-modal="true" aria-labelledby="fbTitle"><div class="sheet-card">
+  <div class="sheet-head" id="fbTitle">Report this answer <button class="x" id="fbClose" type="button" aria-label="Close">×</button></div>
+  <div class="sheet-body">
+    <p class="fb-sub">Tell us what went wrong and staff will review it. The report includes this question and answer.</p>
+    <div class="fb-tags" id="fbTags">
+      <button class="fb-tag" type="button">Wrong or outdated</button>
+      <button class="fb-tag" type="button">Didn't answer the question</button>
+      <button class="fb-tag" type="button">Missing sources</button>
+      <button class="fb-tag" type="button">Confusing</button>
+      <button class="fb-tag" type="button">Other</button>
+    </div>
+    <textarea class="fb-text" id="fbText" rows="3" maxlength="500" placeholder="Add detail (optional)"></textarea>
+    <div class="fb-actions"><button class="signout" id="fbCancel" type="button">Cancel</button><button class="signin" id="fbSend" type="button">Send report</button></div>
   </div>
 </div></div><!-- settings:end -->`;
 
@@ -863,6 +912,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
 
   const js = `<script>(function(){
 var USAGE=${JSON.stringify(usage)};
+var CONVS=${JSON.stringify((conversations || []).map(c => ({ id: c.id, title: c.title, updated: c.updated, created: c.created }))).replace(/</g, "\\u003c")};
 var STARTERS=${JSON.stringify(starterCatalog).replace(/</g, "\\u003c")};
 var LIVE_ICON=${JSON.stringify(icon("zap", { size: 10 }))},ARROW_ICON=${JSON.stringify(icon("arrow-right", { size: 15 }))};
 var MODEL_NAMES=${JSON.stringify(require("./models").displayMap())};
@@ -877,7 +927,9 @@ var f=document.getElementById('f'),q=document.getElementById('q'),go=document.ge
     starterTabs=document.getElementById('starterTabs'),libraryQuestions=document.getElementById('libraryQuestions'),
     questionPanel=document.getElementById('questionPanel'),liveMode=document.getElementById('liveMode'),
     chartViewer=document.getElementById('chartViewer'),chartStage=document.getElementById('chartStage'),
-    chartCanvas=document.getElementById('chartCanvas');
+    chartCanvas=document.getElementById('chartCanvas'),jump=document.getElementById('jump'),
+    qcount=document.getElementById('qcount'),fbPanel=document.getElementById('fbPanel');
+var DOC_TITLE=document.title;
 var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
 var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard',model:localStorage.getItem('ask.model')||'auto'};
@@ -952,11 +1004,11 @@ function paintCost(){
 paintCost();
 
 // settings
-function closeSettings(){settingsPanel.classList.remove('open');}
-document.getElementById('settings').onclick=function(){settingsPanel.classList.add('open');};
+function closeSettings(){if(settingsPanel.classList.contains('open')){settingsPanel.classList.remove('open');document.getElementById('settings').focus();}}
+document.getElementById('settings').onclick=function(){settingsPanel.classList.add('open');document.getElementById('settingsClose').focus();};
 document.getElementById('settingsClose').onclick=closeSettings;
 settingsPanel.addEventListener('click',function(e){if(e.target===settingsPanel)closeSettings();});
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeSettings();closeQuestions();}});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeSettings();closeQuestions();closeFeedback();}});
 settingsPanel.addEventListener('click',function(e){
   var b=e.target.closest('[data-opt]'); if(!b)return;
   var g=b.dataset.opt; S[g]=b.dataset.val; localStorage.setItem('ask.'+g,S[g]);
@@ -1010,8 +1062,8 @@ starterTabs.addEventListener('click',function(e){
     other.classList.toggle('active',active);other.setAttribute('aria-selected',active?'true':'false');});
   renderLibrary();
 });
-function closeQuestions(){questionPanel.classList.remove('open');}
-document.getElementById('starterBrowse').addEventListener('click',function(){renderLibrary();questionPanel.classList.add('open');});
+function closeQuestions(){if(questionPanel.classList.contains('open')){questionPanel.classList.remove('open');document.getElementById('starterBrowse').focus();}}
+document.getElementById('starterBrowse').addEventListener('click',function(){renderLibrary();questionPanel.classList.add('open');document.getElementById('questionClose').focus();});
 document.getElementById('questionClose').addEventListener('click',closeQuestions);
 questionPanel.addEventListener('click',function(e){if(e.target===questionPanel)closeQuestions();});
 
@@ -1019,29 +1071,55 @@ questionPanel.addEventListener('click',function(e){if(e.target===questionPanel)c
 function closeSide(){side.classList.remove('open');scrim.classList.remove('open');}
 document.getElementById('menu').onclick=function(){side.classList.add('open');scrim.classList.add('open');};
 scrim.onclick=closeSide;
-document.getElementById('newq').onclick=function(){convId=null;turnsInThread=0;fuLeft=3;paintCost();out.innerHTML='';hero.style.display='';starterExplorer.style.display='';renderExplorer();closeSide();
+document.getElementById('newq').onclick=function(){convId=null;turnsInThread=0;fuLeft=3;paintCost();out.innerHTML='';hero.style.display='';starterExplorer.style.display='';renderExplorer();closeSide();document.title=DOC_TITLE;
   convs.querySelectorAll('.ask-conv').forEach(function(c){c.classList.remove('active');});q.focus();};
 
 convs.addEventListener('click',function(e){
   var del=e.target.closest('[data-del]');
   if(del){e.stopPropagation();
+    // Two-step delete: the first tap arms the button, the second within a few
+    // seconds actually deletes. A mis-tap never costs a conversation.
+    if(!del.classList.contains('confirm')){
+      del.classList.add('confirm');del.textContent='Delete?';
+      clearTimeout(del._t);del._t=setTimeout(function(){del.classList.remove('confirm');del.textContent='\\u00d7';},3000);
+      return;}
     fetch('/api/conversation/delete',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({id:del.dataset.del})}).then(function(r){return r.json();}).then(function(d){
-        if(convId===del.dataset.del){convId=null;out.innerHTML='';hero.style.display='';starterExplorer.style.display='';}
+        if(convId===del.dataset.del){convId=null;out.innerHTML='';hero.style.display='';starterExplorer.style.display='';document.title=DOC_TITLE;}
         renderConvs(d.conversations||[]);});
     return;}
   var b=e.target.closest('.ask-conv'); if(!b)return;
   loadConv(b.dataset.conv);
 });
-function renderConvs(list){
-  convs.innerHTML=list.length?list.map(function(c){
-    return '<button class="ask-conv'+(c.id===convId?' active':'')+'" data-conv="'+esc(c.id)+'"><span class="ct">'+
-      esc(c.title||'Untitled')+'</span><span class="cx" data-del="'+esc(c.id)+'">×</span></button>';}).join('')
-    :'<div style="padding:8px;font-size:.78rem;color:var(--text-3)">No conversations yet.</div>';
+function convGroup(ts){
+  if(!ts)return 'Earlier';
+  var now=new Date(),d=new Date(ts);
+  if(d.toDateString()===now.toDateString())return 'Today';
+  if(new Date(now.getTime()-86400000).toDateString()===d.toDateString())return 'Yesterday';
+  var days=(now.getTime()-d.getTime())/86400000;
+  if(days<7)return 'Previous 7 days';
+  if(days<30)return 'Previous 30 days';
+  return 'Older';
 }
+function renderConvs(list){
+  CONVS=list;
+  if(!list.length){
+    convs.innerHTML='<div class="side-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>No conversations yet.<br>Your questions will show up here.</span></div>';
+    return;}
+  var groups={},order=[];
+  list.forEach(function(c){var g=convGroup(c.updated||c.created);if(!groups[g]){groups[g]=[];order.push(g);}groups[g].push(c);});
+  convs.innerHTML=order.map(function(g){
+    return '<div class="side-group">'+g+'</div>'+groups[g].map(function(c){
+      var t=c.title||'Untitled';
+      return '<button class="ask-conv'+(c.id===convId?' active':'')+'" data-conv="'+esc(c.id)+'" title="'+esc(t)+'"><span class="ct">'+
+        esc(t)+'</span><span class="cx" data-del="'+esc(c.id)+'" aria-label="Delete conversation">\\u00d7</span></button>';}).join('');
+  }).join('');
+}
+renderConvs(CONVS);
 function loadConv(id){
   convId=id;closeSide();
   convs.querySelectorAll('.ask-conv').forEach(function(c){c.classList.toggle('active',c.dataset.conv===id);});
+  for(var i=0;i<CONVS.length;i++)if(CONVS[i].id===id&&CONVS[i].title){document.title=CONVS[i].title+' · Ask';break;}
   out.innerHTML='';hero.style.display='none';starterExplorer.style.display='none';
   fetch('/api/conversation?id='+encodeURIComponent(id)).then(function(r){return r.json();}).then(function(d){
     (d.turns||[]).forEach(function(t){addTurn(t.question,{answer:t.answer,areas:t.areas,citations:t.citations,cached:!!t.cached,model:t.model});});
@@ -1177,11 +1255,10 @@ function fill(turn,target,d){
     };
     tools.querySelectorAll('[data-feedback]').forEach(function(button){
       button.onclick=function(){
-        var rating=button.dataset.feedback, reason='';
-        if(rating==='down')reason=window.prompt('What was wrong with this answer? (optional)','')||'';
+        if(button.dataset.feedback==='down'){openFeedback(answerId,button);return;}
         fetch('/api/answer/feedback',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
-          body:JSON.stringify({answerId:answerId,rating:rating,reason:reason})})
-          .then(function(r){if(!r.ok)throw new Error();button.classList.add(rating==='down'?'bad':'ok');toast(rating==='down'?'Answer reported. Thank you.':'Marked helpful. Thank you.');})
+          body:JSON.stringify({answerId:answerId,rating:'up',reason:''})})
+          .then(function(r){if(!r.ok)throw new Error();button.classList.add('ok');toast('Marked helpful. Thank you.');})
           .catch(function(){toast('Could not save feedback.');});
       };
     });
@@ -1195,7 +1272,17 @@ function chooseStarter(e){
 }
 starters.addEventListener('click',chooseStarter);
 libraryQuestions.addEventListener('click',chooseStarter);
-q.addEventListener('input',function(){q.style.height='auto';q.style.height=Math.min(q.scrollHeight,160)+'px';go.disabled=q.value.trim().length<5;});
+q.addEventListener('input',function(){q.style.height='auto';q.style.height=Math.min(q.scrollHeight,160)+'px';go.disabled=q.value.trim().length<5;
+  var n=q.value.length;
+  if(n>=420){qcount.hidden=false;qcount.textContent=n+' / 500';qcount.classList.toggle('max',n>=500);}
+  else{qcount.hidden=true;}});
+// Jump-to-latest pill: appears once the reader has scrolled well above the
+// bottom of a conversation, so streamed answers are never silently missed.
+body.addEventListener('scroll',function(){
+  var far=body.scrollHeight-body.scrollTop-body.clientHeight>400;
+  jump.classList.toggle('show',far&&out.children.length>0);
+},{passive:true});
+jump.addEventListener('click',function(){body.scrollTo({top:body.scrollHeight,behavior:'smooth'});});
 q.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit();}});
 f.addEventListener('submit',function(e){e.preventDefault();submit();});
 document.addEventListener('keydown',function(e){
@@ -1205,10 +1292,40 @@ document.addEventListener('keydown',function(e){
 });
 function toast(msg){
   var el=document.getElementById('toast');
-  if(!el){el=document.createElement('div');el.id='toast';el.className='toast';document.body.appendChild(el);}
+  if(!el){el=document.createElement('div');el.id='toast';el.className='toast';el.setAttribute('role','status');el.setAttribute('aria-live','polite');document.body.appendChild(el);}
   el.textContent=msg; el.classList.add('show');
   clearTimeout(el._t); el._t=setTimeout(function(){el.classList.remove('show');},2200);
 }
+// Report-answer dialog. Replaces window.prompt: a reason chip plus optional
+// detail, sent as one reason string the console already displays.
+var fbTarget=null;
+function openFeedback(answerId,button){
+  fbTarget={answerId:answerId,button:button};
+  fbPanel.querySelectorAll('.fb-tag').forEach(function(t){t.classList.remove('active');});
+  document.getElementById('fbText').value='';
+  fbPanel.classList.add('open');
+  document.getElementById('fbText').focus();
+}
+function closeFeedback(){fbPanel.classList.remove('open');fbTarget=null;}
+fbPanel.addEventListener('click',function(e){if(e.target===fbPanel)closeFeedback();});
+document.getElementById('fbClose').onclick=closeFeedback;
+document.getElementById('fbCancel').onclick=closeFeedback;
+document.getElementById('fbTags').addEventListener('click',function(e){
+  var tag=e.target.closest('.fb-tag');if(!tag)return;
+  var was=tag.classList.contains('active');
+  fbPanel.querySelectorAll('.fb-tag').forEach(function(t){t.classList.remove('active');});
+  if(!was)tag.classList.add('active');
+});
+document.getElementById('fbSend').onclick=function(){
+  if(!fbTarget)return;
+  var t=fbTarget,tag=fbPanel.querySelector('.fb-tag.active');
+  var reason=[tag?tag.textContent.trim():'',document.getElementById('fbText').value.trim()].filter(Boolean).join(': ');
+  fetch('/api/answer/feedback',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+    body:JSON.stringify({answerId:t.answerId,rating:'down',reason:reason})})
+    .then(function(r){if(!r.ok)throw new Error();t.button.classList.add('bad');toast('Answer reported. Thank you.');})
+    .catch(function(){toast('Could not save feedback.');});
+  closeFeedback();
+};
 // The 12-bar classic spinner, built once. Each bar is rotated into place and its
 // fade is delayed by a twelfth of the cycle so the lit bar chases around.
 var CLASSIC_SPIN=(function(){var b='';for(var i=0;i<12;i++){
@@ -1282,10 +1399,14 @@ function submit(){
   var stage=0,serverStatus=false;
   var loadingTimer=setInterval(function(){if(serverStatus)return;stage=(stage+1)%stages.length;setLoading(t.target,stages[stage]);},2200);
   t.target.innerHTML=loadingHtml(stages[0]);
-  q.value='';q.style.height='auto';body.scrollTop=body.scrollHeight;
+  q.value='';q.style.height='auto';qcount.hidden=true;body.scrollTop=body.scrollHeight;
   var acc='', meta0=null, ctrl=new AbortController(),hasDelta=false,terminal=false,actions=[];
   var stopped=false;
+  // While generating, the send button IS the stop button: red, square glyph.
+  var sendSvg=go.innerHTML;
   go.classList.add('stopping'); go.disabled=false;
+  go.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>';
+  go.setAttribute('aria-label','Stop generating');
   var prevGo=go.onclick;
   // Stop is a deliberate cancel: tell the server to abort THIS generation (so it
   // records nothing and costs no quota) and let it close the stream. Only if the
@@ -1400,7 +1521,9 @@ function submit(){
     })();
   })
   .finally(function(){
-    clearInterval(loadingTimer);busy=false;go.classList.remove('stopping'); go.onclick=prevGo||null; go.disabled=q.value.trim().length<5; q.focus();
+    clearInterval(loadingTimer);busy=false;go.classList.remove('stopping'); go.onclick=prevGo||null;
+    go.innerHTML=sendSvg; go.setAttribute('aria-label','Ask');
+    go.disabled=q.value.trim().length<5; q.focus();
   });
 }
 go.disabled=true;
@@ -1445,13 +1568,25 @@ function sharedView(conv) {
   // shared transcript looks identical to the live answer.
   if(window.__hydrateShared)window.__hydrateShared();
   var shareToken=${JSON.stringify(conv.shareToken || "")};
+  // Inline report form under the answer header, instead of window.prompt.
   document.querySelectorAll('[data-shared-report]').forEach(function(button){
     button.addEventListener('click',function(){
-      var reason=window.prompt('What was wrong with this answer? (optional)','')||'';
-      fetch('/api/shared/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({shareToken:shareToken,answerId:Number(button.dataset.sharedReport),rating:'down',reason:reason})})
-        .then(function(response){if(!response.ok)throw new Error();button.classList.add('bad');button.textContent='Reported';})
-        .catch(function(){button.textContent='Could not report';});
+      if(button.disabled)return;
+      var head=button.closest('.ask-ans-head');
+      var open=head.parentNode.querySelector('.fb-inline');
+      if(open){open.remove();return;}
+      var box=document.createElement('div');box.className='fb-inline';
+      box.innerHTML='<textarea class="fb-text" rows="2" maxlength="500" placeholder="What was wrong with this answer? (optional)"></textarea>'+
+        '<div class="fb-actions"><button class="signout" type="button" data-cancel>Cancel</button><button class="signin" type="button" data-send>Send report</button></div>';
+      head.after(box);box.querySelector('textarea').focus();
+      box.addEventListener('click',function(e){
+        if(e.target.closest('[data-cancel]')){box.remove();return;}
+        if(!e.target.closest('[data-send]'))return;
+        fetch('/api/shared/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({shareToken:shareToken,answerId:Number(button.dataset.sharedReport),rating:'down',reason:box.querySelector('textarea').value.trim()})})
+          .then(function(response){if(!response.ok)throw new Error();button.classList.add('bad');button.textContent='Reported';button.disabled=true;box.remove();})
+          .catch(function(){button.textContent='Could not report';box.remove();});
+      });
     });
   });
   </script>`;

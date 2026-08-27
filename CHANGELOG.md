@@ -2,6 +2,19 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.4.0 - 2026-08-27
+
+### Added
+- Reporting an answer now opens a proper form with reason choices instead of a browser popup, on the app and on shared pages.
+- Conversation history is grouped by day: Today, Yesterday, Previous 7 days, and older.
+- A "Jump to latest" button appears when you scroll up during a long answer.
+- The send button becomes a stop button while an answer is generating.
+- A character counter appears as a question approaches the 500-character limit.
+- Ask has a browser tab icon, and the tab title follows the conversation you are reading.
+
+### Changed
+- Deleting a conversation now asks for a confirming second tap, so a stray click never loses a thread.
+
 ## 1.3.0 — 2026-08-27
 
 ### Added

@@ -162,7 +162,10 @@ test("answers expose helpful and report actions", () => {
   assert.match(html, /data-feedback="up"/);
   assert.match(html, /data-feedback="down"/);
   assert.match(html, /\/api\/answer\/feedback/);
-  assert.match(html, /What was wrong with this answer/);
+  // Reporting opens a real dialog (reason chips + detail), not window.prompt.
+  assert.match(html, /id="fbPanel"/);
+  assert.match(html, /Report this answer/);
+  assert.doesNotMatch(html, /window\.prompt\('What was wrong with this answer/);
 });
 
 test("shared answers can be reported with their share token", () => {
