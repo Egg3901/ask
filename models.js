@@ -10,13 +10,13 @@
 //            prompts are not representative: ox-alpha answers a 109-token
 //            prompt in 2.3s and the real one in 45s.
 const CATALOG = {
-  "minimax-m3-free": {
+  "minimax/minimax-m3-free": {
     display: "MiniMax M3",
     provider: "commandcode", tier: "flash", score: null, ttftP50Ms: null,
     efforts: null,
     note: "MiniMax M3 via the Command Code provider API (GMICloud free lane, $0 through 2026-09-05, 1M context). No ZDR on this lane. Default chain lead from 2026-08-27; inert until COMMANDCODE_API_KEY is set, the chain skips it instantly without a key.",
   },
-  "minimax-m2.7-free": {
+  "minimax/minimax-m2.7-free": {
     display: "MiniMax M2.7",
     provider: "commandcode", tier: "flash", score: null, ttftP50Ms: null,
     efforts: null,
@@ -186,6 +186,7 @@ const RETIRED = {
 // them here once a valid OPENROUTER_API_KEY is in place.
 const USER_MODELS = {
   auto: { label: "Auto" },
+  "minimax/minimax-m3-free": { label: "MiniMax M3" },
   "deepseek-v4-flash:cloud": { label: "DeepSeek" },
   "mimo-v2.5-free": { label: "Mimo V2.5" },
   "ox-alpha-free": { label: "Ox Alpha" },
