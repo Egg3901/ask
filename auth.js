@@ -14,6 +14,8 @@ const AUTH_INTERNAL = process.env.AUTH_INTERNAL_URL || "http://127.0.0.1:3600";
 const INTERNAL_TOKEN = process.env.AUTH_INTERNAL_TOKEN || "";
 const OPS_INTERNAL = process.env.OPS_INTERNAL_URL || "http://127.0.0.1:9724";
 const ASK_SECRET = process.env.ASK_SECRET || "";
+// Temporary lock: when set, only staff (admin/moderator) may use the service.
+const ASK_PRIVATE = /^(1|true|yes|on)$/i.test(process.env.ASK_PRIVATE || "");
 const SELF_ORIGIN = process.env.SELF_ORIGIN || "https://ask.lakesidegames.net";
 const COOKIE = "ask_session";
 
@@ -123,15 +125,24 @@ async function resolve(req) {
   // Discord identities have no AHD userId, so no tier can be resolved for them.
   let context = null;
   if (identity.provider === "ahd" && identity.id) {
-    try {
-      const { ok, data } = await postJson(`${OPS_INTERNAL}/internal/player-context`,
-        { userId: identity.id }, { "x-ask-secret": ASK_SECRET }, 20000);
-      if (ok) context = data;
-    } catch {}
+    // The player-context lookup goes ops-dash -> a remote (Railway-proxied) Mongo
+    // that blips under load. Retry once before giving up, so a single slow query
+    // does not lock a real, entitled player out of Ask.
+    for (let attempt = 0; attempt < 2 && !context; attempt++) {
+      try {
+        const { ok, data } = await postJson(`${OPS_INTERNAL}/internal/player-context`,
+          { userId: identity.id }, { "x-ask-secret": ASK_SECRET }, 20000);
+        if (ok) context = data;
+      } catch {}
+      if (!context && attempt === 0) await new Promise(r => setTimeout(r, 300));
+    }
   }
 
   const value = { identity, context, entitlement: entitlementFor(context) };
-  _ctxCache.set(token, { value, exp: Date.now() + CTX_TTL });
+  // Cache a good resolution for the normal window; cache a FAILED one only
+  // briefly. A transient ops-dash/Mongo blip must not stick "can't confirm your
+  // account" to a real player for two minutes — "Try again" then actually retries.
+  _ctxCache.set(token, { value, exp: Date.now() + (context ? CTX_TTL : 8000) });
   if (_ctxCache.size > 5000) _ctxCache.clear();
   return value;
 }
@@ -142,6 +153,9 @@ function entitlementFor(context) {
   // is also what an ops-dash outage looks like. Fail closed either way.
   if (!context) return { allowed: false, reason: "no-context", label: null, questions: 0, mcp: 0, visualizations: false };
   if (context.isBanned) return { allowed: false, reason: "banned", label: null, questions: 0, mcp: 0, visualizations: false };
+  if (ASK_PRIVATE && !(context.isAdmin || context.isModerator)) {
+    return { allowed: false, reason: "private", label: null, questions: 0, mcp: 0, visualizations: false };
+  }
   if (context.isAdmin || context.isModerator) {
     return { allowed: true, reason: "staff", label: STAFF.label, questions: STAFF.questions, mcp: STAFF.mcp,
       visualizations: STAFF.visualizations, staff: true };

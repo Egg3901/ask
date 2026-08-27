@@ -7,9 +7,95 @@ const OPS = "/root/projects/LSGD-ops-dash";
 const { TOKENS_CSS } = require(`${OPS}/design-system`);
 const { icon, THEME_HEAD } = require(`${OPS}/ui-kit`);
 const starterQuestions = require("./starters");
+const changelog = require("./changelog");
 const modelRouter = require("./router");
 const models = require("./models");
 const auth = require("./auth");
+const cites = require("./citations");
+
+// Inline jargon annotation: underline terms that have a doc/wiki page, show a
+// blurb on hover/tap, link to the source. The glossary is the same doc/wiki
+// index the citations use, so every link resolves.
+const glossaryJson = () => { try { return JSON.stringify(cites.glossary()).replace(/</g, "\\u003c"); } catch { return "[]"; } };
+const jargonScripts = () => `<script>window.__JARGON=${glossaryJson()};</script><script>${JARGON_JS}</script>`;
+
+// Self-contained rich renderer for the static shared/report pages: the same
+// tables/headings/callouts/lists/code plus Mermaid diagrams and AHD maps the
+// live app renders, so a shared link looks identical to the real answer.
+const SHARED_RENDER_JS = `(function(){
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+function inl(s){return s
+  .replace(/\`([^\`]+)\`/g,'<code>$1</code>')
+  .replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>')
+  .replace(/(^|[^*])\\*([^*\\n]+)\\*(?!\\*)/g,'$1<em>$2</em>')
+  .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');}
+function tbl(block){var lines=block.split('\\n').filter(function(l){return l.trim();});
+  if(lines.length<2||!/\\|/.test(lines[0])||!/^\\s*\\|?[\\s:|-]+$/.test(lines[1]))return null;
+  var cx=function(l){return l.replace(/^\\s*\\||\\|\\s*$/g,'').split('|').map(function(c){return c.trim();});};
+  var h=cx(lines[0]),r=lines.slice(2).filter(function(l){return /\\|/.test(l);}).map(cx);
+  return '<div class="tbl-wrap"><table class="md-table"><thead><tr>'+h.map(function(x){return '<th>'+inl(x)+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return '<tr>'+row.map(function(c){return '<td>'+inl(c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';}
+function md(t){t=esc(t||'');var parts=t.split(/\`\`\`/),o='';
+  for(var i=0;i<parts.length;i++){
+    if(i%2===1){var seg=parts[i],nl=seg.indexOf('\\n'),lang=nl>0?seg.slice(0,nl).trim().toLowerCase():'',code=nl>0?seg.slice(nl+1):seg;
+      if(lang==='mermaid'||lang==='mmd')o+='<pre class="mermaid-source">'+code+'</pre>';
+      else if(lang==='ahd-map')o+='<pre class="map-source">'+code+'</pre>';
+      else o+='<div class="codeblock"><pre><code>'+code+'</code></pre></div>';
+    }else{
+      o+=parts[i].split(/\\n{2,}/).map(function(block){
+        var b=block.replace(/^\\n+|\\n+$/g,'');if(!b.trim())return '';
+        var tb=tbl(b);if(tb)return tb;
+        if(/^\\s*(?:---+|\\*\\*\\*+|___+)\\s*$/.test(b))return '<hr>';
+        if(/^\\s*&gt;/.test(b))return '<blockquote>'+inl(b.replace(/^\\s*&gt;\\s?/gm,'')).replace(/\\n/g,'<br>')+'</blockquote>';
+        var s=inl(b)
+          .replace(/^\\s*#### (.+)$/gm,'<h4>$1</h4>').replace(/^\\s*### (.+)$/gm,'<h3>$1</h3>')
+          .replace(/^\\s*## (.+)$/gm,'<h2>$1</h2>').replace(/^\\s*# (.+)$/gm,'<h2>$1</h2>')
+          .replace(/^\\s*\\d+[.)] (.+)$/gm,'<oli>$1</oli>').replace(/^\\s*[-*] (.+)$/gm,'<uli>$1</uli>');
+        s=s.replace(/(<oli>[\\s\\S]*?<\\/oli>)(?!\\n?<oli>)/g,function(m){return '<ol>'+m.split('\\n').join('')+'</ol>';}).replace(/oli>/g,'li>');
+        s=s.replace(/(<uli>[\\s\\S]*?<\\/uli>)(?!\\n?<uli>)/g,function(m){return '<ul>'+m.split('\\n').join('')+'</ul>';}).replace(/uli>/g,'li>');
+        return /^<(h[1-6]|ul|ol|blockquote|hr|div|table)/.test(s.trim())?s:'<p>'+s.replace(/\\n/g,'<br>')+'</p>';}).join('');
+    }}
+  return o;}
+function fit(svg){requestAnimationFrame(function(){try{var vb=svg.viewBox&&svg.viewBox.baseVal,box=svg.getBBox();if(vb&&box&&box.width&&box.height){var pad=20;svg.setAttribute('viewBox',[Math.min(vb.x,box.x-pad),Math.min(vb.y,box.y-pad),Math.max(vb.width,box.width+2*pad),Math.max(vb.height,box.height+2*pad)].join(' '));}svg.removeAttribute('width');svg.removeAttribute('height');}catch(e){}});}
+function mcfg(){var light=document.documentElement.getAttribute('data-theme')==='light';var v=light?{background:'#ffffff',primaryColor:'#f2f2f3',primaryTextColor:'#0a0a0a',primaryBorderColor:'#b0b0b0',lineColor:'#8a8a8a',mainBkg:'#f2f2f3',nodeBorder:'#b0b0b0',textColor:'#0a0a0a',fontFamily:'Inter, sans-serif'}:{background:'#000000',primaryColor:'#181818',primaryTextColor:'#fafafa',primaryBorderColor:'#5a5a5a',lineColor:'#8a8a8a',mainBkg:'#181818',nodeBorder:'#4a4a4a',textColor:'#e8e8e8',fontFamily:'Inter, sans-serif'};return{startOnLoad:false,securityLevel:'strict',theme:'base',themeVariables:v,xyChart:{plotColorPalette:light?'#111111,#666666,#999999,#444444,#bbbbbb':'#ffffff,#aaaaaa,#777777,#cccccc,#555555'}};}
+function renderMermaid(root){var blocks=root.querySelectorAll('.mermaid-source');if(!blocks.length)return;var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';s.onload=function(){window.mermaid.initialize(mcfg());blocks.forEach(function(block,i){var src=block.textContent;var wrap=document.createElement('div');wrap.className='mermaid-wrap';block.replaceWith(wrap);window.mermaid.render('sh-mmd-'+Date.now()+'-'+i,src).then(function(r){wrap.innerHTML=r.svg;var svg=wrap.querySelector('svg');if(svg)fit(svg);}).catch(function(){wrap.innerHTML='<div class="mermaid-err">This visualization could not be rendered.</div>';});});};document.head.appendChild(s);}
+function renderMaps(root){root.querySelectorAll('.map-source').forEach(function(block){var src=block.textContent;var wrap=document.createElement('div');wrap.className='map-wrap';block.replaceWith(wrap);var spec;try{spec=JSON.parse(src);}catch(e){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';return;}fetch('/api/map/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spec)}).then(function(r){if(!r.ok)throw new Error();return r.text();}).then(function(svg){wrap.innerHTML=svg;var s2=wrap.querySelector('svg');if(s2)fit(s2);}).catch(function(){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';});});}
+window.__hydrateShared=function(){document.querySelectorAll('[data-md]').forEach(function(el){el.innerHTML=md(el.textContent||'');renderMermaid(el);renderMaps(el);if(window.annotateJargon)try{window.annotateJargon(el);}catch(e){}});};
+})();`;
+const sharedScripts = () => jargonScripts() + `<script>${SHARED_RENDER_JS}</script>`;
+const JARGON_JS = String.raw`(function(){
+var G=window.__JARGON||[];if(!G.length)return;
+var byKey={},terms=[];
+G.forEach(function(e){var k=e.term.toLowerCase();if(!byKey[k]){byKey[k]=e;terms.push(e.term);}});
+terms.sort(function(a,b){return b.length-a.length;});
+function esc(s){return s.replace(/[.*+?^(){}|[\]\\$]/g,'\\$&');}
+var SRC='\\b('+terms.map(esc).join('|')+')\\b';
+var pop,hideT;
+function schedHide(){clearTimeout(hideT);hideT=setTimeout(function(){if(pop&&!pop._over)pop.hidden=true;},150);}
+function ensurePop(){if(pop)return pop;pop=document.createElement('div');pop.className='jargon-pop';pop.hidden=true;document.body.appendChild(pop);
+pop.addEventListener('mouseenter',function(){clearTimeout(hideT);pop._over=true;});
+pop.addEventListener('mouseleave',function(){pop._over=false;schedHide();});
+document.addEventListener('click',function(ev){if(pop&&!pop.hidden&&!pop.contains(ev.target)&&!(ev.target.classList&&ev.target.classList.contains('jargon')))pop.hidden=true;});
+return pop;}
+function showPop(el){var e=byKey[el.getAttribute('data-term')];if(!e)return;ensurePop();
+pop.innerHTML='<div class="jp-term"></div><div class="jp-blurb"></div><a class="jp-link" target="_blank" rel="noopener">Read more →</a>';
+pop.querySelector('.jp-term').textContent=e.term;pop.querySelector('.jp-blurb').textContent=e.blurb;pop.querySelector('.jp-link').href=e.url;
+pop.hidden=false;var r=el.getBoundingClientRect(),vw=document.documentElement.clientWidth;
+pop.style.top=(r.bottom+8+window.scrollY)+'px';pop.style.left=Math.max(8,Math.min(r.left+window.scrollX,vw+window.scrollX-312))+'px';}
+function bind(el){el.addEventListener('mouseenter',function(){clearTimeout(hideT);showPop(el);});
+el.addEventListener('mouseleave',schedHide);el.addEventListener('focus',function(){showPop(el);});
+el.addEventListener('blur',function(){if(pop)pop.hidden=true;});
+el.addEventListener('click',function(ev){ev.preventDefault();showPop(el);});}
+window.annotateJargon=function(root){if(!root)return;var RE=new RegExp(SRC,'gi'),used={},count=0,CAP=14;
+var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(n){if(!n.nodeValue||!n.nodeValue.trim())return NodeFilter.FILTER_REJECT;
+var p=n.parentNode;while(p&&p!==root){var t=p.nodeName;if(t==='CODE'||t==='PRE'||t==='A'||t==='SCRIPT'||t==='STYLE'||t==='H1'||(p.classList&&p.classList.contains('jargon')))return NodeFilter.FILTER_REJECT;p=p.parentNode;}
+return NodeFilter.FILTER_ACCEPT;}});
+var nodes=[],nn;while((nn=w.nextNode()))nodes.push(nn);
+nodes.forEach(function(node){if(count>=CAP)return;var text=node.nodeValue,out=[],last=0,m;RE.lastIndex=0;
+while((m=RE.exec(text))){if(count>=CAP)break;var term=m[0],key=term.toLowerCase();if(used[key])continue;used[key]=true;count++;
+if(m.index>last)out.push(document.createTextNode(text.slice(last,m.index)));
+var s=document.createElement('span');s.className='jargon';s.tabIndex=0;s.setAttribute('data-term',key);s.textContent=term;bind(s);out.push(s);last=m.index+term.length;}
+if(out.length){if(last<text.length)out.push(document.createTextNode(text.slice(last)));var frag=document.createDocumentFragment();out.forEach(function(x){frag.appendChild(x);});node.parentNode.replaceChild(frag,node);}});};
+})();`;
 
 // Gate copy is generated from the real tier table. It was hand-written before,
 // and went stale the moment the budgets changed.
@@ -119,6 +205,18 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .ask-direct blockquote{border-left:2px solid var(--accent);padding:.25rem .7rem;margin:.45rem 0;color:var(--text-2);
   background:var(--accent-soft);border-radius:0 var(--r-xs) var(--r-xs) 0}
 .ask-direct hr{border:none;border-top:1px solid var(--border);margin:.65rem 0}
+.ask-direct h2{font-size:1.14rem;font-weight:700;margin:1rem 0 .35rem;letter-spacing:-.015em}
+.ask-direct h2:first-child{margin-top:0}
+.ask-direct h4{font-size:.9rem;font-weight:700;margin:.6rem 0 .2rem;color:var(--text-2)}
+.ask-direct em{font-style:italic}
+.ask-direct a{color:var(--accent);border-bottom:1px solid color-mix(in srgb,var(--accent) 42%,transparent)}
+.ask-direct a:hover{border-bottom-color:var(--accent)}
+.tbl-wrap{overflow-x:auto;margin:.6rem 0;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--r-sm)}
+.ask-direct .md-table{border-collapse:collapse;width:100%;font-size:.86rem}
+.ask-direct .md-table th,.ask-direct .md-table td{padding:.42rem .65rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+.ask-direct .md-table th{background:var(--glass-2);font-weight:700;color:var(--text);white-space:nowrap}
+.ask-direct .md-table tr:last-child td{border-bottom:none}
+.ask-direct .md-table tbody tr:nth-child(even) td{background:var(--glass-1)}
 .ask-direct a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 .ask-direct .codeblock{margin:.6rem 0;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--bg-1)}
 .cb-head{display:flex;align-items:center;justify-content:space-between;padding:.32rem .6rem;background:var(--glass-2);border-bottom:1px solid var(--border)}
@@ -138,6 +236,24 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .map-wrap svg{display:block;width:100%;min-width:0;height:auto;max-width:100%;flex-shrink:1}
 .map-details{margin:-.15rem 0 .8rem;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--glass-1);text-align:left;overflow:hidden}.map-details summary{cursor:pointer;padding:.65rem .8rem;font-size:.75rem;font-weight:600;color:var(--text-2)}.map-details summary:hover{color:var(--text)}.map-detail-list{max-height:220px;overflow:auto;border-top:1px solid var(--border)}.map-detail-row{display:grid;grid-template-columns:minmax(90px,1fr) auto;gap:10px;padding:.48rem .8rem;border-bottom:1px solid var(--border);font-size:.72rem}.map-detail-row:last-child{border-bottom:0}.map-detail-row span:last-child{color:var(--text-2);text-align:right;max-width:60vw;overflow-wrap:anywhere}
 .mermaid-source,.map-source{display:none}
+.viz-skeleton{min-height:150px;display:flex;flex-direction:column;gap:12px}
+.viz-skeleton .sk-top{display:flex;align-items:center;gap:9px;color:var(--text-3);font-size:.82rem}
+.viz-skeleton .sk-top::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--text-3);animation:sk-pulse 1.1s ease-in-out infinite}
+.viz-skeleton .sk-row{flex:1;display:flex;gap:9px;align-items:flex-end;min-height:104px}
+.viz-skeleton .sk-bar{flex:1;border-radius:6px 6px 2px 2px;background:linear-gradient(90deg,var(--glass-1) 20%,var(--glass-3) 50%,var(--glass-1) 80%);
+  background-size:300% 100%;animation:sk-shimmer 1.5s linear infinite}
+@keyframes sk-shimmer{0%{background-position:150% 0}100%{background-position:-150% 0}}
+@keyframes sk-pulse{0%,100%{opacity:.3}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.viz-skeleton .sk-bar,.viz-skeleton .sk-top::before{animation:none}}
+.jargon{border-bottom:1px dotted var(--text-3);cursor:help}
+.jargon:hover,.jargon:focus{border-bottom-color:var(--text);outline:none}
+.jargon-pop{position:absolute;z-index:1200;width:300px;max-width:calc(100vw - 16px);background:var(--surface-2);
+  border:1px solid var(--border-2);border-radius:var(--r-md);box-shadow:var(--e2),var(--hi);padding:11px 13px;
+  font-size:.82rem;line-height:1.48;color:var(--text-2)}
+.jargon-pop[hidden]{display:none}
+.jargon-pop .jp-term{font-weight:700;color:var(--text);font-size:.85rem;margin-bottom:4px;letter-spacing:-.01em}
+.jargon-pop .jp-blurb{margin-bottom:8px}
+.jargon-pop .jp-link{display:inline-block;color:var(--accent);font-weight:600;font-size:.78rem}
 .mermaid-err{color:var(--red);font-size:.75rem;font-family:var(--mono);padding:.5rem;text-align:left;white-space:pre-wrap}
 .chart-viewer{position:fixed;inset:0;z-index:1000;display:none;flex-direction:column;background:var(--bg-0);color:var(--text)}
 .chart-viewer.open{display:flex}
@@ -218,17 +334,28 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .live-mode[aria-pressed="true"]{color:var(--accent)}
 .live-mode:disabled{opacity:.55;cursor:not-allowed}
 .live-mode svg{width:12px;height:12px}
-.ask-loading{display:flex;align-items:center;gap:10px;min-height:30px;color:var(--text-2);font-size:.92rem}
-.ask-loading .classic-spin{display:block;width:15px;height:15px;border-radius:50%;flex:0 0 auto;
-  border:2px solid color-mix(in srgb, var(--accent) 30%, transparent);border-top-color:var(--accent);
-  animation:classic-spin .7s linear infinite}
-@keyframes classic-spin{to{transform:rotate(360deg)}}
-.ask-loading .shimmer{background:linear-gradient(90deg, var(--text-2) 38%, var(--text) 50%, var(--text-2) 62%);
-  background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
-  animation:shimmer-sweep 1.9s linear infinite}
-@keyframes shimmer-sweep{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.ask-loading{display:flex;flex-direction:column;gap:6px;min-height:30px;color:var(--text-2);font-size:.92rem}
+.ask-load-row{display:flex;align-items:center;gap:10px;min-width:0}
+.ask-load-row.has-actions{cursor:pointer}
+.ask-actions-toggle{margin-left:2px;color:var(--text-3);font-size:.8rem;font-variant-numeric:tabular-nums;user-select:none;flex:0 0 auto;white-space:nowrap}
+.ask-actions-toggle[hidden]{display:none}
+.ask-actions{list-style:none;margin:0 0 2px 26px;padding:0;display:flex;flex-direction:column;gap:3px;font-size:.8rem}
+.ask-actions[hidden]{display:none}
+.ask-actions li{display:flex;align-items:center;gap:7px;color:var(--text-2);max-width:100%}
+.ask-actions li svg{width:12px;height:12px;flex:0 0 auto;color:var(--text-3)}
+.ask-actions li .a-lbl{font-family:var(--mono,ui-monospace,SFMono-Regular,monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* loading-ui "classic": 12 radial bars, currentColor, staggered fade. */
+.ask-loading .classic{position:relative;display:inline-block;width:16px;height:16px;color:var(--accent);flex:0 0 auto}
+.ask-loading .classic-in{position:absolute;top:50%;left:50%;display:block;width:100%;height:100%}
+.ask-loading .classic i{position:absolute;top:-3.9%;left:-10%;width:24%;height:8%;border-radius:9999px;
+  background:currentColor;animation:classic-fade 1.2s linear infinite}
+@keyframes classic-fade{0%{opacity:1}100%{opacity:.15}}
+.ask-loading .shimmer{background:linear-gradient(100deg, var(--text-3) 28%, #fff 50%, var(--text-3) 72%);
+  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:shimmer-sweep 2.4s ease-in-out infinite}
+@keyframes shimmer-sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
 @media(prefers-reduced-motion:reduce){
-  .ask-loading .classic-spin{animation:none;border-top-color:color-mix(in srgb, var(--accent) 30%, transparent)}
+  .ask-loading .classic i{animation:none;opacity:.55}
   .ask-loading .shimmer{animation:none;-webkit-background-clip:unset;background-clip:unset;color:var(--text-2)}
 }
 @media(max-width:560px){
@@ -293,6 +420,8 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .side-user b{color:var(--text)}
 .console-link{display:flex;align-items:center;gap:8px;padding:.5rem .6rem;border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-2);font-size:.78rem}
 .console-link:hover{color:var(--text);background:var(--glass-2)}
+.side-ver{align-self:flex-start;font-size:.72rem;color:var(--text-3,var(--text-2));font-family:var(--font-mono,monospace);letter-spacing:0}
+.side-ver:hover{color:var(--accent)}
 .side-user form{margin-left:auto}
 
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--r-full);
@@ -360,6 +489,26 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
   border-radius:var(--r-sm);background:var(--glass-2);font-size:.82rem;color:var(--text-2)}
 .gate-tier b{color:var(--text);min-width:96px}
 .gate-err{color:var(--red);font-size:.82rem;margin-bottom:14px}
+.lander{min-height:100dvh;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 24px;text-align:center}
+.lander-in{width:100%;max-width:660px;display:flex;flex-direction:column;align-items:center;animation:rise .5s var(--ease,ease) both}
+.lander-brand{display:flex;align-items:center;gap:10px;margin-bottom:32px;font-weight:700;letter-spacing:-.02em;font-size:1.05rem}
+.lander-brand .av{width:34px;height:34px;border-radius:var(--r-md);background:var(--accent);display:flex;align-items:center;justify-content:center}
+.lander-brand .av svg{width:18px;height:18px;color:var(--on-accent)}
+.lander-brand em{font-style:normal;color:var(--text-3);font-weight:500}
+.lander h1{font-size:clamp(1.9rem,5.2vw,2.7rem);line-height:1.07;letter-spacing:-.032em;margin-bottom:16px}
+.lander-sub{color:var(--text-2);font-size:1.02rem;line-height:1.62;max-width:530px;margin-bottom:28px}
+.lander-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:.82rem 1.55rem;border-radius:var(--r-md);
+  background:var(--accent);color:var(--on-accent);font-weight:650;font-size:.95rem;text-decoration:none;box-shadow:var(--e2)}
+.lander-cta:hover{filter:brightness(1.08)}
+.lander-cta svg{color:var(--on-accent)}
+.lander-note{color:var(--text-3);font-size:.8rem;margin-top:14px;max-width:420px}
+.lander-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:38px 0 6px;max-width:600px}
+.lander-chip{padding:.5rem .9rem;border:1px solid var(--border);border-radius:var(--r-full);background:var(--glass-2);color:var(--text-2);font-size:.845rem}
+.lander-feats{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 22px;margin:34px 0 4px;color:var(--text-2);font-size:.86rem}
+.lander-feat{display:flex;align-items:center;gap:8px}
+.lander-feat svg{width:15px;height:15px;color:var(--text)}
+.lander-sec{width:100%;max-width:520px;margin-top:42px}
+.lander-sec-h{font-size:.74rem;text-transform:uppercase;letter-spacing:.13em;color:var(--text-3);margin-bottom:12px}
 @media(max-width:820px){
   .ask-root{grid-template-columns:1fr}
   .ask-side{position:fixed;inset:0 auto 0 0;width:264px;height:100dvh;z-index:50;transform:translateX(-100%);transition:transform var(--t)}
@@ -423,12 +572,37 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 `;
 
 
-function shell(inner, extraJs = "") {
+const SELF_ORIGIN = process.env.SELF_ORIGIN || "https://ask.lakesidegames.net";
+
+// Social-unfurl tags for a shared session or report. Built per session so the
+// Discord/Slack/X/iMessage preview shows that conversation's own question and a
+// card image generated from it, not a generic logo.
+function ogHead({ title, description, image, url }) {
+  const t = esc(title || "Ask · A House Divided");
+  const d = esc(description || "Answers about how A House Divided actually works, from the game's live code.");
+  const img = esc(image || `${SELF_ORIGIN}/og-default.png`);
+  const u = esc(url || SELF_ORIGIN);
+  return `<meta property="og:type" content="article">
+<meta property="og:site_name" content="Ask · A House Divided">
+<meta property="og:title" content="${t}">
+<meta property="og:description" content="${d}">
+<meta property="og:image" content="${img}">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:url" content="${u}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${t}">
+<meta name="twitter:description" content="${d}">
+<meta name="twitter:image" content="${img}">
+<meta name="theme-color" content="#000000">`;
+}
+
+function shell(inner, extraJs = "", head = "") {
   return `<!doctype html><html lang="en" data-theme="dark"><head>${THEME_HEAD}
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Ask · A House Divided</title>
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="dark light">
+${head}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -452,6 +626,51 @@ svg{display:block;width:14px;height:14px;flex-shrink:0}
 ${ASK_CSS}</style></head><body>${inner}${extraJs}</body></html>`;
 }
 
+function changelogPage() {
+  const releases = changelog.releases();
+  const body = releases.length
+    ? releases.map((r, i) => `<section class="cl-rel${i === 0 ? " cl-latest" : ""}">
+      <div class="cl-relhd"><h2>v${esc(r.version)}</h2><span class="cl-date">${esc(r.date)}</span>${i === 0 ? '<span class="cl-badge">Latest</span>' : ""}</div>
+      ${r.sections.map(s => `${s.title ? `<h3 class="cl-sec">${esc(s.title)}</h3>` : ""}
+      <ul class="cl-items">${s.items.map(it => `<li>${esc(it)}</li>`).join("")}</ul>`).join("")}
+    </section>`).join("")
+    : `<p class="cl-empty">No release notes yet.</p>`;
+  const inner = `<div class="cl-root">
+    <header class="cl-head">
+      <a class="cl-back" href="/">${icon("arrow-left", 14) || "←"} Ask</a>
+      <span class="cl-brand"><span class="av">${icon("message", 15)}</span>Ask <em>· What's new</em></span>
+    </header>
+    <main class="cl-body">
+      <div class="cl-hero"><h1>Changelog</h1><p>What's changed in Ask, newest first.</p></div>
+      ${body}
+    </main>
+  </div>`;
+  const css = `<style>
+  .cl-root{max-width:720px;margin:0 auto;padding:0 20px 80px}
+  .cl-head{display:flex;align-items:center;gap:16px;padding:18px 0;position:sticky;top:0;background:var(--bg-0);border-bottom:1px solid var(--border);margin-bottom:32px;z-index:2}
+  .cl-back{display:inline-flex;align-items:center;gap:6px;color:var(--text-2);font-size:.82rem}
+  .cl-back:hover{color:var(--text)}
+  .cl-brand{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--text)}
+  .cl-brand em{font-style:normal;font-weight:500;color:var(--text-2)}
+  .cl-brand .av{display:inline-flex;color:var(--accent)}
+  .cl-hero{margin-bottom:36px}
+  .cl-hero h1{font-size:1.9rem;font-weight:800;letter-spacing:-.02em}
+  .cl-hero p{color:var(--text-2);margin-top:6px}
+  .cl-rel{padding:22px 0;border-top:1px solid var(--border)}
+  .cl-rel:first-of-type{border-top:none}
+  .cl-relhd{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+  .cl-relhd h2{font-size:1.15rem;font-weight:700;font-family:var(--font-mono,monospace)}
+  .cl-date{color:var(--text-3,var(--text-2));font-size:.8rem}
+  .cl-badge{font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:var(--r-full);background:var(--accent-soft);color:var(--accent)}
+  .cl-sec{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);margin:16px 0 8px}
+  .cl-items{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .cl-items li{position:relative;padding-left:18px;color:var(--text);font-size:.92rem;line-height:1.5}
+  .cl-items li::before{content:'';position:absolute;left:2px;top:.6em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  .cl-empty{color:var(--text-2)}
+  </style>`;
+  return shell(inner, "", css);
+}
+
 function signedOut({ failed = false, notFound = false } = {}) {
   if (notFound) {
     return shell(`<div class="gate"><div class="gate-card">
@@ -461,17 +680,35 @@ function signedOut({ failed = false, notFound = false } = {}) {
       <a class="gate-btn" href="/">Go to Ask</a>
     </div></div>`);
   }
-  return shell(`<div class="gate"><div class="gate-card">
-    <div class="av">${icon("message", 24)}</div>
-    <h1>Ask</h1>
-    <p>Answers about how A House Divided actually works, taken from the game's live code.</p>
-    ${failed ? `<div class="gate-err">That sign-in didn't complete. Please try again.</div>` : ""}
-    <a class="gate-btn" href="/auth/login">${icon("user", 16)} Sign in with your game account</a>
-    <div class="gate-tiers" style="margin-top:22px">
-      ${tierRows()}
+  const examples = [
+    "How is inflation calculated?",
+    "Why did my corporation's revenue drop?",
+    "What raises approval before an election?",
+    "Which bond maturity is best right now?",
+    "How do tariffs ripple through the economy?",
+  ];
+  return shell(`<div class="lander"><div class="lander-in">
+    <div class="lander-brand"><span class="av">${icon("message", 18)}</span>Ask <em>· A House Divided</em></div>
+    <h1>Answers about how the game actually works.</h1>
+    <p class="lander-sub">Ask anything about A House Divided and get an answer taken straight from the game's live code — with citations, honest "the code doesn't show this" notes, and optional live game-state lookups.</p>
+    ${failed ? `<div class="gate-err" style="margin-bottom:16px">That sign-in didn't complete. Please try again.</div>` : ""}
+    <a class="lander-cta" href="/auth/login">${icon("user", 16)} Sign in with your game account</a>
+    <div class="lander-note">Free for every player with a game account. Supporters get a bigger daily budget, plus charts and maps.</div>
+    <div class="lander-chips">${examples.map(q => `<span class="lander-chip">${esc(q)}</span>`).join("")}</div>
+    <div class="lander-feats">
+      <span class="lander-feat">${icon("terminal", 15)} Grounded in the live code</span>
+      <span class="lander-feat">${icon("message", 15)} Cites its sources</span>
+      <span class="lander-feat">${icon("zap", 15)} Live game-state lookups</span>
     </div>
-    <p style="font-size:.8rem;color:var(--text-3);margin:0">Free for every player with a game account. Supporters get a bigger daily budget, plus charts and maps.</p>
-  </div></div>`);
+    <div class="lander-sec">
+      <div class="lander-sec-h">Daily budgets</div>
+      <div class="gate-tiers" style="margin:0">${tierRows()}</div>
+    </div>
+  </div></div>`, "", ogHead({
+    title: "Ask · A House Divided",
+    description: "Answers about how A House Divided actually works, taken from the game's live code — with citations and live game-state lookups.",
+    url: SELF_ORIGIN,
+  }));
 }
 
 // Ask is open to every player, so the only ways to land here are a restricted
@@ -480,13 +717,20 @@ function signedOut({ failed = false, notFound = false } = {}) {
 function notEntitled({ identity, context, reason }) {
   const name = esc(context?.username || identity?.username || "there");
   const banned = reason === "banned";
+  // "private" is a deliberate maintenance/staff-only mode — it must NOT wear the
+  // "can't confirm your account" copy, which reads to players as a broken login.
+  const isPrivate = reason === "private";
+  const heading = banned ? "Account restricted" : isPrivate ? "Ask is in staff-only mode" : "Can't confirm your game account";
+  const body = banned
+    ? `Ask isn't available on this account.`
+    : isPrivate
+      ? `Ask is temporarily limited to staff while we work on it, <b>${name}</b>. It'll be back for everyone shortly.`
+      : `You're signed in as <b>${name}</b>, but we couldn't load your A House Divided account just now. This is usually temporary, so try again in a minute.`;
   return shell(`<div class="gate"><div class="gate-card">
     <div class="av">${icon("lock", 24) || icon("user", 24)}</div>
-    <h1>${banned ? "Account restricted" : "Can't confirm your game account"}</h1>
-    <p>${banned
-      ? `Ask isn't available on this account.`
-      : `You're signed in as <b>${name}</b>, but we couldn't load your A House Divided account just now. This is usually temporary, so try again in a minute.`}</p>
-    ${banned ? "" : `<a class="gate-btn" href="/">Try again</a>`}
+    <h1>${heading}</h1>
+    <p>${body}</p>
+    ${banned || isPrivate ? "" : `<a class="gate-btn" href="/">Try again</a>`}
     <div style="margin-top:18px"><form method="POST" action="/auth/logout"><button class="signout" type="submit">Sign out</button></form></div>
   </div></div>`);
 }
@@ -503,7 +747,11 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
   ].filter(Boolean).map(esc).join(" · ");
 
   const starterCatalog = starterQuestions.catalog(context, { liveAvailable: usage.mcpRemaining > 0 });
-  const initialStarters = starterQuestions.select(starterCatalog, "for-you", 0, 3);
+  // Vary the first paint: a random 3 from the relevant top of the catalog, so
+  // reloading the page doesn't show the same starters every time. The client
+  // reshuffles again on "new question" and when the browse panel opens.
+  const featuredPool = starterCatalog.slice(0, Math.min(28, starterCatalog.length));
+  const initialStarters = [...featuredPool].sort(() => Math.random() - 0.5).slice(0, 3);
   const starterCard = question => `<button class="fchip starter-card" type="button" data-question="${esc(question.text)}" data-live="${question.live ? "true" : "false"}">
     <span class="starter-meta"><span>${esc(question.label)}</span>${question.live ? `<span class="starter-live">${icon("zap", { size: 10 })} Live</span>` : ""}</span>
     <span class="starter-copy">${esc(question.text)}</span>${icon("arrow-right", { size: 15 })}</button>`;
@@ -528,6 +776,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <div class="side-foot">
       <div class="quota" id="quota"></div>
       ${context?.isAdmin ? `<a class="console-link" href="/console">${icon("terminal", 14) || icon("settings", 14)} Console</a>` : ""}
+      <a class="side-ver" href="/changelog" title="What's new">v${esc(changelog.VERSION)}</a>
     </div>
     <div class="side-user">
       ${icon("user", 14)}<b>${esc(context?.username || identity.username || "You")}</b>
@@ -585,6 +834,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <label class="setting-live${entitlement?.visualizations ? "" : " setting-locked"}"><input type="checkbox" id="visualizations"${entitlement?.visualizations ? "" : " disabled"}><span>Use visualizations<small>${entitlement?.visualizations
       ? "Allow a diagram, chart, or game map when it makes the answer clearer."
       : "Charts, diagrams, and game maps are a supporter feature. Answers stay in prose."}</small></span></label>
+    <div class="setting-group"><label>Answer model</label><div class="seg">${segBtns(require("./models").USER_MODELS, "model", "auto")}</div></div>
     <div class="setting-group"><label>Response style</label><div class="seg">${segBtns(styles, "style", "standard")}</div></div>
     <div class="setting-group"><label>Response length</label><div class="seg">${segBtns(lengths, "length", "standard")}</div></div>
   </div>
@@ -627,7 +877,7 @@ var f=document.getElementById('f'),q=document.getElementById('q'),go=document.ge
     chartCanvas=document.getElementById('chartCanvas');
 var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
-var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard'};
+var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard',model:localStorage.getItem('ask.model')||'auto'};
 visualizations.checked=VIZ_ALLOWED&&localStorage.getItem('ask.visualizations')==='true';
 visualizations.addEventListener('change',function(){localStorage.setItem('ask.visualizations',String(visualizations.checked));});
 var replayQuestion=new URLSearchParams(location.search).get('replay');
@@ -636,7 +886,12 @@ function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;r
 function modelBadge(model){var m=String(model||'');if(MODEL_TIERS[m])return MODEL_TIERS[m];if(m==='Flash'||m==='Pro'||m==='Deep')return m;if(/pro/i.test(m))return 'Pro';if(/flash/i.test(m))return 'Flash';return '';}
 function modelName(d){var id=d&&d.modelId?d.modelId:(d&&d.model?d.model:'');if(d&&d.modelName)return d.modelName;return MODEL_NAMES[id]||'';}
 function setFlags(turn,d){if(!turn)return;var f=turn.querySelector('.flag');if(f)f.textContent=modelBadge(d.modelId||d.model);var n=turn.querySelector('.flag-model');if(!n)return;var name=modelName(d),url=MODEL_URLS[d.modelId||d.model];if(!name){n.textContent='';return;}if(url){n.innerHTML='<a href="'+esc(url)+'" target="_blank" rel="noopener" title="About '+esc(name)+'">'+esc(name)+'</a>';}else{n.textContent=name;}}
-function mermaidCfg(){var light=document.documentElement.getAttribute('data-theme')==='light';return{startOnLoad:false,securityLevel:'strict',theme:light?'default':'dark'};}
+function mermaidCfg(){var light=document.documentElement.getAttribute('data-theme')==='light';
+  var v=light
+    ?{background:'#ffffff',primaryColor:'#f2f2f3',primaryTextColor:'#0a0a0a',primaryBorderColor:'#b0b0b0',lineColor:'#8a8a8a',secondaryColor:'#e6e6e7',tertiaryColor:'#f6f6f7',mainBkg:'#f2f2f3',nodeBorder:'#b0b0b0',clusterBkg:'#fafafa',clusterBorder:'#d4d4d4',textColor:'#0a0a0a',fontFamily:'Inter, system-ui, sans-serif'}
+    :{background:'#000000',primaryColor:'#181818',primaryTextColor:'#fafafa',primaryBorderColor:'#5a5a5a',lineColor:'#8a8a8a',secondaryColor:'#101010',tertiaryColor:'#0b0b0b',mainBkg:'#181818',nodeBorder:'#4a4a4a',clusterBkg:'#0b0b0b',clusterBorder:'#2a2a2a',textColor:'#e8e8e8',fontFamily:'Inter, system-ui, sans-serif'};
+  return{startOnLoad:false,securityLevel:'strict',theme:'base',themeVariables:v,
+    xyChart:{plotColorPalette:light?'#111111,#666666,#999999,#444444,#bbbbbb,#333333':'#ffffff,#aaaaaa,#777777,#cccccc,#555555,#e0e0e0'}};}
 var mermaidLoading=false,mermaidWait=[];
 function ensureMermaid(cb){if(window.mermaid){window.mermaid.initialize(mermaidCfg());cb();return;}mermaidWait.push(cb);if(mermaidLoading)return;mermaidLoading=true;var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';s.onload=function(){window.mermaid.initialize(mermaidCfg());var q=mermaidWait.splice(0);q.forEach(function(f){f();});};s.onerror=function(){mermaidLoading=false;};document.head.appendChild(s);}
 function expandMermaidViewBox(svg,done){if(!svg){if(done)done();return;}requestAnimationFrame(function(){try{var vb=svg.viewBox&&svg.viewBox.baseVal,box=svg.getBBox();if(vb&&box&&box.width&&box.height){var pad=20,x=Math.min(vb.x,box.x-pad),y=Math.min(vb.y,box.y-pad),right=Math.max(vb.x+vb.width,box.x+box.width+pad),bottom=Math.max(vb.y+vb.height,box.y+box.height+pad);svg.setAttribute('viewBox',[x,y,right-x,bottom-y].join(' '));}svg.removeAttribute('width');svg.removeAttribute('height');}catch(e){}if(done)done();});}
@@ -645,9 +900,24 @@ function setChartZoom(next){chartScale=Math.max(.55,Math.min(3,next));applyChart
 function openChartViewer(wrap){var original=wrap&&wrap.querySelector('svg');if(!original)return;chartReturnFocus=wrap;chartCanvas.innerHTML='';var svg=original.cloneNode(true);chartCanvas.appendChild(svg);chartViewer.classList.add('open');chartViewer.setAttribute('aria-hidden','false');expandMermaidViewBox(svg,function(){var vb=svg.viewBox&&svg.viewBox.baseVal;chartBaseWidth=Math.max(900,vb&&vb.width||0);chartScale=1;applyChartZoom();chartStage.scrollLeft=0;chartStage.scrollTop=0;});document.getElementById('chartClose').focus();}
 function closeChartViewer(){chartViewer.classList.remove('open');chartViewer.setAttribute('aria-hidden','true');chartCanvas.innerHTML='';if(chartReturnFocus)chartReturnFocus.focus();chartReturnFocus=null;}
 function prepareMermaidWrap(wrap){var svg=wrap.querySelector('svg');if(!svg)return;expandMermaidViewBox(svg);wrap.tabIndex=0;wrap.setAttribute('role','button');wrap.setAttribute('aria-label','Open chart full screen');wrap.title='Open chart full screen';wrap.addEventListener('click',function(){openChartViewer(wrap);});wrap.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();openChartViewer(wrap);}});}
-function renderMermaidIn(el){var blocks=el&&el.querySelectorAll('.mermaid-source');if(!blocks||!blocks.length)return;ensureMermaid(function(){blocks.forEach(function(block,i){var src=block.textContent;if(!src)return;var wrap=document.createElement('div');wrap.className='mermaid-wrap';wrap.setAttribute('data-source',src);block.replaceWith(wrap);window.mermaid.render('ask-mmd-'+Date.now()+'-'+i,src).then(function(r){wrap.innerHTML=r.svg;prepareMermaidWrap(wrap);}).catch(function(){wrap.innerHTML='<div class="mermaid-err">This visualization could not be rendered.</div>';});});});}
+// A shimmer placeholder shown while a chart or map is still being built, so the
+// answer area never sits blank between "done" and the visualization appearing.
+function vizSkeleton(label){
+  var hs=[46,72,58,88,52,68,44],bars='';
+  for(var i=0;i<hs.length;i++)bars+='<div class="sk-bar" style="height:'+hs[i]+'%"></div>';
+  return '<div class="viz-skeleton"><div class="sk-top">'+esc(label)+'</div><div class="sk-row">'+bars+'</div></div>';
+}
+function renderMermaidIn(el){
+  var blocks=el&&el.querySelectorAll('.mermaid-source');if(!blocks||!blocks.length)return;
+  // Create the wraps with a skeleton FIRST so the placeholder shows during the
+  // mermaid CDN load as well as the render itself.
+  var wraps=[];
+  blocks.forEach(function(block){var src=block.textContent;if(!src)return;var wrap=document.createElement('div');wrap.className='mermaid-wrap';wrap.setAttribute('data-source',src);wrap.innerHTML=vizSkeleton('Rendering chart…');block.replaceWith(wrap);wraps.push({wrap:wrap,src:src});});
+  if(!wraps.length)return;
+  ensureMermaid(function(){wraps.forEach(function(w,i){window.mermaid.render('ask-mmd-'+Date.now()+'-'+i,w.src).then(function(r){w.wrap.innerHTML=r.svg;prepareMermaidWrap(w.wrap);}).catch(function(){w.wrap.innerHTML='<div class="mermaid-err">This visualization could not be rendered.</div>';});});});
+}
 function mapDetails(spec){var rows=(spec&&Array.isArray(spec.regions)?spec.regions:[]).slice().sort(function(a,b){return Number(b.value||0)-Number(a.value||0);});if(!rows.length)return null;var details=document.createElement('details');details.className='map-details';var title=esc(spec.title||'Map details'),unit=spec.unit?' '+esc(spec.unit):'';details.innerHTML='<summary>View '+rows.length+' map entries · '+title+'</summary><div class="map-detail-list">'+rows.map(function(row){var label=esc(row.label||row.id||'Region'),detail=esc(row.detail||''),value=Number.isFinite(Number(row.value))?Number(row.value).toLocaleString()+unit:'';return '<div class="map-detail-row"><b>'+label+'</b><span>'+((detail?detail+(value?' · ':''):'')+value||'No public value')+'</span></div>';}).join('')+'</div>';return details;}
-function renderMapsIn(el){var blocks=el&&el.querySelectorAll('.map-source');if(!blocks||!blocks.length)return;blocks.forEach(function(block){var src=block.textContent;if(!src)return;var wrap=document.createElement('div');wrap.className='map-wrap';block.replaceWith(wrap);var spec;try{spec=JSON.parse(src);}catch(e){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';return;}var details=mapDetails(spec);if(details)wrap.after(details);fetch('/api/map/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spec)}).then(function(r){if(!r.ok)throw new Error();return r.text();}).then(function(svg){wrap.innerHTML=svg;prepareMermaidWrap(wrap);}).catch(function(){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';});});}
+function renderMapsIn(el){var blocks=el&&el.querySelectorAll('.map-source');if(!blocks||!blocks.length)return;blocks.forEach(function(block){var src=block.textContent;if(!src)return;var wrap=document.createElement('div');wrap.className='map-wrap';wrap.innerHTML=vizSkeleton('Rendering map…');block.replaceWith(wrap);var spec;try{spec=JSON.parse(src);}catch(e){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';return;}var details=mapDetails(spec);if(details)wrap.after(details);fetch('/api/map/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(spec)}).then(function(r){if(!r.ok)throw new Error();return r.text();}).then(function(svg){wrap.innerHTML=svg;prepareMermaidWrap(wrap);}).catch(function(){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';});});}
 chartViewer.addEventListener('click',function(e){var zoom=e.target.closest('[data-chart-zoom]');if(!zoom)return;var action=zoom.dataset.chartZoom;if(action==='in')setChartZoom(chartScale*1.25);else if(action==='out')setChartZoom(chartScale/1.25);else setChartZoom(1);});
 document.getElementById('chartClose').addEventListener('click',closeChartViewer);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&chartViewer.classList.contains('open'))closeChartViewer();});
@@ -711,18 +981,24 @@ liveMode.addEventListener('click',function(){if(live.disabled)return;live.checke
   localStorage.setItem('ask.live',String(live.checked));syncLiveMode();});
 syncLiveMode();
 
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+// A varied sample from the relevant top of the catalog, so the starters differ
+// every time they are shown instead of being a fixed slice.
+function featuredSample(n){return shuffle(STARTERS.slice(0,Math.min(28,STARTERS.length))).slice(0,n);}
+function starterCardEl(item){
+  var card=document.createElement('button');
+  card.className='fchip starter-card';card.type='button';card.dataset.question=item.text;card.dataset.live=String(!!item.live);
+  card.innerHTML='<span class="starter-meta"><span>'+esc(item.label)+'</span>'+
+    (item.live?'<span class="starter-live">'+LIVE_ICON+' Live</span>':'')+'</span><span class="starter-copy">'+esc(item.text)+'</span>'+ARROW_ICON;
+  return card;
+}
+// Refresh the 3 explorer cards with a fresh random pick.
+function renderExplorer(){ if(!starters)return;starters.innerHTML='';featuredSample(3).forEach(function(it){starters.appendChild(starterCardEl(it));}); }
 function starterPool(){
-  return starterCategory==='for-you'?STARTERS.slice(0,12):STARTERS.filter(function(item){return item.category===starterCategory;});
+  return starterCategory==='for-you'?featuredSample(12):shuffle(STARTERS.filter(function(item){return item.category===starterCategory;}));
 }
 function renderLibrary(){
-  var pool=starterPool();libraryQuestions.innerHTML='';
-  for(var i=0;i<pool.length;i++){
-    var item=pool[i],card=document.createElement('button');
-    card.className='fchip starter-card';card.type='button';card.dataset.question=item.text;card.dataset.live=String(!!item.live);
-    card.innerHTML='<span class="starter-meta"><span>'+esc(item.label)+'</span>'+
-      (item.live?'<span class="starter-live">'+LIVE_ICON+' Live</span>':'')+'</span><span class="starter-copy">'+esc(item.text)+'</span>'+ARROW_ICON;
-    libraryQuestions.appendChild(card);
-  }
+  var pool=starterPool();libraryQuestions.innerHTML='';for(var i=0;i<pool.length;i++)libraryQuestions.appendChild(starterCardEl(pool[i]));
 }
 starterTabs.addEventListener('click',function(e){
   var tab=e.target.closest('[data-starter-category]');if(!tab)return;
@@ -740,7 +1016,7 @@ questionPanel.addEventListener('click',function(e){if(e.target===questionPanel)c
 function closeSide(){side.classList.remove('open');scrim.classList.remove('open');}
 document.getElementById('menu').onclick=function(){side.classList.add('open');scrim.classList.add('open');};
 scrim.onclick=closeSide;
-document.getElementById('newq').onclick=function(){convId=null;turnsInThread=0;fuLeft=3;paintCost();out.innerHTML='';hero.style.display='';starterExplorer.style.display='';closeSide();
+document.getElementById('newq').onclick=function(){convId=null;turnsInThread=0;fuLeft=3;paintCost();out.innerHTML='';hero.style.display='';starterExplorer.style.display='';renderExplorer();closeSide();
   convs.querySelectorAll('.ask-conv').forEach(function(c){c.classList.remove('active');});q.focus();};
 
 convs.addEventListener('click',function(e){
@@ -770,6 +1046,16 @@ function loadConv(id){
     body.scrollTop=body.scrollHeight;});
 }
 
+function inl(s){return s
+  .replace(/\`([^\`]+)\`/g,'<code>$1</code>')
+  .replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>')
+  .replace(/(^|[^*])\\*([^*\\n]+)\\*(?!\\*)/g,'$1<em>$2</em>')
+  .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');}
+function tbl(block){var lines=block.split('\\n').filter(function(l){return l.trim();});
+  if(lines.length<2||!/\\|/.test(lines[0])||!/^\\s*\\|?[\\s:|-]+$/.test(lines[1]))return null;
+  var cx=function(l){return l.replace(/^\\s*\\||\\|\\s*$/g,'').split('|').map(function(c){return c.trim();});};
+  var h=cx(lines[0]),r=lines.slice(2).filter(function(l){return /\\|/.test(l);}).map(cx);
+  return '<div class="tbl-wrap"><table class="md-table"><thead><tr>'+h.map(function(x){return '<th>'+inl(x)+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return '<tr>'+row.map(function(c){return '<td>'+inl(c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';}
 function md(t){
   t=esc(t||'');
   var parts=t.split(/\`\`\`/),o='';
@@ -780,12 +1066,18 @@ function md(t){
       else o+='<div class="codeblock"><div class="cb-head"><span class="cb-lang">'+(lang||'code')+
          '</span><button type="button" class="cb-copy">Copy</button></div><pre><code>'+code+'</code></pre></div>';
     }else{
-      var s=parts[i].replace(/\`([^\`]+)\`/g,'<code>$1</code>')
-        .replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>')
-        .replace(/^### (.+)$/gm,'<h3>$1</h3>')
-        .replace(/^\\s*[-*] (.+)$/gm,'<li>$1</li>');
-      s=s.replace(/(<li>[\\s\\S]*?<\\/li>)(?!\\s*<li>)/g,'<ul>$1</ul>');
-      o+=s.split(/\\n{2,}/).map(function(pp){return /^<(h3|ul|div)/.test(pp.trim())?pp:'<p>'+pp.replace(/\\n/g,'<br>')+'</p>';}).join('');
+      o+=parts[i].split(/\\n{2,}/).map(function(block){
+        var b=block.replace(/^\\n+|\\n+$/g,'');if(!b.trim())return '';
+        var tb=tbl(b);if(tb)return tb;
+        if(/^\\s*(?:---+|\\*\\*\\*+|___+)\\s*$/.test(b))return '<hr>';
+        if(/^\\s*&gt;/.test(b))return '<blockquote>'+inl(b.replace(/^\\s*&gt;\\s?/gm,'')).replace(/\\n/g,'<br>')+'</blockquote>';
+        var s=inl(b)
+          .replace(/^\\s*#### (.+)$/gm,'<h4>$1</h4>').replace(/^\\s*### (.+)$/gm,'<h3>$1</h3>')
+          .replace(/^\\s*## (.+)$/gm,'<h2>$1</h2>').replace(/^\\s*# (.+)$/gm,'<h2>$1</h2>')
+          .replace(/^\\s*\\d+[.)] (.+)$/gm,'<oli>$1</oli>').replace(/^\\s*[-*] (.+)$/gm,'<uli>$1</uli>');
+        s=s.replace(/(<oli>[\\s\\S]*?<\\/oli>)(?!\\n?<oli>)/g,function(m){return '<ol>'+m.split('\\n').join('')+'</ol>';}).replace(/oli>/g,'li>');
+        s=s.replace(/(<uli>[\\s\\S]*?<\\/uli>)(?!\\n?<uli>)/g,function(m){return '<ul>'+m.split('\\n').join('')+'</ul>';}).replace(/uli>/g,'li>');
+        return /^<(h[1-6]|ul|ol|blockquote|hr|div|table)/.test(s.trim())?s:'<p>'+s.replace(/\\n/g,'<br>')+'</p>';}).join('');
     }}
   return o;
 }
@@ -850,6 +1142,7 @@ function fill(turn,target,d){
   target.innerHTML=h+(meta?'<div class="ask-meta">'+meta+'</div>':'');
   renderMermaidIn(target);
   renderMapsIn(target);
+  if(window.annotateJargon)try{window.annotateJargon(target);}catch(e){}
   // Answer toolbar lives in the header row so it does not move as text streams.
   var head=turn.querySelector('.ask-ans-head');
   if(head&&!head.querySelector('.ans-tools')){
@@ -911,10 +1204,57 @@ function toast(msg){
   el.textContent=msg; el.classList.add('show');
   clearTimeout(el._t); el._t=setTimeout(function(){el.classList.remove('show');},2200);
 }
+// The 12-bar classic spinner, built once. Each bar is rotated into place and its
+// fade is delayed by a twelfth of the cycle so the lit bar chases around.
+var CLASSIC_SPIN=(function(){var b='';for(var i=0;i<12;i++){
+  b+='<i style="transform:rotate('+(i*30)+'deg) translate(146%);animation-delay:'+(0.1*(i-12)).toFixed(2)+'s"></i>';}
+  return '<span class="classic" role="status" aria-label="Loading"><span class="classic-in">'+b+'</span></span>';})();
 function loadingHtml(label){
-  return '<div class="ask-loading"><i class="classic-spin"></i><span class="shimmer">'+esc(label)+'</span></div>';
+  return '<div class="ask-loading"><div class="ask-load-row">'+CLASSIC_SPIN
+    +'<span class="shimmer lbl">'+esc(label)+'</span>'
+    +'<span class="ask-actions-toggle" hidden></span></div>'
+    +'<ul class="ask-actions" hidden></ul></div>';
+}
+// Update the state text WITHOUT re-rendering the spinner, so its animation never
+// restarts as the server narrates each phase.
+function setLoading(target,label){
+  var lbl=target.querySelector('.ask-loading .lbl');
+  if(lbl){lbl.textContent=label;} else {target.innerHTML=loadingHtml(label);}
+}
+// A small monochrome icon per tool call, chosen from the tool name.
+var A_ICONS={
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>',
+  building:'<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h.01M9 11h.01M9 15h.01M15 7h.01M15 11h.01M15 15h.01"/>',
+  ballot:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12l3 3 5-6"/>',
+  chart:'<path d="M3 20h18"/><path d="M6 20V13M12 20V6M18 20V10"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18c-3-3-3-15 0-18z"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>',
+  tool:'<circle cx="12" cy="12" r="2.5"/>'
+};
+function actionIcon(name){
+  var n=String(name||'').toLowerCase(),k='tool';
+  if(/search|code/.test(n))k='search';
+  else if(/corp/.test(n))k='building';
+  else if(/elect|race|approv|part|vote/.test(n))k='ballot';
+  else if(/fx|market|extract|sector|bond/.test(n))k='chart';
+  else if(/map|geo|countr|overview|region/.test(n))k='globe';
+  else if(/player|character|entity|top_/.test(n))k='user';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+A_ICONS[k]+'</svg>';
+}
+// The live action log. Tap the status text to reveal the last 5 tool calls.
+function renderActions(target,actions){
+  var row=target.querySelector('.ask-load-row'), tg=target.querySelector('.ask-actions-toggle'), ul=target.querySelector('.ask-actions');
+  if(!row||!tg||!ul||!actions.length)return;
+  row.classList.add('has-actions'); tg.hidden=false;
+  var open=!ul.hidden;
+  tg.textContent=(open?'▾ ':'▸ ')+actions.length+' action'+(actions.length===1?'':'s');
+  ul.innerHTML=actions.slice(-5).map(function(a){return '<li>'+actionIcon(a.name)+'<span class="a-lbl">'+esc(a.label||'')+'</span></li>';}).join('');
 }
 out.addEventListener('click',function(e){
+  // Tap the status text to expand/collapse the live action log.
+  var ar=e.target.closest('.ask-load-row.has-actions');
+  if(ar){ var tg=ar.querySelector('.ask-actions-toggle'), ul=ar.parentNode.querySelector('.ask-actions');
+    if(tg&&ul){ ul.hidden=!ul.hidden; tg.textContent=(ul.hidden?'▸':'▾')+tg.textContent.slice(1); } return; }
   var lh=e.target.closest('[data-livehint]');
   if(lh){ var tn=lh.closest('.ask-turn'); var qq=tn&&tn.querySelector('.qt');
     if(qq){ live.checked=true;localStorage.setItem('ask.live','true');syncLiveMode();q.value=qq.textContent.trim();submit(); } return; }
@@ -929,19 +1269,29 @@ function submit(){
   var text=q.value.trim(); if(text.length<5||busy)return;
   busy=true;hero.style.display='none';starterExplorer.style.display='none';go.disabled=true;
   var t=addTurn(text,null);
-  var stages=live.checked?['Pulling up the live game state…','Cross-checking what\\'s actually happening…','Weighing the numbers…','Putting the answer together…']
-    :['Digging into the rules…','Piecing together how it works…','Double-checking the details…','Putting the answer together…'];
-  var stage=0,loadingTimer=setInterval(function(){stage=(stage+1)%stages.length;t.target.innerHTML=loadingHtml(stages[stage]);},2200);
+  // The server narrates each phase over its own status events. This client-side
+  // cycle is only a fallback for the brief gap before the stream connects; it is
+  // retired the moment the first real status arrives.
+  var stages=live.checked?['Pulling up the live game state…','Cross-checking what\\'s actually happening…','Weighing the numbers…']
+    :['Digging into the rules…','Piecing together how it works…','Double-checking the details…'];
+  var stage=0,serverStatus=false;
+  var loadingTimer=setInterval(function(){if(serverStatus)return;stage=(stage+1)%stages.length;setLoading(t.target,stages[stage]);},2200);
   t.target.innerHTML=loadingHtml(stages[0]);
   q.value='';q.style.height='auto';body.scrollTop=body.scrollHeight;
-  var acc='', meta0=null, ctrl=new AbortController(),hasDelta=false,terminal=false;
+  var acc='', meta0=null, ctrl=new AbortController(),hasDelta=false,terminal=false,actions=[];
   var stopped=false;
   go.classList.add('stopping'); go.disabled=false;
   var prevGo=go.onclick;
-  go.onclick=function(ev){ ev.preventDefault(); stopped=true; ctrl.abort(); };
+  // Stop is a deliberate cancel: tell the server to abort THIS generation (so it
+  // records nothing and costs no quota) and let it close the stream. Only if the
+  // request id has not arrived yet do we fall back to tearing down the fetch.
+  go.onclick=function(ev){ ev.preventDefault(); stopped=true;
+    var rid=meta0&&meta0.reqId;
+    if(rid){ fetch('/api/ask/stop',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({reqId:rid})}).catch(function(){}); }
+    else { ctrl.abort(); } };
   fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
     signal:ctrl.signal,
-    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId})})
+    body:JSON.stringify({question:text,style:S.style,length:S.length,model:S.model,useMcp:live.checked,visualizations:visualizations.checked,convId:convId})})
   .then(function(r){
     // Non-streaming replies (cache hits, quota refusals) still come back as JSON.
     var ct=r.headers.get('content-type')||'';
@@ -960,6 +1310,22 @@ function submit(){
     body.addEventListener('scroll',function(){
       stick=(body.scrollHeight-body.scrollTop-body.clientHeight)<80;
     },{passive:true});
+    // Coalesce delta rendering onto one animation frame. Tokens arrive faster than
+    // a full md(acc) reparse + innerHTML swap can run, and on long (deep-tier)
+    // answers rendering on every token is O(n^2) on the main thread — it pins the
+    // tab and OOMs mobile to a white page. Render at most once per frame instead.
+    var renderQueued=false;
+    var raf=window.requestAnimationFrame?window.requestAnimationFrame.bind(window):function(fn){return setTimeout(fn,16);};
+    var caf=window.cancelAnimationFrame?window.cancelAnimationFrame.bind(window):clearTimeout;
+    var rafId=0;
+    function flushRender(){
+      renderQueued=false;
+      if(terminal||stopped)return;
+      t.target.innerHTML=md(acc);
+      if(stick)body.scrollTop=body.scrollHeight;
+    }
+    function scheduleRender(){ if(renderQueued)return; renderQueued=true; rafId=raf(flushRender); }
+    function cancelRender(){ if(renderQueued){caf(rafId);renderQueued=false;} }
     function pump(){
       return reader.read().then(function(res){
         if(res.done){if(!terminal)throw new Error('stream ended before completion');return;}
@@ -975,12 +1341,13 @@ function submit(){
           var d; try{d=JSON.parse(data);}catch(e){return;}
           if(ev==='meta'){ meta0=d; if(!convId)convId=d.convId;
             setFlags(t.turn,d);
-            if(!hasDelta){stage=stages.length-1;t.target.innerHTML=loadingHtml(d.status||stages[stage]);} }
-          else if(ev==='delta'){ if(!hasDelta){hasDelta=true;clearInterval(loadingTimer);} acc+=d; t.target.innerHTML=md(acc);
-            if(stick)body.scrollTop=body.scrollHeight; }
-          else if(ev==='error'){ terminal=true;clearInterval(loadingTimer);t.target.innerHTML='<div class="ask-err">'+esc(d.error)+'</div>'; }
+            if(!hasDelta&&d.status){serverStatus=true;setLoading(t.target,d.status);} }
+          else if(ev==='status'){ if(!hasDelta&&d.label){serverStatus=true;setLoading(t.target,d.label);} }
+          else if(ev==='action'){ if(!hasDelta&&d.label){actions.push(d);renderActions(t.target,actions);} }
+          else if(ev==='delta'){ if(!hasDelta){hasDelta=true;clearInterval(loadingTimer);} acc+=d; scheduleRender(); }
+          else if(ev==='error'){ terminal=true;clearInterval(loadingTimer);cancelRender();t.target.innerHTML='<div class="ask-err">'+esc(d.error)+'</div>'; }
           else if(ev==='done'){
-            terminal=true;clearInterval(loadingTimer);
+            terminal=true;clearInterval(loadingTimer);cancelRender();
             fill(t.turn,t.target,d);
             if(d.usage)paintQuota(d.usage);
             turnsInThread++;
@@ -1003,22 +1370,29 @@ function submit(){
         :'<div class="ask-err">Stopped.</div>';
       return;
     }
-    if(acc){ // partial answer already on screen; keep it rather than wiping
-      t.target.innerHTML=md(acc)+'<div class="ask-err" style="margin-top:10px">Connection dropped mid-answer.</div>';
-      return;
-    }
-    t.target.innerHTML=loadingHtml('Reconnecting…');
-    setTimeout(function(){
+    // The server keeps generating after a dropped stream and saves the FULL
+    // answer, so poll the conversation for it — whether the stream dropped before
+    // the first token or mid-answer (which was truncating long live answers on
+    // mobile). While polling we keep the partial (or a reconnecting spinner)
+    // on screen; when the complete answer lands it replaces the partial.
+    var hadPartial=!!acc;
+    if(hadPartial){ t.target.innerHTML=md(acc)+'<div class="ask-err" style="margin-top:10px">Reconnecting to finish the answer…</div>'; }
+    else { setLoading(t.target,'Reconnecting…'); }
+    var tries=0, delays=[1500,2500,4000,5000,6000,8000,8000,10000,12000];
+    (function poll(){
       fetch('/api/conversation?id='+encodeURIComponent(convId||''),{credentials:'same-origin'})
         .then(function(r){return r.ok?r.json():null;})
         .then(function(d){
           var turns=(d&&d.turns)||[], match=null;
-          for(var i=turns.length-1;i>=0;i--){ if(turns[i].question===text&&turns[i].answer){match=turns[i];break;} }
-          if(match)fill(t.turn,t.target,{answer:match.answer,areas:match.areas,citations:match.citations,cached:false,model:match.model});
-          else t.target.innerHTML='<div class="ask-err">Connection dropped before the answer arrived. Try again.</div>';
+          // Prefer a saved answer at least as complete as what we already streamed.
+          for(var i=turns.length-1;i>=0;i--){ if(turns[i].question===text&&turns[i].answer&&(turns[i].answer.length>=acc.length-8)){match=turns[i];break;} }
+          if(match){fill(t.turn,t.target,{answer:match.answer,areas:match.areas,citations:match.citations,cached:false,model:match.model});return;}
+          if(tries<delays.length){setTimeout(poll,delays[tries++]);}
+          else if(hadPartial){ t.target.innerHTML=md(acc)+'<div class="ask-err" style="margin-top:10px">Connection dropped mid-answer. The full version may be in your history shortly.</div>'; }
+          else t.target.innerHTML='<div class="ask-err">Connection dropped before the answer arrived. It may still be saved — check your history in a moment, or try again.</div>';
         })
-        .catch(function(){t.target.innerHTML='<div class="ask-err">Connection dropped. Try again.</div>';});
-    },1500);
+        .catch(function(){ if(tries<delays.length){setTimeout(poll,delays[tries++]);} else if(!hadPartial) t.target.innerHTML='<div class="ask-err">Connection dropped. Try again.</div>'; });
+    })();
   })
   .finally(function(){
     clearInterval(loadingTimer);busy=false;go.classList.remove('stopping'); go.onclick=prevGo||null; go.disabled=q.value.trim().length<5; q.focus();
@@ -1026,7 +1400,7 @@ function submit(){
 }
 go.disabled=true;
 })();</script>`;
-  return shell(inner + questionPanel + chartViewer, js);
+  return shell(inner + questionPanel + chartViewer, jargonScripts() + js);
 }
 
 function esc(s) {
@@ -1062,13 +1436,9 @@ function sharedView(conv) {
     </div></div>
   </div>
   <script>
-  // Same renderer as the live view so shared transcripts look identical.
-  document.querySelectorAll('[data-md]').forEach(function(el){
-    var t=el.textContent||'';
-    el.innerHTML=t.replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>')
-      .split(/\\n{2,}/).map(function(p){return '<p>'+p.replace(/\\n/g,'<br>')+'</p>';}).join('');
-  });
+  // Full rich renderer (tables, headings, callouts, code, Mermaid, maps) so a
+  // shared transcript looks identical to the live answer.
+  if(window.__hydrateShared)window.__hydrateShared();
   var shareToken=${JSON.stringify(conv.shareToken || "")};
   document.querySelectorAll('[data-shared-report]').forEach(function(button){
     button.addEventListener('click',function(){
@@ -1080,7 +1450,14 @@ function sharedView(conv) {
     });
   });
   </script>`;
-  return shell(inner);
+  const first = (conv.turns || [])[0] || {};
+  const snippet = String(first.answer || "").replace(/[*`#>_]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
+  return shell(inner, "", ogHead({
+    title: conv.title || first.question || "Shared Ask conversation",
+    description: snippet || "A shared Ask conversation. Answers come from the game's live code.",
+    image: conv.shareToken ? `${SELF_ORIGIN}/s/${conv.shareToken}/og.png` : undefined,
+    url: conv.shareToken ? `${SELF_ORIGIN}/s/${conv.shareToken}` : undefined,
+  }) + sharedScripts());
 }
 
 // A generated report on its own shareable page. The renderer is deliberately
@@ -1140,13 +1517,15 @@ function reportView(report) {
     return o;
   }
   el.innerHTML=md(el.textContent||'');
+  if(window.annotateJargon)try{window.annotateJargon(el);}catch(e){}
   function fit(svg){requestAnimationFrame(function(){try{var vb=svg.viewBox&&svg.viewBox.baseVal,box=svg.getBBox();
     if(vb&&box&&box.width&&box.height){var pad=20;svg.setAttribute('viewBox',[Math.min(vb.x,box.x-pad),Math.min(vb.y,box.y-pad),Math.max(vb.width,box.width+2*pad),Math.max(vb.height,box.height+2*pad)].join(' '));}
     svg.removeAttribute('width');svg.removeAttribute('height');}catch(e){}});}
   var mmd=el.querySelectorAll('.mermaid-source');
   if(mmd.length){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
     s.onload=function(){var light=document.documentElement.getAttribute('data-theme')==='light';
-      window.mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:light?'default':'dark'});
+      var v=light?{background:'#ffffff',primaryColor:'#f2f2f3',primaryTextColor:'#0a0a0a',primaryBorderColor:'#b0b0b0',lineColor:'#8a8a8a',secondaryColor:'#e6e6e7',tertiaryColor:'#f6f6f7',mainBkg:'#f2f2f3',nodeBorder:'#b0b0b0',textColor:'#0a0a0a',fontFamily:'Inter, system-ui, sans-serif'}:{background:'#000000',primaryColor:'#181818',primaryTextColor:'#fafafa',primaryBorderColor:'#5a5a5a',lineColor:'#8a8a8a',secondaryColor:'#101010',tertiaryColor:'#0b0b0b',mainBkg:'#181818',nodeBorder:'#4a4a4a',textColor:'#e8e8e8',fontFamily:'Inter, system-ui, sans-serif'};
+      window.mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'base',themeVariables:v,xyChart:{plotColorPalette:light?'#111111,#666666,#999999,#444444,#bbbbbb,#333333':'#ffffff,#aaaaaa,#777777,#cccccc,#555555,#e0e0e0'}});
       mmd.forEach(function(block,i){var src=block.textContent;var wrap=document.createElement('div');wrap.className='mermaid-wrap';block.replaceWith(wrap);
         window.mermaid.render('report-mmd-'+i,src).then(function(r){wrap.innerHTML=r.svg;var svg=wrap.querySelector('svg');if(svg)fit(svg);})
           .catch(function(){wrap.innerHTML='<div class="mermaid-err">This visualization could not be rendered.</div>';});});};
@@ -1158,12 +1537,48 @@ function reportView(report) {
       .then(function(svg){wrap.innerHTML=svg;var s2=wrap.querySelector('svg');if(s2)fit(s2);})
       .catch(function(){wrap.innerHTML='<div class="mermaid-err">This map could not be rendered.</div>';});});
   })();`}</script>`;
-  return shell(inner);
+  const snippet = String(report.body || "").replace(/[*`#>_|-]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
+  return shell(inner, "", ogHead({
+    title: report.title || report.question || "Ask report",
+    description: snippet || "A generated report from a live Ask question.",
+    image: report.token ? `${SELF_ORIGIN}/r/${report.token}/og.png` : undefined,
+    url: report.token ? `${SELF_ORIGIN}/r/${report.token}` : undefined,
+  }) + jargonScripts());
 }
 
-function consolePage({ identity, context, users = [], selected = null, reports = [], correctionRows = [] }) {
+function consolePage({ identity, context, users = [], selected = null, reports = [], modelStats = [], correctionRows = [] }) {
+  const models = require("./models");
   const money = n => `$${Number(n || 0).toFixed(Number(n || 0) < 0.01 ? 4 : 2)}`;
   const when = ts => ts ? new Date(ts).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "Never";
+  const num = n => Number(n || 0).toLocaleString();
+  const ratePct = (up, down) => { const t = Number(up) + Number(down); return t ? `${Math.round((Number(up) / t) * 100)}%` : "—"; };
+
+  // Actual token usage + helpful/unhelpful, per model.
+  const modelRows = modelStats.map(m => `<tr>
+    <td>${esc(models.displayFor(m.model))}<div class="console-muted">${esc(m.model)}</div></td>
+    <td>${esc(models.providerOf(m.model))}</td>
+    <td>${num(m.questions)}</td>
+    <td>${num(m.tokens_in)} / ${num(m.tokens_out)}</td>
+    <td>${num(m.up)} 👍 / ${num(m.down)} 👎<div class="console-muted">${ratePct(m.up, m.down)} helpful</div></td>
+    <td>${money(m.cost)}</td>
+  </tr>`).join("") || `<tr><td colspan="6" class="console-muted">No answers yet.</td></tr>`;
+
+  // Real cost by provider (free providers = $0), from actual token totals.
+  const providerAgg = {};
+  for (const m of modelStats) {
+    const prov = models.providerOf(m.model);
+    const a = providerAgg[prov] || (providerAgg[prov] = { questions: 0, tokens_in: 0, tokens_out: 0, cost: 0 });
+    a.questions += Number(m.questions || 0); a.tokens_in += Number(m.tokens_in || 0);
+    a.tokens_out += Number(m.tokens_out || 0); a.cost += Number(m.cost || 0);
+  }
+  const providerRows = Object.entries(providerAgg).sort((a, b) => b[1].cost - a[1].cost).map(([prov, a]) => `<tr>
+    <td>${esc(prov)}</td><td>${num(a.questions)}</td><td>${num(a.tokens_in)} / ${num(a.tokens_out)}</td><td>${money(a.cost)}</td>
+  </tr>`).join("") || `<tr><td colspan="4" class="console-muted">No answers yet.</td></tr>`;
+  const modelUsageSection = `<section class="console-card"><h2>Usage by model</h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>Model</th><th>Provider</th><th>Questions</th><th>Tokens in / out</th><th>Helpful / reported</th><th>Cost</th></tr></thead><tbody>${modelRows}</tbody></table></div>
+    <h2 style="margin-top:18px">Cost by provider</h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>Provider</th><th>Questions</th><th>Tokens in / out</th><th>Cost</th></tr></thead><tbody>${providerRows}</tbody></table></div>
+  </section>`;
   const totalQuestions = users.reduce((n, u) => n + Number(u.question_count || 0), 0);
   const totalReports = users.reduce((n, u) => n + Number(u.report_count || 0), 0);
   const totalCost = users.reduce((n, u) => n + Number(u.estimated_cost || 0), 0);
@@ -1202,7 +1617,8 @@ function consolePage({ identity, context, users = [], selected = null, reports =
       <div class="console-stat"><small>Tokens</small><b>${totalTokens.toLocaleString()}</b></div>
       <div class="console-stat"><small>Rough API cost</small><b>${money(totalCost)}</b></div>
     </div>
-    <p class="console-muted" style="font-size:.7rem;margin:-8px 0 14px">Free OpenRouter models bill nothing and show $0. DeepSeek fallback requests use peak cache-miss list rates, so those are a conservative estimate. Historic requests recorded before token accounting also show $0.</p>
+    <p class="console-muted" style="font-size:.7rem;margin:-8px 0 14px">Cost is actual token usage × provider rate. Google Gemini (free tier) and OpenRouter free/stealth slugs bill nothing, so they are $0 — the real spend is the DeepSeek fallback, priced at its cache-miss list rate. Cached reads carry no tokens or cost.</p>
+    ${modelUsageSection}
     <div class="console-grid"><section class="console-card"><h2>Users</h2><div style="overflow:auto"><table class="console-table"><thead><tr><th>User</th><th>Questions</th><th>Live</th><th>Reports</th><th>Tokens in / out</th><th>Cost</th><th>Last active</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="console-muted">No users yet.</td></tr>`}</tbody></table></div></section>
       <section class="console-card"><h2>User profile and questions</h2>${detail}</section></div>
     <section class="console-card console-reports"><h2>Reported-answer queue</h2>${reportQueue}</section>
@@ -1234,4 +1650,4 @@ function consolePage({ identity, context, users = [], selected = null, reports =
   </div></div>`);
 }
 
-module.exports = { app, signedOut, notEntitled, sharedView, reportView, consolePage, esc };
+module.exports = { app, signedOut, notEntitled, sharedView, reportView, consolePage, changelogPage, esc };

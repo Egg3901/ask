@@ -274,12 +274,18 @@ function feedback({ answerId, userKey = null, shareToken = null, rating, reason 
 // same review queue. Recording them as a zero-cost Discord turn makes the
 // admin console, report clustering, and replay flow work without a second
 // analytics silo.
-function recordDiscordFeedback({ discordId, username, question, answer, rating, reason = "", usedMcp = false }) {
+function recordDiscordFeedback({ discordId, username, question, answer, rating, reason = "", usedMcp = false, answerId = null }) {
   const id = String(discordId || "").slice(0, 100);
   if (!id || !["up", "down"].includes(rating)) return null;
   const key = `discord:${id}`;
+  // If the ask was already recorded at answer time (via recordDiscordAsk), link
+  // the feedback to that row instead of creating a duplicate — otherwise the
+  // question would be counted twice against the daily quota.
+  if (answerId != null && Number.isInteger(Number(answerId))) {
+    return feedback({ answerId: Number(answerId), userKey: key, rating, reason }) ? Number(answerId) : null;
+  }
   touchUser(key, { provider: "discord", id, username }, { username });
-  const answerId = record({
+  const newId = record({
     user_key: key, username: String(username || "Discord user").slice(0, 100),
     conv_id: `discord-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     question: String(question || "").slice(0, 2000), answer: String(answer || "").slice(0, 30000),
@@ -288,8 +294,36 @@ function recordDiscordFeedback({ discordId, username, question, answer, rating, 
     plan: JSON.stringify({ id: "discord-ask" }), validation: JSON.stringify({ issues: [] }),
     evidence: JSON.stringify({ tools: [], visualizations: [] }), ts: Date.now(),
   });
-  feedback({ answerId, userKey: key, rating, reason });
-  return answerId;
+  feedback({ answerId: newId, userKey: key, rating, reason });
+  return newId;
+}
+
+// Discord /ask quota. Discord logins carry no AHD userId, so no supporter tier
+// resolves for them — they get the base signed-in-player limits, the same
+// numbers the web enforces (auth.PLAYER). Staff calls never reach here: the bot
+// only meters non-staff.
+const authMod = require("./auth");
+function discordEnt() { return { questions: authMod.PLAYER.questions, mcp: authMod.PLAYER.mcp, label: "Discord" }; }
+function discordUsage(discordId) {
+  const key = `discord:${String(discordId || "").slice(0, 100)}`;
+  return usage(key, discordEnt());
+}
+// Record a Discord ask that CONSUMES quota (cost 1), distinct from the zero-cost
+// feedback row. Returns the answerId so feedback can link to it later.
+function recordDiscordAsk({ discordId, username, question, answer = "", usedMcp = false }) {
+  const id = String(discordId || "").slice(0, 100);
+  if (!id) return null;
+  const key = `discord:${id}`;
+  touchUser(key, { provider: "discord", id, username }, { username });
+  return record({
+    user_key: key, username: String(username || "Discord user").slice(0, 100),
+    conv_id: `discord-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    question: String(question || "").slice(0, 2000), answer: String(answer || "").slice(0, 30000),
+    areas: "[]", citations: "[]", used_mcp: usedMcp ? 1 : 0, cached: 0,
+    tokens_in: 0, tokens_out: 0, cost: 1, followup: 0, model: "discord-ask",
+    plan: JSON.stringify({ id: "discord-ask" }), validation: JSON.stringify({ issues: [] }),
+    evidence: JSON.stringify({ tools: [], visualizations: [] }), ts: Date.now(),
+  });
 }
 
 function touchUser(key, identity, context) {
@@ -316,12 +350,13 @@ const PRICE = {
   pro: { input: 1.32, output: 3.96 },
   free: { input: 0, output: 0 },
 };
-// OpenRouter free and stealth slugs bill nothing, so they must not inherit the
-// DeepSeek list rate. Anything else keeps the old estimate, which is what every
-// historic row was priced at.
+// OpenRouter free/stealth slugs, Google's free-tier Gemini, and the internal
+// discord-ask marker all bill nothing, so they must not inherit the DeepSeek
+// list rate. Anything else keeps the old estimate, which is what every historic
+// row was priced at.
 function rateFor(model) {
   const m = String(model || "");
-  if (/:free$/.test(m) || m.startsWith("stealth/")) return PRICE.free;
+  if (/:free$/.test(m) || /-free$/.test(m) || /:cloud$/.test(m) || m.startsWith("stealth/") || /^gemini|google/i.test(m) || m === "discord-ask") return PRICE.free;
   return /pro/i.test(m) ? PRICE.pro : PRICE.flash;
 }
 function estimateCost(row) {
@@ -331,6 +366,22 @@ function estimateCost(row) {
 }
 function adminUsers() {
   return S.adminUserList.all();
+}
+// Per-model usage: real token totals, real cost (free providers = $0), and the
+// helpful/unhelpful counts, straight from the recorded rows. Cached reads carry
+// no tokens or cost, so they are excluded from the money and token columns.
+const S_modelStats = db.prepare(`SELECT model,
+    COUNT(*) questions,
+    COALESCE(SUM(CASE WHEN cached=1 THEN 0 ELSE tokens_in END),0) tokens_in,
+    COALESCE(SUM(CASE WHEN cached=1 THEN 0 ELSE tokens_out END),0) tokens_out,
+    COALESCE(SUM(CASE WHEN feedback_rating='up' THEN 1 ELSE 0 END),0) up,
+    COALESCE(SUM(CASE WHEN feedback_rating='down' THEN 1 ELSE 0 END),0) down
+  FROM asks GROUP BY model ORDER BY questions DESC`);
+function adminModelStats() {
+  return S_modelStats.all().map(r => {
+    const rate = rateFor(r.model);
+    return { ...r, cost: (Number(r.tokens_in) * rate.input + Number(r.tokens_out) * rate.output) / 1_000_000 };
+  });
 }
 function adminUser(key) {
   const profile = S.adminProfile.get(key);
@@ -405,4 +456,4 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, reportClusters, estimateCost, putReport, getReport, userReports };
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports };

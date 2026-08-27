@@ -15,7 +15,7 @@ const MODELS = {
 const COMPLEX = /\b(?:why|compare|contrast|tradeoffs?|trade-offs?|interact|interaction|relationship|across|trace|diagnose|root cause|what caused|step by step|edge cases?|all the ways|combined effect|consequences?)\b/i;
 const CROSS_SYSTEM = /\b(?:affect|impact|feed into|depend on|change).{0,50}\b(?:economy|election|government|corporation|company|party|country|market|budget|inflation|growth|turn)\b/i;
 
-function choose({ question = "", length = "standard", style = "standard", useMcp = false, isFollowup = false, visualizations = false } = {}) {
+function choose({ question = "", length = "standard", style = "standard", useMcp = false, isFollowup = false, visualizations = false, report = false } = {}) {
   const text = String(question).trim();
   let score = 0;
   const reasons = [];
@@ -31,12 +31,26 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
   if (useMcp) { score += 1; reasons.push("live state"); }
   if (isFollowup) score += 1;
 
-  // A chart has to be built, not just described, and a deep answer is the one
-  // place the slowest model earns its latency. Both go to the deep tier outright
-  // rather than competing on the heuristic score.
+  // The deep tier (Ox Alpha) is slow, so it is reserved for genuinely multi-part
+  // responses — a question that asks two or more distinct things, an explicit
+  // numbered/lettered list of asks, or the explicit "deep" length. Everything
+  // else that needs reasoning (including visualizations and single-topic analysis)
+  // goes to pro (Mimo); simple lookups go to flash (DeepSeek).
+  const questionMarks = (text.match(/\?/g) || []).length;
+  const multiPart = questionMarks > 1
+    || (text.match(/;/g) || []).length >= 1 && questionMarks >= 1
+    || /(?:^|\s)\d[.)]\s+\S[\s\S]*(?:^|\s)\d[.)]\s+\S/.test(text)               // "1. ... 2. ..."
+    || /\b(?:and also|as well as|on top of that|two things|both\b[\s\S]*\band\b)\b/i.test(text)
+    || /\bfirst\b[\s\S]*\b(?:second|then|next|also)\b/i.test(text);
+  if (multiPart) reasons.push("multi-part");
+
+  // Ox Alpha (deep) is ONLY for multi-part responses: a question with 2+ distinct
+  // asks, or an explicit report (a multi-section deliverable). The plain "deep"
+  // length toggle just makes the answer longer — it still scores up to pro (Mimo)
+  // rather than dragging every long answer onto the slow model.
   let tier;
-  if (visualizations) { tier = "deep"; reasons.push("visualization"); }
-  else if (length === "deep") tier = "deep";
+  if (multiPart || report) { tier = "deep"; if (report) reasons.push("report"); }
+  else if (visualizations) { tier = "pro"; reasons.push("visualization"); }
   else tier = score >= 4 ? "pro" : "flash";
 
   return {

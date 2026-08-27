@@ -13,13 +13,54 @@ const models = require("./models");
 const KEYS = {
   openrouter: () => process.env.OPENROUTER_API_KEY || "",
   deepseek: () => process.env.DEEPSEEK_API_KEY || "",
+  // Google's OpenAI-compatible endpoint takes the API key as a bearer token.
+  google: () => process.env.GEMINI_API_KEY || "",
+  // Local Ollama proxy (free cloud tags). Any bearer works on loopback.
+  ollama: () => process.env.OLLAMA_API_KEY || "ollama",
+  // OpenCode gateway — free community models. Zen route (Mimo, Muse Spark) and
+  // the "go" route (Ox Alpha) share one key but live at different URLs.
+  opencode: () => process.env.OPENCODE_API_KEY || "",
+  opencodego: () => process.env.OPENCODE_API_KEY || "",
 };
 const URLS = {
   openrouter: () => process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions",
   deepseek: () => process.env.DEEPSEEK_URL || "https://api.deepseek.com/chat/completions",
+  google: () => process.env.GEMINI_URL || "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+  ollama: () => process.env.OLLAMA_URL || "http://localhost:11434/v1/chat/completions",
+  opencode: () => process.env.OPENCODE_URL || "https://opencode.ai/zen/v1/chat/completions",
+  opencodego: () => process.env.OPENCODE_GO_URL || "https://opencode.ai/zen/go/v1/chat/completions",
 };
 const DEFAULT_MODEL = process.env.ASK_MODEL || models.CHAINS.flash[0];
 const RETRIES_PER_MODEL = Number(process.env.ASK_LLM_RETRIES || 2);
+
+// Circuit breaker. A model that rate-limits, errors, or stalls before its first
+// token is put in cooldown and skipped on subsequent requests, so the chain
+// dynamically routes around a dead or throttled endpoint instead of paying its
+// latency every time. Cooldowns self-expire, which re-tests the endpoint on the
+// next request — no separate health-probe traffic (that would burn free quota).
+const RATE_COOLDOWN_MS = Number(process.env.ASK_RATE_COOLDOWN_MS || 60000);
+const FAIL_COOLDOWN_MS = Number(process.env.ASK_FAIL_COOLDOWN_MS || 20000);
+// Abandon a non-deep model that produces no visible token in this long and fall
+// through (the observed Gemini free-tier stall was ~29s). Deep answers legitimately
+// think longer, so they are not time-gated here — only rate-limits move them.
+const FIRST_TOKEN_TIMEOUT_MS = Number(process.env.ASK_FIRST_TOKEN_TIMEOUT_MS || 18000);
+const cooldowns = new Map(); // id -> { until, reason }
+function isCoolingDown(id) {
+  const c = cooldowns.get(id);
+  if (!c) return false;
+  if (Date.now() >= c.until) { cooldowns.delete(id); return false; }
+  return true;
+}
+function markCooldown(id, ms, reason) {
+  cooldowns.set(id, { until: Date.now() + ms, reason });
+  console.error(`[ask] ${id} cooldown ${Math.round(ms / 1000)}s (${reason})`);
+}
+/** Live view of which models are currently benched, for the console/health. */
+function cooldownState() {
+  const out = {};
+  for (const [id, c] of cooldowns) if (Date.now() < c.until) out[id] = { reason: c.reason, msLeft: c.until - Date.now() };
+  return out;
+}
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -41,7 +82,7 @@ function release() {
 }
 
 /** One streamed attempt against one model. Throws on transport or HTTP failure. */
-async function attempt({ id, system, history, question, effort, maxTokens, onDelta, signal, emitted }) {
+async function attempt({ id, system, history, question, effort, maxTokens, onDelta, signal, emitted, firstTokenTimeoutMs = 0 }) {
   const entry = models.CATALOG[id] || { provider: "openrouter" };
   const provider = entry.provider;
   const body = {
@@ -55,57 +96,107 @@ async function attempt({ id, system, history, question, effort, maxTokens, onDel
   const resolved = models.effortFor(id, effort);
   if (resolved) body.reasoning_effort = resolved;
 
-  const r = await fetch(URLS[provider](), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${KEYS[provider]()}`,
-      // OpenRouter attributes usage to the app when these are present.
-      ...(provider === "openrouter"
-        ? { "HTTP-Referer": process.env.SELF_ORIGIN || "https://ask.lakesidegames.net", "X-Title": "Lakeside Ask" }
-        : {}),
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!r.ok) {
-    const text = await r.text().catch(() => "");
-    const err = new Error(`${provider} ${r.status} ${text.slice(0, 200)}`);
-    err.status = r.status;
-    throw err;
-  }
+  // One controller relays the caller's abort AND enforces the first-token
+  // deadline, so a model that never speaks is dropped instead of hanging.
+  const inner = new AbortController();
+  const relay = () => inner.abort();
+  if (signal) { if (signal.aborted) inner.abort(); else signal.addEventListener("abort", relay, { once: true }); }
+  let gotFirst = false, timedOut = false;
+  const timer = firstTokenTimeoutMs > 0
+    ? setTimeout(() => { if (!gotFirst) { timedOut = true; inner.abort(); } }, firstTokenTimeoutMs)
+    : null;
 
-  let text = "", usage = null, finish = null, buf = "";
-  const reader = r.body.getReader();
-  const dec = new TextDecoder();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let nl;
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl).trim();
-      buf = buf.slice(nl + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (payload === "[DONE]") continue;
-      let j; try { j = JSON.parse(payload); } catch { continue; }
-      if (j.usage) usage = j.usage;
-      // OpenRouter reports mid-stream provider faults in-band rather than by
-      // status code, so a 200 that dies halfway still has to be caught.
-      if (j.error) {
-        const err = new Error(`${provider} stream ${JSON.stringify(j.error).slice(0, 200)}`);
-        err.status = j.error.code;
-        throw err;
+  try {
+    // Google's OpenAI-compat STREAMING endpoint truncates mid-answer — the stream
+    // ends with no finish_reason after a partial (reproduced across every option
+    // combination). Non-streaming returns the complete answer, so fetch it whole
+    // and replay it as deltas: the client still gets a progressive reveal, and the
+    // saved answer is no longer cut off.
+    if (provider === "google") {
+      const r = await fetch(URLS.google(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEYS.google()}` },
+        body: JSON.stringify({ ...body, stream: false, stream_options: undefined }),
+        signal: inner.signal,
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        const err = new Error(`google ${r.status} ${t.slice(0, 200)}`); err.status = r.status; throw err;
       }
-      const ch = j.choices?.[0];
-      if (!ch) continue;
-      if (ch.finish_reason) finish = ch.finish_reason;
-      const piece = ch.delta?.content;
-      if (piece) { text += piece; emitted.any = true; if (onDelta) onDelta(piece); }
+      const j = await r.json();
+      const msg = j.choices?.[0]?.message?.content || "";
+      const finish = j.choices?.[0]?.finish_reason || null;
+      if (msg && onDelta) {
+        for (const chunk of (msg.match(/[\s\S]{1,64}(?:\s|$)/g) || [msg])) {
+          if (!gotFirst) { gotFirst = true; if (timer) clearTimeout(timer); }
+          emitted.any = true; onDelta(chunk);
+        }
+      }
+      return { text: msg, usage: j.usage || null, finish, model: id, effort: resolved };
     }
+
+    const r = await fetch(URLS[provider](), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${KEYS[provider]()}`,
+        // OpenRouter attributes usage to the app when these are present.
+        ...(provider === "openrouter"
+          ? { "HTTP-Referer": process.env.SELF_ORIGIN || "https://ask.lakesidegames.net", "X-Title": "Lakeside Ask" }
+          : {}),
+        ...(provider === "opencode" || provider === "opencodego" ? { "User-Agent": "opencode" } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: inner.signal,
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      const err = new Error(`${provider} ${r.status} ${text.slice(0, 200)}`);
+      err.status = r.status;
+      throw err;
+    }
+
+    let text = "", usage = null, finish = null, buf = "";
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        let j; try { j = JSON.parse(payload); } catch { continue; }
+        if (j.usage) usage = j.usage;
+        // OpenRouter reports mid-stream provider faults in-band rather than by
+        // status code, so a 200 that dies halfway still has to be caught.
+        if (j.error) {
+          const err = new Error(`${provider} stream ${JSON.stringify(j.error).slice(0, 200)}`);
+          err.status = j.error.code;
+          throw err;
+        }
+        const ch = j.choices?.[0];
+        if (!ch) continue;
+        if (ch.finish_reason) finish = ch.finish_reason;
+        const piece = ch.delta?.content;
+        if (piece) { if (!gotFirst) { gotFirst = true; if (timer) clearTimeout(timer); } text += piece; emitted.any = true; if (onDelta) onDelta(piece); }
+      }
+    }
+    return { text, usage, finish, model: id, effort: resolved };
+  } catch (e) {
+    // A first-token timeout surfaces as an abort; retag it as a transient
+    // endpoint failure so the chain cools it down and falls through, rather than
+    // the caller mistaking it for the user cancelling.
+    if (timedOut) { const err = new Error(`${id} produced no token in ${firstTokenTimeoutMs}ms`); err.ttftTimeout = true; throw err; }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (signal) signal.removeEventListener("abort", relay);
   }
-  return { text, usage, finish, model: id, effort: resolved };
 }
 
 /**
@@ -122,32 +213,55 @@ async function stream(opts) {
   try { return await walk(opts); } finally { release(); }
 }
 
-async function walk({ system, history = [], question, deep = false, chain, model, effort, onDelta, signal }) {
-  const order = (chain && chain.length ? chain : [model || DEFAULT_MODEL]).filter(Boolean);
+function isRateLimit(e) {
+  return Number(e?.status) === 429 || /\b429\b/.test(String(e?.message || "")) || e?.rateLimited === true;
+}
+
+async function walk({ system, history = [], question, deep = false, tier = null, chain, model, effort, onDelta, signal }) {
+  const rawOrder = (chain && chain.length ? chain : [model || DEFAULT_MODEL]).filter(Boolean);
+  // Skip models currently benched by the circuit breaker. If that would skip the
+  // whole chain, keep the last one (the reliable paid backstop) — better a slow
+  // answer than none.
+  let order = rawOrder.filter(id => !isCoolingDown(id));
+  if (!order.length) order = rawOrder.slice(-1);
   const want = effort || (deep ? "high" : "low");
   // Reasoning tokens are billed against max_tokens, so a model that thinks hard
   // on a 7k-token prompt can exhaust the budget before writing anything.
   const maxTokens = deep ? Number(process.env.ASK_MAX_TOKENS_DEEP || 32000) : Number(process.env.ASK_MAX_TOKENS || 8000);
+  // First-token deadline by tier: flash is fast (DeepSeek) so keep it tight; the
+  // reasoning tiers (Mimo for pro, Ox Alpha for deep) legitimately think for a
+  // while, so give pro a long leash and deep none at all.
+  const ttft = (deep || tier === "deep") ? 0
+    : tier === "pro" ? Number(process.env.ASK_TTFT_PRO_MS || 60000)
+    : FIRST_TOKEN_TIMEOUT_MS;
   const emitted = { any: false };
   const tried = [];
   let last = null;
 
   for (const id of order) {
+    let rateLimited = false;
     for (let a = 0; a <= RETRIES_PER_MODEL; a++) {
       try {
-        const out = await attempt({ id, system, history, question, effort: want, maxTokens, onDelta, signal, emitted });
-        if (out.text.trim()) return { ...out, tried };
+        const out = await attempt({ id, system, history, question, effort: want, maxTokens, onDelta, signal, emitted, firstTokenTimeoutMs: ttft });
+        if (out.text.trim()) { cooldowns.delete(id); return { ...out, tried }; }
         last = new Error(`${id} returned an empty answer (finish=${out.finish})`);
       } catch (e) {
-        if (e?.name === "AbortError") throw e;
+        if (e?.name === "AbortError") throw e; // genuine user cancel
         last = e;
-        // 4xx other than rate limiting and timeout will not fix themselves.
+        // A rate limit won't clear on a retry of the same model, and a stall
+        // before the first token means this endpoint is unhealthy right now —
+        // both fall straight through instead of burning retries.
+        if (isRateLimit(e)) { rateLimited = true; break; }
+        if (e?.ttftTimeout) break;
         const status = Number(e?.status);
-        if (status >= 400 && status < 500 && status !== 429 && status !== 408) break;
+        if (status >= 400 && status < 500 && status !== 408) break;
       }
       if (emitted.any) return { text: "", usage: null, finish: "interrupted", model: id, tried, error: String(last?.message || last) };
       if (a < RETRIES_PER_MODEL) await sleep(1500 * (a + 1));
     }
+    // Bench this endpoint: a rate limit cools longer than a transient error so
+    // the next requests route past it (ultimately to DeepSeek) automatically.
+    markCooldown(id, rateLimited ? RATE_COOLDOWN_MS : FAIL_COOLDOWN_MS, rateLimited ? "rate-limit" : "error");
     tried.push({ model: id, error: String(last?.message || last).slice(0, 160) });
     if (emitted.any) break;
     console.error(`[ask] ${id} failed, falling through:`, String(last?.message || last).slice(0, 160));
@@ -156,7 +270,7 @@ async function walk({ system, history = [], question, deep = false, chain, model
   err.tried = tried;
   // Every model being busy is a capacity problem, not a bad question, and the
   // player should be told the difference.
-  err.rateLimited = Number(last?.status) === 429 || /\b429\b/.test(String(last?.message || ""));
+  err.rateLimited = isRateLimit(last);
   throw err;
 }
 
@@ -222,4 +336,4 @@ async function chatRaw({ messages, tools = null, maxTokens = 900, timeoutMs = 20
   return helperChat(body, timeoutMs);
 }
 
-module.exports = { stream, complete, chatRaw, MODEL: DEFAULT_MODEL, MAX_INFLIGHT, HELPER_CHAIN };
+module.exports = { stream, complete, chatRaw, cooldownState, MODEL: DEFAULT_MODEL, MAX_INFLIGHT, HELPER_CHAIN };

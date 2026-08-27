@@ -10,6 +10,7 @@ const ELECTION_RULES = /\b(?:house|lower chamber|senate|district|constituen|seat
 const ELECTION_QUESTION = /\b(?:can |how |which |what |one person|multiple|same party|at-large|single.member)\b/i;
 const CORP = /\b(?:corporation|corp|company|public peer|peer(?:s)?|revenue per stake|valuation|valued|stock)\b/i;
 const CORP_LEADERBOARD = /^(?=[\s\S]*\b(?:largest|biggest|top|rank|ranking|leaderboard)\b)(?=[\s\S]*\bpublic\b)(?=[\s\S]*\b(?:corporations?|corps?|companies|businesses)\b)[\s\S]*$/i;
+const PLAYER_WEALTH = /\b(?:net[\s-]?worth|player wealth|wealth (?:distribution|inequality|gap|ranking)|inequality|richest|poorest|wealthiest|savings)\b/i;
 const VISUAL = /\b(?:visuali[sz](?:e|ation)|chart|graph|diagram|plot|map|heatmap|choropleth)\b/i;
 
 function create(question, context = {}) {
@@ -61,6 +62,12 @@ function create(question, context = {}) {
     display: { kind: "comparison", metric: null, canonical: false },
     visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: false,
     status: "Checking public corporation data…", context,
+  };
+  if (!map && PLAYER_WEALTH.test(text)) return {
+    id: "player-wealth", intent: "player_wealth", live: "required",
+    display: { kind: "comparison", metric: "player_net_worth", canonical: false },
+    visual: explicitVisual ? "required" : "optional", suppressGenericCountryEconomy: true,
+    status: "Reading live player wealth…", context,
   };
   return {
     id: "general", intent: "general", live: "preferred",

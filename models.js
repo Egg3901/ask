@@ -28,11 +28,78 @@ const CATALOG = {
     efforts: null,
     note: "Out of the default chains since 2026-08-23: 25-58s to first token live, and it spends most of its budget on hidden reasoning (3222 completion tokens for 545 characters of answer). Kept for display of historic rows.",
   },
+  "meta/muse-spark-1.2-contributor": {
+    display: "Muse Spark",
+    provider: "openrouter", tier: "flash", score: null, ttftP50Ms: 2200,
+    // Reasoning is MANDATORY on this endpoint and cannot be disabled: "none"
+    // returns a 400. At the default (unset) effort it burns 600-850 hidden
+    // reasoning tokens and takes 5-26s to first visible token. "minimal" keeps it
+    // to ~130 tokens and ~2s, which is why it is the only effort exposed here —
+    // effortFor() maps the flash tier's wanted "none" to the nearest rung.
+    efforts: ["minimal"],
+    note: "Default answer model from 2026-08-25. 1M context, contributor (free) endpoint. Reasoning is mandatory; run at minimal effort for ~2s first token. Falls back to DeepSeek Flash if the endpoint is unavailable.",
+  },
+  "meta/muse-spark-1.2": {
+    display: "Muse Spark",
+    provider: "openrouter", tier: "flash", score: null, ttftP50Ms: 2200,
+    efforts: ["minimal"],
+    note: "Paid Muse Spark 1.2 ($1.25/M in, $4.25/M out). Reasoning mandatory; run at minimal effort. Named fallback for the contributor slug.",
+  },
+  "gemini-3.7-flash": {
+    display: "Gemini 3.7 Flash",
+    provider: "google", tier: "flash", score: null, ttftP50Ms: 3000,
+    // Default from 2026-08-25. Newer than 3.6, same free Google endpoint, same
+    // mandatory-reasoning constraint, so pinned to LOW effort like 3.6.
+    efforts: ["low"],
+    note: "Default answer model. Google free-tier API (OpenAI-compat). Newer than 3.6 Flash; reasoning mandatory, pinned to LOW effort (~3-5s first token). Falls back to DeepSeek Flash.",
+  },
+  "gemini-3.6-flash": {
+    display: "Gemini Flash",
+    provider: "google", tier: "flash", score: null, ttftP50Ms: 3000,
+    // Reasoning is MANDATORY ("none" is a 400) and effort scales first-token time
+    // HARD: at "high" a deep/live answer took 21-35s to first token (measured —
+    // long enough to drop mobile connections). "low" keeps it to ~3-5s with no
+    // quality loss on these grounded answers, so it is the ONLY effort exposed:
+    // effortFor() maps every tier's wanted rung (including the deep tier's "high")
+    // down to "low".
+    efforts: ["low"],
+    note: "Default answer model from 2026-08-25, via Google's free-tier API (OpenAI-compat endpoint). Best grounding of the tested set — refuses to answer past the evidence. 1M context. Pinned to LOW reasoning effort across all tiers (~3-5s first token); high effort caused 20-35s first-token stalls on deep/live questions. Falls back to DeepSeek Flash.",
+  },
+  "deepseek-v4-flash:cloud": {
+    display: "DeepSeek Flash",
+    provider: "ollama", tier: "flash", score: null, ttftP50Ms: 900,
+    efforts: null,
+    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25.",
+  },
+  "mimo-v2.5-free": {
+    display: "Mimo V2.5",
+    provider: "opencode", tier: "pro", score: null, ttftP50Ms: 4800,
+    efforts: null,
+    note: "Mimo V2.5 via the OpenCode Zen gateway — FREE. Offered in the picker.",
+  },
+  "muse-spark-1.2-contributor-free": {
+    display: "Muse Spark",
+    provider: "opencode", tier: "flash", score: null, ttftP50Ms: 2200,
+    efforts: null,
+    note: "Muse Spark 1.2 via the OpenCode Zen gateway — FREE. The gateway 500s intermittently; the chain falls through when it does.",
+  },
+  "ox-alpha-free": {
+    display: "Ox Alpha",
+    provider: "opencodego", tier: "deep", score: null, ttftP50Ms: 3200,
+    efforts: null,
+    note: "Ox Alpha via the OpenCode 'go' gateway — FREE. Best-grounding preview model, restored here after the OpenRouter key was rotated.",
+  },
+  "nemotron-3-ultra:cloud": {
+    display: "Nemotron Ultra",
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 2000,
+    efforts: null,
+    note: "Nemotron 3 Ultra via the local Ollama cloud tag — FREE. Stronger reasoning than DeepSeek Flash; offered in the picker.",
+  },
   "deepseek-v4-flash": {
     display: "DeepSeek Flash",
     provider: "deepseek", tier: "flash", score: 80.8, ttftP50Ms: 1072,
     efforts: ["none", "medium"],
-    note: "Fastest first token by a wide margin and never failed a request. Weakest grounding of the working set.",
+    note: "Fastest first token by a wide margin and never failed a request. Weakest grounding of the working set. The reliable PAID last-resort behind the free Ollama route.",
   },
   "deepseek-v4-pro": {
     display: "DeepSeek Pro",
@@ -51,11 +118,15 @@ const EXCLUDED = {
 
 // Three tiers.
 //
-//   flash  DeepSeek Flash      everyday lookups. Led here by Nemotron Lightning
-//                              until 2026-08-23, but free capacity made the
-//                              everyday tier the slowest (25-58s to first token
-//                              vs a steady ~850ms), so the paid model leads and
-//                              the best free model backs it up.
+//   flash  DeepSeek Flash      everyday lookups. The proven built-in default;
+//                              Nemotron Ultra backs it up. Production overrides
+//                              this via ASK_CHAIN_FLASH to lead with Gemini 3.6
+//                              Flash (Google free-tier API, 1M context, low
+//                              reasoning effort, ~3s first token, best grounding
+//                              of the tested set) and fall back to DeepSeek Flash.
+//                              Gemini is kept out of the in-repo default until it
+//                              carries a full bench score — the router test
+//                              requires every default-chain model to be scored.
 //   pro    Nemotron Ultra      best measured grounding and usefulness of the free set
 //   deep   Ox Alpha            visualization requests and deep-reasoning answers
 //
@@ -95,7 +166,21 @@ const RETIRED = {
   "discord-ask": "Discord",
 };
 
-const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai" };
+// Models a player may pick in Settings. DeepSeek is intentionally absent: it is
+// the reliable paid backstop, always the last link, not a headline choice.
+// "auto" means "use the normal preference chain".
+// Only models that can actually serve are offered. Ox Alpha and Muse Spark were
+// removed 2026-08-25 when the OpenRouter key was rotated (they now 401); re-add
+// them here once a valid OPENROUTER_API_KEY is in place.
+const USER_MODELS = {
+  auto: { label: "Auto" },
+  "deepseek-v4-flash:cloud": { label: "DeepSeek" },
+  "mimo-v2.5-free": { label: "Mimo V2.5" },
+  "ox-alpha-free": { label: "Ox Alpha" },
+  "gemini-3.7-flash": { label: "Gemini 3.7" },
+};
+
+const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev" };
 
 /** Where a player can read about the model that answered them. */
 function urlFor(id) {
@@ -135,6 +220,19 @@ function displayMap() {
   return out;
 }
 
+/** Provider for a stored model id, for cost/usage grouping in the console. */
+function providerOf(id) {
+  const s = String(id || "");
+  if (CATALOG[s]) return CATALOG[s].provider;
+  if (/:free$/.test(s) || s.startsWith("stealth/")) return "openrouter";
+  if (/^gemini|google/i.test(s)) return "google";
+  if (/:cloud$/.test(s)) return "ollama";
+  if (/^ox-alpha/i.test(s)) return "opencodego";
+  if (/-free$/.test(s) || /^(mimo|muse-spark|hy3|laguna|nemotron-3)/i.test(s)) return "opencode";
+  if (s === "discord-ask") return "discord";
+  return s.includes("/") ? "openrouter" : "deepseek";
+}
+
 /** Display tier for a stored model id, including ids retired from the catalog. */
 function tierOf(id) {
   const s = String(id || "");
@@ -153,4 +251,4 @@ function tierMap() {
   return out;
 }
 
-module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, effortFor, tierOf, displayFor, displayMap, tierMap, urlFor, urlMap };
+module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, USER_MODELS, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };

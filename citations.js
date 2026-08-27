@@ -40,12 +40,39 @@ function docIndex() {
         kind: it.k === "wiki" ? "wiki" : "docs",
         section: it.s || "",
         url: href.startsWith("http") ? href : DOCS_BASE + (href.startsWith("/") ? "" : "/") + href,
+        desc: String(it.d || it.hd || "").trim(),
         hay: `${title} ${it.hd || ""} ${it.d || ""}`.toLowerCase(),
       });
     }
   } catch { /* index is optional; absence just means no doc/wiki citations */ }
   _docIndex = out; _docIndexAt = Date.now();
   return _docIndex;
+}
+
+// Terms too generic to underline usefully (they would mark half an answer).
+const JARGON_STOP = new Set(["news", "mail", "home", "overview", "getting started", "strategy guides",
+  "faq", "glossary", "wiki", "changelog", "index", "guide", "guides", "tips", "help", "about", "tutorial",
+  "walkthrough", "reference", "introduction", "basics", "core systems"]);
+
+/**
+ * A glossary for inline jargon annotation: one entry per doc/wiki page whose
+ * title reads like a term, with a short blurb and the source link. Built from
+ * the same index the citations use, so every link resolves.
+ */
+function glossary() {
+  const byTerm = new Map();
+  for (const p of docIndex()) {
+    const term = String(p.title || "").trim();
+    const key = term.toLowerCase();
+    if (term.length < 4 || term.length > 40 || JARGON_STOP.has(key) || byTerm.has(key)) continue;
+    // Strip a leading repeat of the title, collapse whitespace, cap length.
+    let blurb = p.desc.replace(/\s+/g, " ").trim();
+    if (blurb.toLowerCase().startsWith(key)) blurb = blurb.slice(term.length).replace(/^[\s:.\-–]+/, "");
+    blurb = blurb.slice(0, 180);
+    if (blurb.length < 12) continue; // no useful explainer -> skip
+    byTerm.set(key, { term, blurb, url: p.url, kind: p.kind });
+  }
+  return [...byTerm.values()];
 }
 
 /** Score a page against the question + answer by title and description overlap. */
@@ -121,4 +148,4 @@ function areasFor(files) {
   return out;
 }
 
-module.exports = { apply, areasFor, docIndex };
+module.exports = { apply, areasFor, docIndex, glossary };

@@ -23,6 +23,7 @@ const visualization = require("./visualization");
 const mapVisualization = require("./map-visualization");
 const askPlan = require("./ask-plan");
 const answerGuard = require("./answer-guard");
+const ogImage = require("./og-image");
 
 const PORT = Number(process.env.PORT || 9749);
 const UPSTREAM = process.env.UPSTREAM_URL || "http://127.0.0.1:9724/api/ask-public";
@@ -39,6 +40,11 @@ const MAX_Q = 500;
 // NOT match "report a bug" / "how do I report", which are the support flow.
 const REPORT_RE = /\b(?:generate|create|write(?:\s+up)?|make|build|compile|produce|prepare|give\s+me)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+)?(?:full\s+|detailed\s+|deep\s+)?report\b|\breport\s+(?:on|about|covering)\b/i;
 const SELF_ORIGIN = process.env.SELF_ORIGIN || "https://ask.lakesidegames.net";
+
+// In-flight answer generations, keyed by an unguessable per-request id, so an
+// explicit Stop from the client can abort exactly its own generation. A closed
+// connection does NOT abort — the answer finishes and is recorded regardless.
+const activeGenerations = new Map();
 
 const json = (res, code, obj) => {
   const b = JSON.stringify(obj);
@@ -61,6 +67,13 @@ async function readJson(req, cap = 16384) {
   try { return JSON.parse(b || "{}"); } catch { return null; }
 }
 const norm = q => q.toLowerCase().replace(/\s+/g, " ").replace(/[?.!,]+$/, "").trim();
+
+// Constant-time check of the shared machine secret (Discord bot, map PNG).
+function askSecretOk(req) {
+  const bearer = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const supplied = Buffer.from(bearer), expected = Buffer.from(ASK_SECRET);
+  return Boolean(ASK_SECRET) && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
@@ -111,6 +124,35 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === "/auth/logout") { auth.invalidate(req); return auth.logout(res); }
 
+    // Social-card images. Public and unauthenticated by design: an unfurl bot
+    // (Discord, Slack, X) fetches these with no session. The unguessable token is
+    // still the permission — an unknown token renders the generic card, never
+    // another session's content.
+    if (req.method === "GET" && (p === "/og-default.png" || /^\/[sr]\/[A-Za-z0-9_-]{8,32}\/og\.png$/.test(p))) {
+      let card = { kind: "Ask", question: "How A House Divided actually works", footer: "ask.lakesidegames.net" };
+      const m = p.match(/^\/([sr])\/([A-Za-z0-9_-]{8,32})\/og\.png$/);
+      if (m && m[1] === "s") {
+        const conv = store.shared(m[2]);
+        if (conv) {
+          const n = (conv.turns || []).length;
+          card = { kind: "Shared answer", question: conv.title || (conv.turns?.[0]?.question) || "Shared conversation",
+            footer: `${n} answer${n === 1 ? "" : "s"} · ask.lakesidegames.net` };
+        }
+      } else if (m && m[1] === "r") {
+        const report = store.getReport(m[2]);
+        if (report) card = { kind: "Report", question: report.title || report.question || "Report", footer: "ask.lakesidegames.net" };
+      }
+      try {
+        const png = await ogImage.renderCard(card);
+        res.writeHead(200, { "Content-Type": "image/png", "Content-Length": png.length,
+          "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" });
+        return res.end(png);
+      } catch (e) {
+        console.warn("[ask] og render failed:", String(e?.message || e));
+        return json(res, 500, { error: "card render failed" });
+      }
+    }
+
     // Report pages: same token-is-the-permission model as shared transcripts.
     if (req.method === "GET" && p.startsWith("/r/")) {
       const tok = p.slice(3);
@@ -152,13 +194,48 @@ const server = http.createServer(async (req, res) => {
       const answerId = store.recordDiscordFeedback({
         discordId: body.discordId, username: body.username, question: body.question,
         answer: body.answer, rating, reason: String(body.reason || "").slice(0, 500), usedMcp: body.usedMcp === true,
+        answerId: body.answerId != null ? Number(body.answerId) : null,
       });
       return json(res, answerId ? 200 : 400, { ok: Boolean(answerId), answerId });
+    }
+
+    // Discord /ask quota. Non-staff bot callers get the same daily limits a web
+    // player does (auth.PLAYER); staff are exempt and the bot never calls these
+    // for them. `check` is a read-only pre-gate; `record` consumes one question.
+    if (req.method === "POST" && p === "/api/discord-ask/check") {
+      if (!askSecretOk(req)) return json(res, 401, { error: "Not authorized." });
+      const body = await readJson(req);
+      const id = String(body?.discordId || "");
+      if (!id) return json(res, 400, { error: "discordId required." });
+      const u = store.discordUsage(id);
+      const live = body?.live === true;
+      const allowed = u.remaining >= 1 && (!live || u.mcpRemaining >= 1);
+      return json(res, 200, { allowed, usage: u, reason: allowed ? null : (u.remaining < 1 ? "daily" : "live") });
+    }
+    if (req.method === "POST" && p === "/api/discord-ask/record") {
+      if (!askSecretOk(req)) return json(res, 401, { error: "Not authorized." });
+      const body = await readJson(req, 65536);
+      if (!body?.discordId || !body?.question) return json(res, 400, { error: "discordId and question required." });
+      const answerId = store.recordDiscordAsk({
+        discordId: body.discordId, username: body.username, question: body.question,
+        answer: body.answer, usedMcp: body.usedMcp === true,
+      });
+      return json(res, answerId ? 200 : 400, { ok: Boolean(answerId), answerId, usage: store.discordUsage(body.discordId) });
     }
 
     const session = await auth.resolve(req);
 
     // ── page ────────────────────────────────────────────────────────────────
+    // Public, cacheable release notes. No session required — nothing here is
+    // user-specific, so a short shared cache is safe.
+    if (req.method === "GET" && p === "/changelog") {
+      res.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
+        "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+      });
+      return res.end(page.changelogPage());
+    }
+
     if (req.method === "GET" && (p === "/" || p === "/index.html")) {
       if (!session) {
         return html(res, 200, page.signedOut({ failed: url.searchParams.get("auth") === "failed" }));
@@ -192,6 +269,7 @@ const server = http.createServer(async (req, res) => {
             users: store.adminUsers(),
             selected: selectedKey ? store.adminUser(selectedKey) : null,
             reports: store.reportClusters(),
+            modelStats: store.adminModelStats(),
             correctionRows: corrections.list(),
           }));
     }
@@ -273,6 +351,17 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { conflicts: store.conflicts(url.searchParams.get("status") || "open", 100) });
       }
 
+      // Deliberate cancel. Aborts the caller's own in-flight generation (matched
+      // by the reqId handed out in the ask stream's meta event) and records
+      // nothing, so a stopped answer costs the player no quota. Closing the tab
+      // is NOT this — that lets the answer finish and be saved.
+      if (req.method === "POST" && p === "/api/ask/stop") {
+        const b = await readJson(req);
+        const g = activeGenerations.get(String(b?.reqId || ""));
+        if (g && g.key === key) { try { g.ac.abort(); } catch {} return json(res, 200, { ok: true }); }
+        return json(res, 200, { ok: false });
+      }
+
       if (req.method === "POST" && p === "/api/ask") {
         const body = await readJson(req);
         if (!body) return json(res, 400, { error: "Bad request." });
@@ -310,8 +399,15 @@ const server = http.createServer(async (req, res) => {
         // "what about the UK?" cached from one thread would otherwise be served
         // verbatim into an unrelated one. Only a fresh first turn is cacheable.
         const isFollowup = store.nextCost(convId, key).followup > 0;
-        const cacheable = !wantMcp && !isFollowup;
-        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations });
+        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested });
+        // A player can pin the answer model in Settings. Only the whitelist is
+        // honoured (never DeepSeek — that stays the invisible backstop), and it
+        // keeps the tier's effort/token budget; just the lead model changes, with
+        // DeepSeek still behind it. An explicit pick bypasses the shared cache so
+        // the player actually gets the model they chose.
+        const pickedModel = models.USER_MODELS[body.model] && body.model !== "auto" ? body.model : null;
+        if (pickedModel) { route.chain = [pickedModel, "deepseek-v4-flash"]; route.model = pickedModel; }
+        const cacheable = !wantMcp && !isFollowup && !pickedModel;
 
         // Cache is checked BEFORE quota so re-reading an answer is always free.
         // The plan is part of cache identity. A pre-planner answer must never
@@ -356,6 +452,54 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
+        // Open the stream NOW, before retrieval, the live pass and the scout —
+        // each of which can run for seconds. Bytes reach the browser in well
+        // under a second, and every phase below narrates itself with a `status`
+        // event so the spinner says what it is actually doing instead of cycling
+        // canned guesses. Status codes are fixed the instant we write this head,
+        // but cache, quota and auth already returned above, so every failure
+        // past this point is reported in-band as an SSE `error` event.
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive", "X-Accel-Buffering": "no",
+        });
+        const send = (event, data) => {
+          try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
+        };
+        const status = label => send("status", { label });
+        // Live action log: each tool call, streamed as it fires. The client keeps
+        // the last few and reveals them when the player taps the status text. Args
+        // are compacted to the first meaningful string value (a corp/country name,
+        // a search query) so a call reads as e.g. trace_corp(Tinky Winky).
+        const actionLabel = (name, args) => {
+          let a = "";
+          if (args && typeof args === "object") {
+            const v = Object.values(args).find(x => typeof x === "string" && x.trim());
+            if (v) a = String(v).slice(0, 48);
+          }
+          return a ? `${name}(${a})` : String(name || "tool");
+        };
+        const onAction = (name, args) => send("action", { label: actionLabel(name, args), name: String(name || "") });
+        const ac = new AbortController();
+        // Closing the tab used to abort generation here, which threw the answer
+        // away before it was ever recorded — so a player who navigated away lost
+        // the answer and it was not there when they came back. A disconnect now
+        // only stops the streaming (writes no-op), while generation runs to
+        // completion and the row is persisted below, so the answer is waiting on
+        // reopen. A deliberate Stop is a separate, explicit signal: the client
+        // POSTs /api/ask/stop with this reqId, which aborts and records nothing.
+        const reqId = crypto.randomUUID().slice(0, 18);
+        let clientGone = false;
+        activeGenerations.set(reqId, { ac, key });
+        // Ping every 5s (not 15s): Gemini can think for 10-15s before its first
+        // visible token, and a frequent heartbeat keeps the proxy and browser
+        // from treating that quiet gap as a stalled connection.
+        const ping = setInterval(() => { try { res.write(": keepalive\n\n"); } catch {} }, 5000);
+        req.on("close", () => { clientGone = true; activeGenerations.delete(reqId); });
+
+        send("meta", { convId, reqId, cost, followup, followupsLeft, usedMcp: useMcp, model: route.label, vizBlocked,
+          modelId: route.chain[0], modelName: models.displayFor(route.chain[0]), status: plan.status });
+
         // Actual source text for this question. The old path sent only a file
         // listing, which is why answers said "I wasn't given the contents".
         let hits = null;
@@ -369,8 +513,10 @@ const server = http.createServer(async (req, res) => {
         // model still receives the player's literal question.
         let retrievalQuestion = question;
         if (isFollowup) {
+          status("Condensing the thread into a standalone query…");
           try { retrievalQuestion = (await grounding.condense(store.history(convId, key, 3), question)) || question; } catch {}
         }
+        status(deepAnswer ? "Decomposing into sub-queries, searching code, docs & wiki…" : "Vector-searching code & docs…");
         try {
           const retrieveOpts = deepAnswer ? { topK: DEEP_TOP_K, maxChars: DEEP_MAX_CHARS } : {};
           // Pro and deep questions get model-written sub-queries so retrieval
@@ -380,16 +526,19 @@ const server = http.createServer(async (req, res) => {
           const subQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion);
           hits = await retrieve.searchMulti(retrievalQuestion, subQueries, retrieveOpts);
         } catch { hits = null; }
+        if (hits?.files?.length) status(`Matched ${hits.files.length} source${hits.files.length === 1 ? "" : "s"} — reading…`);
 
         // Staff-verified lessons from past wrong answers, matched semantically.
         let matchedCorrections = [];
         try { matchedCorrections = await corrections.match(retrievalQuestion); } catch {}
+        if (matchedCorrections.length) status(`Injecting ${matchedCorrections.length} verified correction${matchedCorrections.length === 1 ? "" : "s"}…`);
 
         // Live game state, only when asked for and only read-only.
         let liveBlock = "", liveVisualizations = [], liveEvidence = { tools: [], visualizations: [] };
         if (useMcp) {
+          status(plan.status || "Querying live game state (read-only)…");
           try {
-            const intelligence = await mcp.liveIntelligence(question, session.context, null, plan);
+            const intelligence = await mcp.liveIntelligence(question, session.context, null, plan, onAction);
             liveBlock = intelligence.text;
             liveVisualizations = intelligence.visualizations || [];
             liveEvidence = {
@@ -411,30 +560,21 @@ const server = http.createServer(async (req, res) => {
         // it; they are lookups, and the scout would double their latency.
         let investigation = null;
         if (deepAnswer || (useMcp && route.tier !== "flash")) {
+          status(useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…");
           try {
-            investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer });
+            investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction });
           } catch { investigation = null; }
           if (investigation?.tools?.length) liveEvidence.tools = [...liveEvidence.tools, ...investigation.tools.map(t => `investigate:${t}`)];
         }
 
-        // Stream. The client shows text as it arrives, then a final event
-        // carries citations, conflicts and quota — all of which need the whole
-        // answer before they can be computed.
-        res.writeHead(200, {
-          "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive", "X-Accel-Buffering": "no",
-        });
-        const send = (event, data) => {
-          try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
-        };
-        send("meta", { convId, cost, followup, followupsLeft, usedMcp: useMcp, model: route.label, vizBlocked,
-          modelId: route.chain[0], modelName: models.displayFor(route.chain[0]), status: plan.status });
-
-        const ac = new AbortController();
-        req.on("close", () => ac.abort());
-        const ping = setInterval(() => { try { res.write(": keepalive\n\n"); } catch {} }, 15000);
+        // Evidence is assembled; the answer model is about to start streaming.
+        // Name the model so the wait reads as work, not a hang (Gemini can think
+        // for 10s+ before its first token).
+        status(`Drafting with ${models.displayFor(route.chain[0])}…`);
 
         let raw = "", failed = null, failedBusy = false, llmUsage = {}, servedModel = route.model;
+        const genStart = Date.now();
+        let firstTokenMs = null;
         try {
           const out = await llm.stream({
             system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, liveData: useMcp, report: reportRequested })
@@ -447,22 +587,35 @@ const server = http.createServer(async (req, res) => {
             history: store.history(convId, key, deepAnswer ? DEEP_HISTORY_TURNS : 3),
             question,
             deep: length === "deep",
+            tier: route.tier,
             chain: route.chain,
             effort: route.effort,
             signal: ac.signal,
-            onDelta: piece => send("delta", piece),
+            onDelta: piece => { if (firstTokenMs === null) firstTokenMs = Date.now() - genStart; send("delta", piece); },
           });
           raw = out.text || "";
           llmUsage = out.usage || {};
           // The chain may have fallen through to a lower-scored model, so record
           // what actually answered rather than what routing first asked for.
           servedModel = out.model || route.model;
-          if (out.tried?.length) console.error("[ask] fell through:", out.tried.map(t => t.model).join(", "), "->", servedModel);
+          if (out.tried?.length) console.error("[ask] fell through:", out.tried.map(t => `${t.model}(${t.error})`).join(" | "), "->", servedModel);
+          // One concise line per answer so slow models, fall-throughs and client
+          // disconnects are visible without turning on verbose logging.
+          console.log(`[ask] served=${servedModel} tier=${route.tier} live=${useMcp ? 1 : 0} firstTokenMs=${firstTokenMs} totalMs=${Date.now() - genStart} outTok=${llmUsage.completion_tokens || 0} clientGone=${clientGone ? 1 : 0}`);
         } catch (e) {
           failed = e?.name === "AbortError" ? "aborted" : String(e.message || e).slice(0, 160);
+          if (failed !== "aborted") console.error(`[ask] gen failed tier=${route.tier} live=${useMcp ? 1 : 0} after ${Date.now() - genStart}ms:`, failed);
           failedBusy = e?.rateLimited === true;
         }
         clearInterval(ping);
+
+        // A picker model that text-emits tool calls (<tool_call>/<function=…>)
+        // never produced a real answer — the markup just streamed as content.
+        // Discard it so it fails into the standard retry error and costs no quota.
+        if (!failed && raw.trim() && answerGuard.looksLikeToolLeak(raw)) {
+          console.error(`[ask] tool-call markup leaked from ${servedModel}; discarding answer`);
+          failed = "tool_call_leak"; raw = "";
+        }
 
         if (failed === "aborted") { try { res.end(); } catch {} return; }
         if (failed || !raw.trim()) {

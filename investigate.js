@@ -112,9 +112,18 @@ async function execute(name, args, { useLive, context }) {
   // session; any other target is rewritten to it rather than refused, so the
   // model still gets the self-lookup it usually actually wanted.
   if (name === "trace_character") {
-    const own = context?.character?.name;
-    if (!own) return "Not available: you have no character in this session.";
-    args = { ...args, character: own, name: own };
+    // Staff (admins/moderators) may inspect any character — useful for support
+    // and moderation. Everyone else is pinned to their own, so a player can
+    // never read another player's private standing.
+    const isStaff = context?.isAdmin === true || context?.isModerator === true;
+    const requested = args?.character || args?.name;
+    if (isStaff && requested) {
+      args = { ...args, character: requested, name: requested };
+    } else {
+      const own = context?.character?.name;
+      if (!own) return "Not available: you have no character in this session.";
+      args = { ...args, character: own, name: own };
+    }
   }
   const out = await mcp.call(name, args, 20000);
   return out || "No result.";
@@ -124,17 +133,21 @@ async function execute(name, args, { useLive, context }) {
  * Run the investigation. Returns { text, tools } or null when nothing was
  * gathered. `text` is a prompt-ready evidence block.
  */
-async function run({ question, context = null, useLive = false, deep = false }) {
+async function run({ question, context = null, useLive = false, deep = false, onAction = null }) {
   const caps = deep ? CAPS.deep : CAPS.standard;
   const defs = [SEARCH_CODE_DEF, ...(useLive ? await liveToolDefs() : [])];
   const started = Date.now();
 
+  const isStaff = context?.isAdmin === true || context?.isModerator === true;
   const playerLine = context?.character?.name
     ? `\n(The asker plays ${context.character.name}${context.character.country ? ` in ${context.character.country}` : ""}${context.corporation?.name ? `, runs ${context.corporation.name}` : ""}.)`
     : "";
+  const staffLine = isStaff
+    ? `\n(The asker is STAFF: you MAY trace any named player or corporation they ask about, not only their own.)`
+    : "";
   const messages = [
     { role: "system", content: SYSTEM },
-    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.` },
+    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${staffLine}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.` },
   ];
 
   const blocks = [];
@@ -157,6 +170,7 @@ async function run({ question, context = null, useLive = false, deep = false }) 
       let args = {};
       try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
       const name = tc.function?.name || "";
+      if (onAction) { try { onAction(name, args); } catch {} }
       let result;
       try { result = await execute(name, args, { useLive, context }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
       return { tc, name, args, result: cap(result) };

@@ -9,6 +9,17 @@ function stripVisuals(answer) {
   return String(answer || "").replace(BLOCK, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+// Some picker models (e.g. Mimo via the OpenCode Zen gateway) don't honor the
+// native tool_calls contract — they emit tool invocations as XML text inside the
+// content: <tool_call><function=search_code><parameter=query>…. The harness never
+// parses these, so the raw markup would stream straight to the player as the
+// "answer". Detect that shape so the caller can fail the generation (no quota,
+// standard retry error) instead of shipping tool-call soup.
+const TOOL_LEAK = /<\/?tool_call\b|<function\s*=|<parameter\s*=|<\|(?:tool_call|tool_calls|python_tag)\|>/i;
+function looksLikeToolLeak(answer) {
+  return TOOL_LEAK.test(String(answer || ""));
+}
+
 function matchingMap(datasets, metric) {
   return (datasets || []).find(data => data?.recommended === "map" && (!metric || data.metric === metric)) || null;
 }
@@ -76,4 +87,4 @@ function inspect(answer, plan) {
   return [];
 }
 
-module.exports = { enforce, inspect, stripVisuals };
+module.exports = { enforce, inspect, stripVisuals, looksLikeToolLeak };

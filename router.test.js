@@ -46,11 +46,20 @@ test("routes cross-system analysis to Pro", () => {
   }).tier, "pro");
 });
 
-test("deep answers and visualization requests both take the deep tier", () => {
-  assert.equal(router.choose({ question: "How does inflation work?", length: "deep" }).tier, "deep");
-  // A chart has to be built, not described, so it outranks the heuristic score.
+test("deep tier is reserved for multi-part responses and reports; nothing else", () => {
+  // The plain "deep" length toggle does NOT force the slow deep tier for a simple
+  // single-part question — it goes to pro (Mimo), just with a longer answer.
+  assert.equal(router.choose({ question: "How do actions work?", length: "deep" }).tier, "pro");
+  // A genuine multi-part question takes deep (Ox Alpha).
+  const multi = router.choose({ question: "1. How is inflation calculated? 2. What is the current rate?" });
+  assert.equal(multi.tier, "deep");
+  assert.ok(multi.reasons.includes("multi-part"));
+  // An explicit report is a multi-section deliverable -> deep.
+  const rep = router.choose({ question: "Generate a report on the economy", report: true });
+  assert.equal(rep.tier, "deep");
+  // A single visualization request goes to pro (Mimo), not the slow deep tier.
   const viz = router.choose({ question: "Chart my GDP", length: "concise", visualizations: true });
-  assert.equal(viz.tier, "deep");
+  assert.equal(viz.tier, "pro");
   assert.ok(viz.reasons.includes("visualization"));
 });
 

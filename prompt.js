@@ -123,6 +123,8 @@ function liveDataRules(enabled) {
 - For a focused foreign-exchange pair, use the supplied pair quote and pair history. Do not replace it with GDP, inflation, or another country statistic.
 - For questions about why a sector is dominant, inspect installed capacity, utilization, sell-through, market clearing, input availability, growth, and state specialization. Do not infer a cause from ranking alone. Name the drivers established by telemetry and clearly separate them from plausible mechanics that lack current evidence.
 - For a request such as "map GOP Senate Class 1 candidates", use the live candidate-roster map data. It represents public filings by state and preserves the party's live game color.
+- For a player's own wealth, savings, net worth, income, or holdings, use the supplied character and top-players data. This IS the asker's live standing — report the concrete figures.
+- NEVER answer "I do not have access" or claim you lack the data when live evidence is supplied below: you DO have it. If the question asks for a breakdown the evidence does not contain (for example turn-by-turn history when only a current snapshot is supplied), give the current figures you do have and note the one specific gap in a single sentence — do not refuse the whole question.
 - Apply the public/private and fair-play rules before disclosing any corporation-specific or opponent-specific detail.`;
 }
 
@@ -143,6 +145,14 @@ country or their corporation. Do NOT state facts about their situation that the 
 and do not assume their holdings, money, or standing.\n`;
 }
 
+const FORMATTING = `RICH FORMATTING — the answer renders as rich text (tables, headings, callouts, code, and diagrams), so use structure instead of a wall of prose. Match the structure to the content:
+- COMPARISONS / STATS: a Markdown table (\`| Column | Column |\` with a \`|---|---|\` separator row). Use it whenever you present 3+ comparable values, per-entity rows, or an option/effect list. Put units in the header cell.
+- SECTIONS: \`## \` headings to split a multi-part answer into scannable parts, and \`#### \` for sub-points. A short single-point answer needs no headings.
+- KEY TAKEAWAY / WARNING: one \`> \` blockquote callout, at most one per answer.
+- LISTS: \`- \` bullets for unordered points; \`1.\` numbered lists for ordered steps or ranked items.
+- INLINE: \`backticks\` for exact identifiers (file paths, constants, field names, tickers, numeric values); **bold** for the term being defined; *italics* sparingly. Link a source as [label](https://…) only with a real URL from the evidence — never invent one.
+- Do NOT force structure onto a one-line answer, and never use ASCII-art tables or diagrams — use a real Markdown table or a Mermaid block.`;
+
 function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, liveData = false, report = false } = {}) {
   const s = STYLES[style] || STYLES.standard;
   const l = LENGTHS[length] || LENGTHS.standard;
@@ -154,6 +164,8 @@ ${s.text}
 
 ${report ? REPORT : `LENGTH — ${l.label}
 ${l.text} Aim for roughly ${l.words} words; never pad to reach it.`}
+
+${report ? "" : FORMATTING}
 
 ${AUTHORITY}
 

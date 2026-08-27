@@ -66,7 +66,7 @@ async function listTools(server = "gamestate") {
   return _tools;
 }
 
-const WANTS_STATE = /\b(right now|currently|current|my |mine|our |latest|this turn|today|why did|why is|compare|comparison|peer|benchmark|rank|largest public (?:companies|corporations|businesses)|how much do i|what happened|valued|valuation|market cap|balance sheet|economy|gdp|inflation|unemployment|exchange rate|forex|currency|public corporations?|stock market|election|poll|supply|demand|map|heatmap|choropleth|regional|active players?|online players?|player counts?|player wealth|player net worth|campaign funds?)\b/i;
+const WANTS_STATE = /\b(right now|currently|current|my |mine|our |latest|this turn|per turn|a turn|why did|why is|compare|comparison|peer|benchmark|rank|largest public (?:companies|corporations|businesses)|how much do i|how much am i|what happened|valued|valuation|market cap|balance sheet|economy|gdp|inflation|unemployment|exchange rate|forex|currency|public corporations?|stock market|election|poll|supply|demand|map|heatmap|choropleth|regional|active players?|online players?|player counts?|net[\s-]?worth|wealth|savings|income|earnings|holdings|inequality|richest|poorest|wealthiest|campaign funds?)\b/i;
 const REQUIRED_LIVE_CANDIDATE_MAP = /^(?=.*\b(?:map|heatmap|choropleth)\b)(?=.*\b(?:candidate|candidates|filings?)\b)(?=.*\b(?:senate|house|governor|president)\b)[\s\S]*$/i;
 
 function looksLive(question) {
@@ -80,10 +80,15 @@ function requiresLive(question) {
   return REQUIRED_LIVE_CANDIDATE_MAP.test(question || "");
 }
 
-async function liveIntelligence(question, context, callTool = null, plan = null) {
-  const adapter = callTool
+async function liveIntelligence(question, context, callTool = null, plan = null, onAction = null) {
+  const base = callTool
     ? (name, args, server) => callTool(name, args, server)
     : (name, args, server, preserveToolError) => callServer(server, name, args, 25000, preserveToolError);
+  // Announce each tool call as it fires, so the UI can show the live action log.
+  // Wrapping is transparent: onAction never changes the call or its result.
+  const adapter = onAction
+    ? (name, args, server, pte) => { try { onAction(name, args); } catch {} return base(name, args, server, pte); }
+    : base;
   return intelligence.retrieve({ question, context, callTool: adapter, plan });
 }
 
