@@ -79,9 +79,9 @@ const CATALOG = {
   },
   "deepseek-v4-flash:cloud": {
     display: "DeepSeek Flash",
-    provider: "ollama", tier: "flash", score: null, ttftP50Ms: 17514,
+    provider: "ollama", tier: "flash", score: null, ttftP50Ms: 15000,
     efforts: null,
-    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25. ttft re-measured 2026-08-27 on the REAL prompt at 17.5s; the previous 900ms here was a short-prompt reading and badly understated it.",
+    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25. ttft re-measured 2026-08-27 on the REAL prompt across 7 runs: 5.1-18.8s, medians 12.9s and 17.5s on two passes, so ~15s with wide spread. The previous 900ms here was a short-prompt reading and understated it by an order of magnitude. Also narrated its own evidence bundle on 1 of 3 runs, which GLM 5.3 Flash never did in 4 — part of why pro leads with GLM.",
   },
   "glm-5.3-flash:cloud": {
     display: "GLM 5.3 Flash",
