@@ -21,6 +21,9 @@ const KEYS = {
   // the "go" route (Ox Alpha) share one key but live at different URLs.
   opencode: () => process.env.OPENCODE_API_KEY || "",
   opencodego: () => process.env.OPENCODE_API_KEY || "",
+  // Command Code provider API (OpenAI-compat). Carries the free MiniMax lane
+  // (GMICloud) through 2026-09-05.
+  commandcode: () => process.env.COMMANDCODE_API_KEY || "",
 };
 const URLS = {
   openrouter: () => process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions",
@@ -29,6 +32,7 @@ const URLS = {
   ollama: () => process.env.OLLAMA_URL || "http://localhost:11434/v1/chat/completions",
   opencode: () => process.env.OPENCODE_URL || "https://opencode.ai/zen/v1/chat/completions",
   opencodego: () => process.env.OPENCODE_GO_URL || "https://opencode.ai/zen/go/v1/chat/completions",
+  commandcode: () => process.env.COMMANDCODE_URL || "https://api.commandcode.ai/provider/v1/chat/completions",
 };
 const DEFAULT_MODEL = process.env.ASK_MODEL || models.CHAINS.flash[0];
 const RETRIES_PER_MODEL = Number(process.env.ASK_LLM_RETRIES || 2);
@@ -85,6 +89,14 @@ function release() {
 async function attempt({ id, system, history, question, effort, maxTokens, onDelta, signal, emitted, firstTokenTimeoutMs = 0 }) {
   const entry = models.CATALOG[id] || { provider: "openrouter" };
   const provider = entry.provider;
+  // A provider with no key configured can never answer: fail without a network
+  // round-trip so the chain moves on instantly. Lets a chain lead with a model
+  // whose key is not on the box yet (it activates the moment the key is set).
+  if (provider !== "ollama" && !KEYS[provider]?.()) {
+    const err = new Error(`${provider} has no API key configured`);
+    err.status = 401;
+    throw err;
+  }
   const body = {
     model: id,
     messages: [{ role: "system", content: system }, ...history, { role: "user", content: question }],

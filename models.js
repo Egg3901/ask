@@ -10,6 +10,18 @@
 //            prompts are not representative: ox-alpha answers a 109-token
 //            prompt in 2.3s and the real one in 45s.
 const CATALOG = {
+  "minimax-m3-free": {
+    display: "MiniMax M3",
+    provider: "commandcode", tier: "flash", score: null, ttftP50Ms: null,
+    efforts: null,
+    note: "MiniMax M3 via the Command Code provider API (GMICloud free lane, $0 through 2026-09-05, 1M context). No ZDR on this lane. Default chain lead from 2026-08-27; inert until COMMANDCODE_API_KEY is set, the chain skips it instantly without a key.",
+  },
+  "minimax-m2.7-free": {
+    display: "MiniMax M2.7",
+    provider: "commandcode", tier: "flash", score: null, ttftP50Ms: null,
+    efforts: null,
+    note: "MiniMax M2.7 on the same Command Code free lane (197K context). Named alternate to M3, not in any default chain.",
+  },
   "nvidia/nemotron-3-ultra-550b-a55b:free": {
     display: "Nemotron Ultra",
     provider: "openrouter", tier: "pro", score: 79.0, ttftP50Ms: 6606,
@@ -180,7 +192,7 @@ const USER_MODELS = {
   "gemini-3.7-flash": { label: "Gemini 3.7" },
 };
 
-const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev" };
+const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai" };
 
 /** Where a player can read about the model that answered them. */
 function urlFor(id) {
@@ -228,6 +240,7 @@ function providerOf(id) {
   if (/^gemini|google/i.test(s)) return "google";
   if (/:cloud$/.test(s)) return "ollama";
   if (/^ox-alpha/i.test(s)) return "opencodego";
+  if (/^minimax/i.test(s)) return "commandcode";
   if (/-free$/.test(s) || /^(mimo|muse-spark|hy3|laguna|nemotron-3)/i.test(s)) return "opencode";
   if (s === "discord-ask") return "discord";
   return s.includes("/") ? "openrouter" : "deepseek";
