@@ -580,11 +580,13 @@ const server = http.createServer(async (req, res) => {
 
         // Live game state, only when asked for and only read-only.
         let liveBlock = "", liveVisualizations = [], liveEvidence = { tools: [], visualizations: [] };
+        let liveTargeted = false;
         if (useMcp) {
           status(plan.status || "Querying live game state (read-only)…");
           try {
             const intelligence = await mcp.liveIntelligence(question, session.context, null, plan, onAction);
             liveBlock = intelligence.text;
+            liveTargeted = intelligence.targeted === true;
             liveVisualizations = intelligence.visualizations || [];
             liveEvidence = {
               tools: intelligence.usedTools || [],
@@ -603,8 +605,18 @@ const server = http.createServer(async (req, res) => {
         // when an excerpt references something unseen, and targeted live
         // lookups the heuristics did not anticipate. Flash-tier questions skip
         // it; they are lookups, and the scout would double their latency.
+        // Flash used to skip the scout outright, on the reasoning that flash
+        // questions are lookups and the scout would double their latency. True
+        // when the heuristics found what the question needed. But 81% of real
+        // traffic lands on flash, and when the heuristics match nothing all the
+        // answer gets is the generic world snapshot — which is exactly the state
+        // that produced "I don't have that data" on questions the tools could
+        // answer. So flash now runs the scout only in that case: the fast path
+        // stays fast, and a question that was heading for a non-answer gets the
+        // one pass that can rescue it.
+        const liveMissedTarget = useMcp && !liveTargeted;
         let investigation = null;
-        if (deepAnswer || (useMcp && route.tier !== "flash")) {
+        if (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget) {
           status(useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…");
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction });

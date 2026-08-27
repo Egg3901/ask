@@ -446,6 +446,10 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
   let handledAnalyticsDataset = null;
   const overview = await call("game_overview");
   if (overview) parts.push(`CURRENT WORLD STATE:\n${cap(overview)}`);
+  // Everything above is generic boilerplate fetched for every live question.
+  // Anything pushed after this point is specific to what was actually asked,
+  // and that distinction decides whether the scout needs to run.
+  const genericParts = parts.length;
 
   if (ANALYTICS_WORDS.test(text)) {
     const catalog = payload(await call("analytics_catalog"));
@@ -690,11 +694,15 @@ ${cap(sector, 5000)}`);
   if (visualizations.length) {
     parts.push(`VISUALIZATION DATA:\n${asJson(visualizations.slice(0, 2))}`);
   }
-  if (!parts.length) return { text: "", visualizations: [], usedTools };
+  if (!parts.length) return { text: "", visualizations: [], usedTools, targeted: false };
   return {
     text: `LIVE GAME INTELLIGENCE (read-only, fetched just now; current facts outrank stale documentation):\n\n${parts.join("\n\n")}`,
     visualizations,
     usedTools,
+    // False means the heuristics matched nothing and all we have is the world
+    // snapshot every question gets. That is the state in which answers used to
+    // tell players the data did not exist, so it is the signal to send the scout.
+    targeted: parts.length > genericParts,
   };
 }
 
