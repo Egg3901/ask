@@ -617,6 +617,7 @@ const server = http.createServer(async (req, res) => {
         status(`Drafting with ${models.displayFor(route.chain[0])}…`);
 
         let raw = "", failed = null, failedBusy = false, llmUsage = {}, servedModel = route.model;
+        let finishReason = null;
         const genStart = Date.now();
         let firstTokenMs = null;
         try {
@@ -639,6 +640,7 @@ const server = http.createServer(async (req, res) => {
           });
           raw = out.text || "";
           llmUsage = out.usage || {};
+          finishReason = out.finish || null;
           // The chain may have fallen through to a lower-scored model, so record
           // what actually answered rather than what routing first asked for.
           servedModel = out.model || route.model;
@@ -718,10 +720,21 @@ const server = http.createServer(async (req, res) => {
         // refusal must never be served to everyone.
         const refusedWithEvidence = answerGuard.detectRefusal(answer, useMcp) && useMcp;
         if (refusedWithEvidence) console.warn(`[ask] refusal WITH live evidence plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : [])], grounding: groundingNotes, inventedPaths };
+        // The model hit the token ceiling mid-sentence. Reasoning tokens bill
+        // against the same budget, so a model that thinks hard on a long prompt
+        // can spend the lot before finishing. The player already saw the partial
+        // text, but it must never be cached and it must show up in the audit.
+        const truncated = finishReason === "length" || answerGuard.looksTruncated(answer);
+        if (truncated) console.warn(`[ask] TRUNCATED answer model=${servedModel} finish=${finishReason} outTok=${llmUsage.completion_tokens || 0} q=${JSON.stringify(question.slice(0, 80))}`);
+        // The model narrated its own retrieval bundle to the player ("the
+        // supplied source does not include…"). That is an implementation detail
+        // leaking as an answer, and it is the single most common failure shape.
+        const narratedEvidence = answerGuard.detectBundleNarration(answer);
+        if (narratedEvidence) console.warn(`[ask] evidence-bundle narration plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
+        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : [])], grounding: groundingNotes, inventedPaths };
         const areas = cites.areasFor(hits?.files || []);
 
-        if (cacheable && !inventedPaths.length && !groundingNotes.length && !refusedWithEvidence) {
+        if (cacheable && !inventedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {
           store.S.putCache.run(ckey, answer, JSON.stringify(areas), JSON.stringify(citations), servedModel, Date.now());
         }
         const answerId = store.record({

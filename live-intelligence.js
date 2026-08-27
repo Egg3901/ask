@@ -223,7 +223,59 @@ function asJson(value) {
   return JSON.stringify(value, null, 2);
 }
 
+// Minimum entity_search score we will act on. Below this the match is a guess,
+// and guessing which corporation a player meant is how you answer about someone
+// else's company.
+const ENTITY_MATCH_FLOOR = 0.55;
+// Two candidates this close in score are a genuine ambiguity, not a winner.
+const ENTITY_TIE_EPSILON = 0.02;
+
+/**
+ * Resolve a player's informal corporation name to a canonical one.
+ *
+ * Players type "Tinky corp", "doofenschmirtsevil incorpirated", "meyer corp".
+ * The old approach asked trace_corp for the raw string and then for
+ * `${raw} Corporation`, which resolves none of those: it told players the
+ * largest public corporation in the game "could not be found". entity_search
+ * does fuzzy matching server-side and gets "Tinky corp" to "Tinky Winky
+ * Corporation" at 0.915 in a single call.
+ *
+ * Returns `ambiguous` with the candidates when two names score within an
+ * epsilon of each other, so the writer asks which one rather than picking.
+ */
 async function resolveCorporation(name, callTool) {
+  const found = payload(await callTool("entity_search", {
+    query: name, types: ["corporation"], limit: 5,
+  }, "gamestate").catch(() => null));
+
+  const matches = (Array.isArray(found?.results) ? found.results : [])
+    .filter(r => r?.type === "corporation" && Number(r.score) >= ENTITY_MATCH_FLOOR)
+    .sort((a, b) => Number(b.score) - Number(a.score));
+
+  if (matches.length) {
+    const top = matches[0];
+    const tied = matches.filter(r => Number(top.score) - Number(r.score) <= ENTITY_TIE_EPSILON);
+    // A public corporation is the one a player asking a loose question almost
+    // always means; only treat it as ambiguous if the tie is between peers of
+    // the same visibility.
+    const publicTied = tied.filter(r => r.public);
+    const pick = publicTied.length === 1 ? publicTied[0] : tied.length > 1 ? null : top;
+
+    if (!pick) {
+      return {
+        requested: name, resolved: null, ambiguous: tied.map(r => r.name),
+        result: null, data: null,
+      };
+    }
+    const result = await callTool("trace_corp", { corporation: pick.name }, "gamestate").catch(() => null);
+    const data = payload(result);
+    if (result && !data?.error) {
+      return { requested: name, resolved: data?.corporation?.name || pick.name, result, data };
+    }
+  }
+
+  // entity_search found nothing usable. Fall back to the literal lookups so a
+  // name it does not index still has a chance.
   const variants = [name];
   if (!/\b(?:corporation|corp|company)$/i.test(name)) variants.push(`${name} Corporation`);
   let failure = null;
@@ -550,6 +602,11 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
     const traces = await Promise.all(requestedNames.map(name => resolveCorporation(name, call)));
     for (const trace of traces) {
       if (trace.result) parts.push(`REQUESTED CORPORATION (${trace.resolved}; disclose corporation-specific financial details only if this result establishes public visibility):\n${cap(trace.result)}`);
+      // Two corporations matched the player's wording equally well. Say so and
+      // let them choose, rather than silently reporting on one of them.
+      else if (trace.ambiguous?.length) {
+        parts.push(`AMBIGUOUS CORPORATION NAME: "${trace.requested}" matches several corporations equally well: ${trace.ambiguous.join(", ")}. Ask the player which one they mean. Do NOT report figures for any of them.`);
+      }
     }
     if (explicitSector) {
       const resolved = traces.filter(trace => trace.result && !trace.data?.error);
@@ -635,4 +692,4 @@ ${cap(sector, 5000)}`);
   };
 }
 
-module.exports = { retrieve, namedCorporation, namedCorporations, namedSectorType, namedSectorState, namedFxPair, candidateMapFilters, geoAggregateMetric, activeWindowHours };
+module.exports = { retrieve, resolveCorporation, namedCorporation, namedCorporations, namedSectorType, namedSectorState, namedFxPair, candidateMapFilters, geoAggregateMetric, activeWindowHours };

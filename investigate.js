@@ -48,11 +48,34 @@ const RESULT_CAP = 5000;
 
 // Public, read-only gamestate lookups a player could reasonably see themselves.
 // Everything not listed here does not exist as far as the investigator knows.
+//
+// Deliberately excluded, and they stay excluded: trace_account, alt_rank,
+// alt_ring_audit, trace_ledger, audit_query, trace_actions. Those are forensic
+// and moderation surfaces, not player-visible data. election_sim_results is
+// internal balance tooling and is not a player answer either.
 const LIVE_ALLOWLIST = new Set([
   "game_overview", "countries", "entity_search", "parties", "top_players",
   "elections", "fx_quote", "extraction_market", "trace_corp", "trace_sector",
   "trace_election", "trace_race", "trace_approval", "trace_character",
+  // Public aggregates and rankings. Their absence is why Ask told players that
+  // rankings, counts and distributions "are not available in the source" while
+  // the tools to compute them sat one call away.
+  "analytics_catalog", "analytics_query", "corporation_rankings",
+  // Map-ready public data, including the candidate-roster filters
+  // (electionType / senateClass / party / playersOnly) that candidate-map
+  // questions need.
+  "map_snapshot", "geo_aggregate",
+  // Public country and legislature state.
+  "country_fiscal", "legislation_catalog",
+  // Own-character wealth snapshot. Pinned to the asker below, exactly like
+  // trace_character. trace_bonds stays out: it is a forensic holdings
+  // breakdown, and nothing in the failure corpus needed it.
+  "character_balance_sheet",
 ]);
+
+// Tools that read one character's private standing. Non-staff askers are pinned
+// to their own character on every one of these, never just the first.
+const SELF_ONLY_TOOLS = new Set(["trace_character", "character_balance_sheet"]);
 
 const SEARCH_CODE_DEF = {
   type: "function",
@@ -111,7 +134,7 @@ async function execute(name, args, { useLive, context }) {
   // The asker may only trace themselves. Their own character is the one in the
   // session; any other target is rewritten to it rather than refused, so the
   // model still gets the self-lookup it usually actually wanted.
-  if (name === "trace_character") {
+  if (SELF_ONLY_TOOLS.has(name)) {
     // Staff (admins/moderators) may inspect any character — useful for support
     // and moderation. Everyone else is pinned to their own, so a player can
     // never read another player's private standing.
@@ -215,4 +238,4 @@ async function run({ question, context = null, useLive = false, deep = false, on
   };
 }
 
-module.exports = { run, LIVE_ALLOWLIST };
+module.exports = { run, LIVE_ALLOWLIST, SELF_ONLY_TOOLS };

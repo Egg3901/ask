@@ -239,7 +239,13 @@ async function walk({ system, history = [], question, deep = false, tier = null,
   const want = effort || (deep ? "high" : "low");
   // Reasoning tokens are billed against max_tokens, so a model that thinks hard
   // on a 7k-token prompt can exhaust the budget before writing anything.
-  const maxTokens = deep ? Number(process.env.ASK_MAX_TOKENS_DEEP || 32000) : Number(process.env.ASK_MAX_TOKENS || 8000);
+  //
+  // 8000 was not enough: the corpus audit found answers cut off mid-sentence on
+  // the standard tier, all of them reasoning models that had spent most of the
+  // ceiling thinking. This is a cap and not a spend, and the LENGTH rules still
+  // bound how much prose the model writes, so raising it costs nothing on the
+  // answers that were already finishing cleanly.
+  const maxTokens = deep ? Number(process.env.ASK_MAX_TOKENS_DEEP || 32000) : Number(process.env.ASK_MAX_TOKENS || 16000);
   // First-token deadline by tier: flash is fast (DeepSeek) so keep it tight; the
   // reasoning tiers (Mimo for pro, Ox Alpha for deep) legitimately think for a
   // while, so give pro a long leash and deep none at all.

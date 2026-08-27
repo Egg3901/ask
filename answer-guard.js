@@ -44,6 +44,65 @@ function detectRefusal(answer, hasLiveData) {
   return true;
 }
 
+// The answer describes its own retrieval bundle to the player: "the supplied
+// source", "the evidence provided", "the live snapshot only covers", "the files
+// I haven't been given". This was the single most common failure shape in the
+// corpus audit — 43 of 195 answers, 38 of which HAD live data fetched and still
+// told the player the bundle was the limit of the game.
+//
+// The player asked about the game, not about what Ask was handed. Flagged, never
+// rewritten: the text already streamed, and the value here is keeping it out of
+// the shared cache and into the audit queue.
+const BUNDLE_NARRATION = /\b(?:the\s+)?(?:supplied|provided|retrieved|given|available)\s+(?:source|sources|evidence|material|data|excerpts?|context|snapshot|documents?|files?)\b|\b(?:evidence|sources?|material|excerpts?|context)\s+(?:supplied|provided|given|retrieved)\b|\b(?:source|sources|evidence|material|data|excerpts?|context|snapshot|files?)\s+(?:you|I)\s*(?:'ve|have|was|were)?\s*(?:supplied|provided|given|shown|been given)\b|\bin (?:the |what )?(?:evidence|material|source|sources|excerpts?|snapshot)\s+(?:I|you)\b|\b(?:live\s+)?(?:world\s+)?snapshot\s+(?:only|does not|doesn'?t)\b|\bwhat (?:you'?ve|I'?ve|you have|I have)\s+(?:shown|given|provided)\s+me\b|\bnot (?:in|present in|included in|part of)\s+(?:the\s+)?(?:supplied|provided|retrieved|given)\b|\bfiles?\s+I\s+(?:haven'?t|have not)\s+been\s+given\b/i;
+
+function detectBundleNarration(answer) {
+  return BUNDLE_NARRATION.test(String(answer || ""));
+}
+
+// The generation hit the token ceiling mid-thought. `finish_reason` is the
+// authority when the provider sends one; this is the textual backstop for the
+// providers that do not. Deliberately narrow: a real answer ends on terminal
+// punctuation, a closing fence, or a table row.
+const ENDS_CLEANLY = /[.!?:)\]`"'’”*]\s*$|```\s*$|\|\s*$|-->\s*$/;
+
+function looksTruncated(answer) {
+  const text = String(answer || "").trimEnd();
+  if (text.length < 200) return false;      // short answers are not worth guessing about
+  return !ENDS_CLEANLY.test(text);
+}
+
+// A dataset that has nothing to do with the question must never be charted just
+// because the live layer happened to return one. The audit found a country
+// GDP-growth bar chart attached to "Map GOP Senate 1 candidates", immediately
+// above the answer refusing that very request.
+//
+// Matching is deliberately lexical and generous: the cost of dropping a
+// borderline-relevant chart is a plainer answer, while the cost of keeping an
+// irrelevant one is an answer that visibly contradicts itself.
+const CHART_STOPWORDS = new Set([
+  "the", "a", "an", "of", "by", "in", "on", "for", "and", "or", "to", "with",
+  "live", "current", "recent", "show", "me", "what", "which", "is", "are", "how",
+  "my", "your", "their", "its", "this", "that", "chart", "graph", "map", "plot",
+  "visualize", "visualise", "visualization", "visualisation", "compare",
+  "comparison", "data", "value", "values", "total", "world", "game", "please",
+]);
+
+function contentWords(text) {
+  return new Set(String(text || "").toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !CHART_STOPWORDS.has(w))
+    .map(w => w.replace(/(?:ies|es|s)$/, "")));   // crude stem so "candidates" meets "candidate"
+}
+
+function datasetMatchesQuestion(dataset, question) {
+  const subject = contentWords([dataset?.metric, dataset?.title, dataset?.unit].filter(Boolean).join(" "));
+  const asked = contentWords(question);
+  if (!subject.size || !asked.size) return true;   // nothing to judge on: don't block
+  for (const word of asked) if (subject.has(word)) return true;
+  return false;
+}
+
 function matchingMap(datasets, metric) {
   return (datasets || []).find(data => data?.recommended === "map" && (!metric || data.metric === metric)) || null;
 }
@@ -95,10 +154,17 @@ function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, q
   }
 
   if (visualizationsEnabled && datasets.length) {
-    const canonical = visualization.chart(datasets[0], question);
-    if (canonical) {
-      const prose = stripVisuals(text);
-      return { answer: `${canonical}\n\n${prose}`.trim(), issues, required: false };
+    // Opportunistic chart: nothing planned it, the live layer just returned one.
+    // It only ships if it is actually about what was asked.
+    const relevant = datasets.find(d => datasetMatchesQuestion(d, question));
+    if (!relevant) {
+      if (datasets.length) issues.push("irrelevant_visualization_withheld");
+    } else {
+      const canonical = visualization.chart(relevant, question);
+      if (canonical) {
+        const prose = stripVisuals(text);
+        return { answer: `${canonical}\n\n${prose}`.trim(), issues, required: false };
+      }
     }
   }
 
@@ -111,4 +177,4 @@ function inspect(answer, plan) {
   return [];
 }
 
-module.exports = { enforce, inspect, stripVisuals, looksLikeToolLeak, detectRefusal };
+module.exports = { enforce, inspect, stripVisuals, looksLikeToolLeak, detectRefusal, detectBundleNarration, looksTruncated, datasetMatchesQuestion };

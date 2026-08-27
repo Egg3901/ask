@@ -22,6 +22,26 @@ test("the investigator live allowlist excludes forensic and moderation tools", (
   assert.ok(investigate.LIVE_ALLOWLIST.has("trace_corp"));
 });
 
+test("the investigator can reach the public aggregate and map tools", () => {
+  // Their absence is why Ask told players that rankings, counts, distributions
+  // and candidate maps "are not available in the source" while the tools to
+  // compute them sat one call away.
+  for (const needed of [
+    "analytics_catalog", "analytics_query", "corporation_rankings",
+    "map_snapshot", "geo_aggregate", "country_fiscal", "legislation_catalog",
+  ]) {
+    assert.ok(investigate.LIVE_ALLOWLIST.has(needed), `${needed} must be reachable`);
+  }
+});
+
+test("every character-scoped tool is pinned to the asker, not just trace_character", () => {
+  for (const scoped of investigate.SELF_ONLY_TOOLS) {
+    assert.ok(investigate.LIVE_ALLOWLIST.has(scoped), `${scoped} is pinned but unreachable`);
+  }
+  assert.ok(investigate.SELF_ONLY_TOOLS.has("trace_character"));
+  assert.ok(investigate.SELF_ONLY_TOOLS.has("character_balance_sheet"));
+});
+
 test("a path never shown to the model is flagged, cited evidence paths are not", () => {
   const evidence = "--- SOURCE code @ abc | src/lib/turn/bondTurn.ts (part 1) ---\nstuff\n--- src/lib/constants/bonds.ts ---\nmore";
   const answer = "Coupons come from src/lib/turn/bondTurn.ts and inflation from src/lib/turn/inflationTurn.ts.";
