@@ -20,6 +20,21 @@ const LEGIT_REFUSAL = /\bprivate|fair.?play|opponent|not a failure|legitimate|co
 const SAMPLE_RATE = clampRate(process.env.ASK_AUDIT_SAMPLE);
 const MAX_ANSWER_CHARS = 4000;
 
+// Validation issues that make an answer worth grading regardless of the sample
+// draw. Each one is a deterministic guard trip, not a guess: the answer either
+// described its own retrieval bundle, stopped mid-sentence, declined while
+// holding live evidence, or had a chart pulled because it was about something
+// else. All four were top failure classes in the corpus audit.
+const AUDIT_ALWAYS = new Set([
+  "narrated_evidence_bundle",
+  "truncated",
+  "refused_with_live_evidence",
+  "irrelevant_visualization_withheld",
+  "required_live_map_missing",
+  "required_live_map_unavailable",
+  "required_live_dataset_unavailable",
+]);
+
 function clampRate(raw) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return 0.15; // default: audit 15% of answers
@@ -73,8 +88,13 @@ async function grade({ question, answer, hadLive = false }) {
 // Fire-and-forget from the request handler AFTER the answer is recorded and the
 // stream is closed. Awaiting this would add a free-model round-trip to every
 // sampled request, so callers must not await it.
-function maybeAudit({ answerId = null, question, answer, hadLive = false }) {
-  if (!shouldSample()) return;
+function maybeAudit({ answerId = null, question, answer, hadLive = false, issues = [] }) {
+  // A random 15% draw is the right way to measure the baseline and the wrong way
+  // to catch known-suspect answers. The output guards already decided this one
+  // looks wrong — narrated its own evidence, stopped mid-sentence, refused with
+  // live data in hand — so it gets graded every time, not one time in seven.
+  const flagged = Array.isArray(issues) && issues.some(i => AUDIT_ALWAYS.has(i));
+  if (!flagged && !shouldSample()) return;
   Promise.resolve()
     .then(() => grade({ question, answer, hadLive }))
     .then(verdict => {
@@ -98,4 +118,4 @@ function maybeAudit({ answerId = null, question, answer, hadLive = false }) {
     .catch(() => { /* advisory only */ });
 }
 
-module.exports = { maybeAudit, grade, parseVerdict, shouldSample, SAMPLE_RATE };
+module.exports = { maybeAudit, grade, parseVerdict, shouldSample, SAMPLE_RATE, AUDIT_ALWAYS };

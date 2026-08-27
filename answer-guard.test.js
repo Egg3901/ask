@@ -82,3 +82,13 @@ test("flags an answer that stops mid-thought but not one that ends cleanly", () 
   assert.equal(guard.looksTruncated(body + "```"), false);
   assert.equal(guard.looksTruncated("Short and unfinished but too short to judge"), false);
 });
+
+test("a guard-flagged answer is always graded, not left to the sample draw", () => {
+  const audit = require("./answer-audit");
+  // Every one of these is a deterministic guard trip, so the 15% draw must not
+  // decide whether it gets looked at.
+  for (const issue of ["narrated_evidence_bundle", "truncated", "refused_with_live_evidence"]) {
+    assert.ok(audit.AUDIT_ALWAYS.has(issue), issue);
+  }
+  assert.equal(audit.AUDIT_ALWAYS.has("some_benign_issue"), false);
+});

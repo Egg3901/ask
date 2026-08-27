@@ -754,6 +754,10 @@ const server = http.createServer(async (req, res) => {
         // it. Dedup lives in corrections.draft(); fire-and-forget.
         if (refusedWithEvidence) {
           corrections.draft({ question, reason: "refused despite live evidence being available", sourceAnswerId: answerId }).catch(() => {});
+        } else if (narratedEvidence) {
+          corrections.draft({ question, reason: "described its own evidence to the player instead of answering", sourceAnswerId: answerId }).catch(() => {});
+        } else if (truncated) {
+          corrections.draft({ question, reason: "answer stopped mid-sentence", sourceAnswerId: answerId }).catch(() => {});
         }
 
         // A report gets its own page. Title comes from the model's own H1, with
@@ -786,7 +790,7 @@ const server = http.createServer(async (req, res) => {
         });
         // Random-sample QA: a free model re-reads this answer and logs whether
         // it actually answered. Fire-and-forget — must not delay res.end().
-        answerAudit.maybeAudit({ answerId, question, answer, hadLive: useMcp });
+        answerAudit.maybeAudit({ answerId, question, answer, hadLive: useMcp, issues: validation.issues });
 
         try { res.end(); } catch {}
         return;
