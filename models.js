@@ -81,28 +81,31 @@ const CATALOG = {
     display: "DeepSeek Flash",
     provider: "ollama", tier: "flash", score: null, ttftP50Ms: 15000,
     efforts: null,
-    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25. ttft re-measured 2026-08-27 on the REAL prompt across 7 runs: 5.1-18.8s, medians 12.9s and 17.5s on two passes, so ~15s with wide spread. The previous 900ms here was a short-prompt reading and understated it by an order of magnitude. Also narrated its own evidence bundle on 1 of 3 runs, which GLM 5.3 Flash never did in 4 — part of why pro leads with GLM.",
+    note: "DeepSeek V4 Flash via the local Ollama cloud tag — FREE (Ollama grunt tier), routed over loopback. Primary free fallback since the OpenRouter key was rotated 2026-08-25. ttft re-measured 2026-08-27 on the REAL prompt across 7 runs: 5.1-18.8s, medians 12.9s and 17.5s on two passes, so ~15s with wide spread. The previous 900ms here was a short-prompt reading and understated it by an order of magnitude. Remains the fallback behind MiniMax M3 on every tier: 5x slower to first token and fewer path citations, but reliable and free.",
   },
   "glm-5.3-flash:cloud": {
     display: "GLM 5.3 Flash",
-    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 24195,
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 27062,
     efforts: null,
-    // Measured 2026-08-27 on the real prompt over four cross-system questions:
-    // ttft 13.6/23.9/24.5/48.1s, 1520-2076 chars, follow-up marker 4/4, cites a
-    // real path 4/4, never narrated its evidence bundle, never truncated.
-    note: "GLM 5.3 Flash via the Ollama cloud tag — FREE, loopback. Pro-tier lead from 2026-08-27 (owner call). Best contract compliance of the benched set (4/4 follow-up marker, 4/4 real path citation) and the slowest to first token: ~24s median, 48s worst. Fine for pro, which tolerates a 60s first-token leash; do NOT put it on flash. score is null pending a full judged bench, so it is set via ASK_CHAIN_PRO rather than the in-repo default.",
+    note: "GLM 5.3 Flash via the Ollama cloud tag — FREE, loopback. TRIED ON PRO 2026-08-27 AND PULLED THE SAME HOUR: 27s median to first token and a 75s tail, which is far too slow in front of a streaming answer. Its one real strength is that it never narrated its own evidence bundle across 15 runs, the best of any model tested. Not routed. Do not re-try it without solving the first-token latency.",
   },
   "gpt-oss:120b-cloud": {
     display: "GPT-OSS 120B",
     provider: "ollama", tier: "pro", score: null, ttftP50Ms: 6497,
     efforts: null,
-    note: "GPT-OSS 120B via the Ollama cloud tag — FREE, loopback. Benched 2026-08-27: fastest of the pro candidates (6.5s ttft, very consistent), longest answers (2260 chars avg), follow-up marker 4/4. Not routed by default; the standing alternate if GLM 5.3 Flash's first-token latency proves too slow in production.",
+    note: "GPT-OSS 120B via the Ollama cloud tag — FREE, loopback. Benched well (6.5s ttft, tightest spread, 2260 chars, follow-up 4/4) but NOT WANTED for serving by owner decision 2026-08-27. Used only as a bench judge. Do not route it.",
   },
   "deepseek-v4-pro:cloud": {
     display: "DeepSeek Pro",
-    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 10661,
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 3898,
     efforts: null,
-    note: "DeepSeek V4 Pro via the Ollama cloud tag — FREE, loopback. Benched 2026-08-27: 10.7s ttft, shortest answers of the pro candidates (1323 chars), follow-up marker 3/4. Beaten by both GLM 5.3 Flash and GPT-OSS 120B; kept visible so it is not re-tested expecting better.",
+    note: "DeepSeek V4 Pro via the Ollama cloud tag — FREE, loopback. Fastest Ollama option through llm.js (3.9s median) but writes 354-char stubs and dropped the follow-up marker on 11 of 12 runs, so the suggestion chips vanish. Also narrated its own evidence bundle 3 times in 16. Not routed.",
+  },
+  "minimax-m3:cloud": {
+    display: "MiniMax M3 (Ollama)",
+    provider: "ollama", tier: "flash", score: null, ttftP50Ms: 16678,
+    efforts: null,
+    note: "THE SAME MODEL as the production lead, reached over Ollama instead of Command Code, and 8x slower for it: 16.7s median against 2.3s, with a 39s tail, and it timed out entirely through llm.js. Kept here as the standing proof that the ROUTE matters as much as the model. Do not substitute this for minimax/minimax-m3-free.",
   },
   "mimo-v2.5-free": {
     display: "Mimo V2.5",
@@ -124,9 +127,9 @@ const CATALOG = {
   },
   "nemotron-3-ultra:cloud": {
     display: "Nemotron Ultra",
-    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 2000,
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 11351,
     efforts: null,
-    note: "Nemotron 3 Ultra via the local Ollama cloud tag — FREE. Stronger reasoning than DeepSeek Flash; offered in the picker.",
+    note: "Nemotron 3 Ultra via the local Ollama cloud tag — FREE. Benched 2026-08-28 and REJECTED: it narrated its own evidence bundle on 8 of 15 runs, by far the worst of any model tested and the exact failure the prompt contract exists to prevent, plus a 113s first-token tail. Not routed.",
   },
   "deepseek-v4-flash": {
     display: "DeepSeek Flash",
