@@ -128,11 +128,16 @@ const S_propose = store.db.prepare("UPDATE corrections SET correction=? WHERE id
 async function propose(id, question, reason = "") {
   const evidence = await investigate.run({ question, useLive: false, deep: false });
   if (!evidence?.text) return null;
-  const proposed = await llm.complete({
+  const ask = () => llm.complete({
     system: PROPOSE_SYSTEM,
-    question: `PLAYER QUESTION: ${question}\n\nWHY IT WAS FLAGGED: ${String(reason || "answer reported").slice(0, 300)}\n\nEVIDENCE:\n${evidence.text.slice(0, 40000)}`,
-    maxTokens: 400, timeoutMs: 30000,
+    question: `PLAYER QUESTION: ${question}\n\nWHY IT WAS FLAGGED: ${String(reason || "answer reported").slice(0, 300)}\n\nEVIDENCE:\n${evidence.text.slice(0, 24000)}`,
+    // Generous budget on purpose: the helper backstop streams its first token
+    // in ~15s on prompts this size, and a reasoning model can spend a small
+    // completion budget entirely on hidden thinking. One retry for the same
+    // reason — this runs in the background, so patience is free.
+    maxTokens: 600, timeoutMs: 60000,
   });
+  const proposed = (await ask()) || (await ask());
   const text = String(proposed || "").trim();
   if (text.length < 20) return null;
   // Re-check the row: staff may have resolved it while the research ran, and
