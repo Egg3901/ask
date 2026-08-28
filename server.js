@@ -268,6 +268,20 @@ const server = http.createServer(async (req, res) => {
       return res.end(page.changelogPage());
     }
 
+    // Public legal pages. Deliberately reachable without a session: someone
+    // deciding whether to sign in needs to read what Ask sends to AI providers
+    // BEFORE they hand it a question, not after.
+    if (req.method === "GET" && (p === "/privacy" || p === "/terms")) {
+      const body = page.legalPage(p.slice(1));
+      if (body) {
+        res.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
+          "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+        });
+        return res.end(body);
+      }
+    }
+
     if (req.method === "GET" && (p === "/" || p === "/index.html")) {
       if (!session) {
         return html(res, 200, page.signedOut({ failed: url.searchParams.get("auth") === "failed" }));

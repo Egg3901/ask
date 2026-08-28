@@ -8,6 +8,7 @@ const { TOKENS_CSS } = require(`${OPS}/design-system`);
 const { icon, THEME_HEAD } = require(`${OPS}/ui-kit`);
 const starterQuestions = require("./starters");
 const changelog = require("./changelog");
+const legal = require("./legal");
 const modelRouter = require("./router");
 const models = require("./models");
 const auth = require("./auth");
@@ -560,6 +561,16 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .lander-feat svg{width:15px;height:15px;color:var(--text)}
 .lander-sec{width:100%;max-width:520px;margin-top:42px}
 .lander-sec-h{font-size:.74rem;text-transform:uppercase;letter-spacing:.13em;color:var(--text-3);margin-bottom:12px}
+.lander-legal{margin-top:34px;padding-top:18px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:.8rem}
+.lander-legal a{color:var(--text-2)}
+.lander-legal a:hover{color:var(--text)}
+.lander-legal span{color:var(--text-3)}
+.lander-legal p{flex-basis:100%;margin:6px 0 0;color:var(--text-3);font-size:.78rem}
+.lander-legal p a{color:var(--text-2);text-decoration:underline}
+.side-legal{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.72rem}
+.side-legal a{color:var(--text-3)}
+.side-legal a:hover{color:var(--text-2)}
+.side-legal span{color:var(--text-3);opacity:.6}
 @media(max-width:820px){
   .ask-root{grid-template-columns:1fr}
   .ask-side{position:fixed;inset:0 auto 0 0;width:264px;height:100dvh;z-index:50;transform:translateX(-100%);transition:transform var(--t)}
@@ -683,10 +694,10 @@ function ogHead({ title, description, image, url }) {
 <meta name="theme-color" content="#000000">`;
 }
 
-function shell(inner, extraJs = "", head = "") {
+function shell(inner, extraJs = "", head = "", title = "Ask \u00b7 A House Divided") {
   return `<!doctype html><html lang="en" data-theme="dark"><head>${THEME_HEAD}
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Ask · A House Divided</title>
+<title>${esc(title)}</title>
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" type="image/png" href="/ahd-logo.png">
@@ -765,6 +776,55 @@ function changelogPage() {
   return shell(inner, "", css);
 }
 
+// Reuses the changelog page's chrome so the legal pages are unmistakably part
+// of Ask rather than a bare document. Content lives in legal.js.
+function legalPage(slug) {
+  const doc = legal.get(slug);
+  if (!doc) return null;
+  const other = slug === "privacy" ? legal.get("terms") : legal.get("privacy");
+  const block = (sec) => `<section class="lg-sec">
+      <h2>${esc(sec.h)}</h2>
+      ${(sec.p || []).map(t => `<p>${t}</p>`).join("")}
+      ${sec.ul ? `<ul class="lg-list">${sec.ul.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}
+      ${sec.list ? `<ul class="lg-list">${sec.list.map(i => `<li>${i}</li>`).join("")}</ul>` : ""}
+      ${(sec.after || []).map(t => `<p>${t}</p>`).join("")}
+    </section>`;
+  const inner = `<div class="cl-root">
+    <header class="cl-head">
+      <a class="cl-back" href="/">${icon("arrow-left", 14) || "\u2190"} Ask</a>
+      <span class="cl-brand">${mark(20)}Ask <em>\u00b7 ${esc(doc.title)}</em></span>
+    </header>
+    <main class="cl-body">
+      <div class="cl-hero"><h1>${esc(doc.title)}</h1><p>${esc(doc.lead)}</p></div>
+      ${doc.sections.map(block).join("")}
+      <p class="lg-foot"><a href="/${esc(other.slug)}">${esc(other.title)}</a> \u00b7 <a href="/">Back to Ask</a></p>
+    </main>
+  </div>`;
+  const css = `<style>
+  .cl-root{max-width:720px;margin:0 auto;padding:0 20px 80px}
+  .cl-head{display:flex;align-items:center;gap:16px;padding:18px 0;position:sticky;top:0;background:var(--bg-0);border-bottom:1px solid var(--border);margin-bottom:32px;z-index:2}
+  .cl-back{display:inline-flex;align-items:center;gap:6px;color:var(--text-2);font-size:.82rem}
+  .cl-back:hover{color:var(--text)}
+  .cl-brand{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--text)}
+  .cl-brand em{font-style:normal;font-weight:500;color:var(--text-2)}
+  .cl-brand .av{display:inline-flex;color:var(--accent)}
+  .cl-hero{margin-bottom:36px}
+  .cl-hero h1{font-size:1.9rem;font-weight:800;letter-spacing:-.02em}
+  .cl-hero p{color:var(--text-2);margin-top:6px}
+  .lg-sec{padding:22px 0;border-top:1px solid var(--border)}
+  .lg-sec:first-of-type{border-top:none}
+  .lg-sec h2{font-size:1.02rem;font-weight:700;margin-bottom:10px}
+  .lg-sec p{color:var(--text-2);font-size:.92rem;line-height:1.6;margin-bottom:10px}
+  .lg-sec p:last-child{margin-bottom:0}
+  .lg-list{list-style:none;display:flex;flex-direction:column;gap:8px;margin:4px 0 12px}
+  .lg-list li{position:relative;padding-left:18px;color:var(--text-2);font-size:.92rem;line-height:1.5}
+  .lg-list li::before{content:'';position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  .lg-list li b{color:var(--text);font-weight:600}
+  .lg-foot{margin-top:32px;padding-top:20px;border-top:1px solid var(--border);color:var(--text-2);font-size:.86rem}
+  </style>`;
+  return shell(inner, "", css, `${doc.title} \u00b7 Ask`);
+}
+
 function signedOut({ failed = false, notFound = false } = {}) {
   if (notFound) {
     return shell(`<div class="gate"><div class="gate-card">
@@ -797,6 +857,10 @@ function signedOut({ failed = false, notFound = false } = {}) {
     <div class="lander-sec">
       <div class="lander-sec-h">Daily budgets</div>
       <div class="gate-tiers" style="margin:0">${tierRows()}</div>
+    </div>
+    <div class="lander-legal">
+      <a href="/privacy">Privacy</a><span aria-hidden="true">\u00b7</span><a href="/terms">Terms</a><span aria-hidden="true">\u00b7</span><a href="/changelog">What's new</a><span aria-hidden="true">\u00b7</span><a href="https://lakesidegames.net">Lakeside Games</a>
+      <p>Ask sends your question to a third-party AI provider. <a href="/privacy">What that means</a>.</p>
     </div>
   </div></div>`, "", ogHead({
     title: "Ask · A House Divided",
@@ -873,6 +937,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
       <div class="quota" id="quota"></div>
       ${context?.isAdmin ? `<a class="console-link" href="/console">${icon("terminal", 14) || icon("settings", 14)} Console</a>` : ""}
       <a class="side-ver" href="/changelog" title="What's new">v${esc(changelog.VERSION)}</a>
+      <div class="side-legal"><a href="/privacy">Privacy</a><span aria-hidden="true">\u00b7</span><a href="/terms">Terms</a></div>
     </div>
     <div class="side-user">
       ${icon("user", 14)}<b>${esc(context?.username || identity.username || "You")}</b>
@@ -1954,4 +2019,4 @@ function consolePage({ identity, context, users = [], selected = null, reports =
   </div></div>`);
 }
 
-module.exports = { app, signedOut, notEntitled, sharedView, reportView, consolePage, changelogPage, esc };
+module.exports = { app, signedOut, notEntitled, sharedView, reportView, consolePage, changelogPage, legalPage, esc };
