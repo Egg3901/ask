@@ -75,6 +75,9 @@ const LIVE_ALLOWLIST = new Set([
   // campaigns, tension. The tool itself enforces the public conflict tier
   // (no rosters, no force composition), so it is safe for any asker.
   "wars",
+  // Regional macro trend series ({turn, value} per metric) — the same public
+  // data the state pages chart, for "how has X changed" questions.
+  "macro_history",
 ]);
 
 // Tools that read one character's private standing. Non-staff askers are pinned
