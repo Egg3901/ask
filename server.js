@@ -667,8 +667,14 @@ const server = http.createServer(async (req, res) => {
         // stays fast, and a question that was heading for a non-answer gets the
         // one pass that can rescue it.
         const liveMissedTarget = useMcp && !liveTargeted;
+        // Trend questions get the scout even when the live heuristics hit:
+        // the heuristic pass serves snapshots, and a "how has X changed"
+        // answer built on a snapshot is exactly the failure the history
+        // tools exist to prevent (measured: California unemployment answered
+        // "not in this snapshot" while macro_history sat one call away).
+        const trendish = /\b(trend|history|over (?:the )?(?:last|past|recent)|chang(?:e|ed|es|ing)|since (?:19|20)\d\d|turn.by.turn|evolv)/i.test(question);
         let investigation = null;
-        if (game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget)) {
+        if (game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish))) {
           status(useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…");
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction });

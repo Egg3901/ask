@@ -592,6 +592,16 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
       const sheet = await call("character_balance_sheet", { character: charName });
       const data = payload(sheet);
       if (data?.found) parts.push(`THIS PLAYER'S WEALTH (${charName}) — report these concrete figures:\n${cap(sheet, 3000)}`);
+      // A change/trend question needs the per-turn series, not just today's
+      // snapshot. The portfolio series values stocks and funds the cash-based
+      // balance sheet does not carry, so on wealth-over-time questions the
+      // series is the authoritative net-worth figure.
+      if (/\b(chang(?:e|ed|es|ing)|trend|history|over (?:recent|the last|time)|recent turns|grew|grown|dropped|gained|lost|biggest|largest)\b/i.test(text)) {
+        const series = await call("character_wealth_history", { character: charName, turns: 48 });
+        if (series && !/MCP error/i.test(series)) {
+          parts.push(`THIS PLAYER'S WEALTH OVER TIME (${charName}) — per-turn net worth INCLUDING stock/bond/fund positions (unlike the cash-based sheet above; prefer THESE figures for wealth-over-time and largest-change questions):\n${cap(series, 6000)}`);
+        }
+      }
     }
     const character = await call("trace_character", { character: charName });
     if (character) parts.push(`THIS PLAYER'S RECENT HISTORY (${charName}):\n${cap(character)}`);
