@@ -1,5 +1,12 @@
 // Prompt construction: output style, answer length, source authority, and the
 // machine-readable conflict contract.
+//
+// Everything here is written per-game. A House Divided is the default and the
+// only game with a running world, a player wiki and other players — so the live
+// grounding and fair-play sections apply to it alone, and a single-player game
+// gets a prompt that does not describe rules it has no way to obey.
+
+const games = require("./games");
 
 const STYLES = {
   simplified: {
@@ -40,19 +47,18 @@ Structure it exactly like this:
 - Close with a one-line footer: the game turn or date of the live data, and whether the report is built from live data, code, or both.
 - No preamble, no "this report will cover", no summary that repeats the lead. Do not pad thin evidence into long sections; a short honest report beats a long inflated one.`;
 
-const AUTHORITY = `SOURCE AUTHORITY — this matters more than anything else here.
+const authorityFor = game => `SOURCE AUTHORITY — this matters more than anything else here.
 Rank evidence in this order, highest first:
   1. The game's current source code and configuration (what the game actually does)
-  2. The engineering docs
-  3. The player wiki (community-written, frequently out of date)
-
-Never let documentation or the wiki override behaviour shown in the code. If the code says one
-thing and a doc or wiki page says another, the CODE IS RIGHT — answer from the code, and tell the
+  2. The engineering and design docs
+${game.multiplayer ? "  3. The player wiki (community-written, frequently out of date)\n" : ""}
+Never let documentation${game.multiplayer ? " or the wiki" : ""} override behaviour shown in the code. If the code says one
+thing and a doc${game.multiplayer ? " or wiki page" : ""} says another, the CODE IS RIGHT — answer from the code, and tell the
 player plainly that some documentation still says otherwise.
 
 When you find such a disagreement, append this exact machine-readable line at the very end,
 after your answer, once per disagreement:
-<!--CONFLICT {"source":"wiki|docs","page":"page title if known","claim":"what the doc says","actual":"what the code does","evidence":"src/path/file.ts"}-->
+<!--CONFLICT {"source":"wiki|docs","page":"page title if known","claim":"what the doc says","actual":"what the code does","evidence":"${game.pathExample}"}-->
 Emit it ONLY for a real, specific, factual contradiction you can point at in the provided source.
 Never emit it speculatively, and never mention the marker itself in your prose.`;
 
@@ -63,11 +69,11 @@ would plausibly ask next, as:
 They must be answerable from this game's code, specific rather than generic, and phrased as the
 player would say them. Omit the line entirely if nothing useful follows.`;
 
-const RULES = `RULES
+const rulesFor = game => `RULES
 - Ground every claim in the evidence below. Never invent a mechanic, number, or file. A confident wrong answer is the worst outcome.
 - Do not describe real-world politics or real-world legislative procedure as if it were this game's rules.
   This is a game with its own rules; only describe mechanics the evidence actually shows.
-- When a value comes from a specific file, name the path (e.g. src/lib/military/defenceLotEconomics.ts).
+- When a value comes from a specific file, name the path (e.g. ${game.pathExample}).
 - Never write code, suggest code changes, or give terminal commands.
 - Do not start with "I'll look…", "Let me check…" or any narration. Begin with the answer.
 
@@ -152,6 +158,18 @@ function visualizationRules(enabled, requested = false) {
 - Keep it small and readable. Quote labels containing punctuation, brackets, slashes, braces, or HTML. Never invent nodes, values, or relationships.${explicit}`;
 }
 
+/**
+ * What to say when a game has no live world to read.
+ *
+ * Without this the model treats "I have no live data" as a gap to apologise for
+ * or, worse, invents a current figure. These games are single-player: there IS
+ * no shared world state, so the honest answer is about the mechanics.
+ */
+const NO_LIVE_WORLD = `NO LIVE WORLD
+- This game is single-player. There is no shared running world, no live market, no other players, and no current game state to look up. Each player's game exists only on their own machine.
+- So never offer to check live data, never say the live data is unavailable right now, and never present a number as the game's current state. Answer from the mechanics: what the rules do, what the values are, and what would happen in a described situation.
+- If a player asks "what is X right now", explain what determines X in their game and what it starts at, rather than treating the question as unanswerable.`;
+
 function liveDataRules(enabled) {
   if (!enabled) return "";
   return `LIVE GROUNDING
@@ -192,11 +210,13 @@ const FORMATTING = `RICH FORMATTING — the answer renders as rich text (tables,
 - INLINE: \`backticks\` for exact identifiers (file paths, constants, field names, tickers, numeric values); **bold** for the term being defined; *italics* sparingly. Link a source as [label](https://…) only with a real URL from the evidence — never invent one.
 - Do NOT force structure onto a one-line answer, and never use ASCII-art tables or diagrams — use a real Markdown table or a Mermaid block.`;
 
-function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, liveData = false, report = false } = {}) {
+function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, liveData = false, report = false, game = null } = {}) {
   const s = STYLES[style] || STYLES.standard;
   const l = LENGTHS[length] || LENGTHS.standard;
-  return `You are the in-game guide for A House Divided, a political and economic strategy game.
+  const g = game && game.id ? game : games.fallback();
+  return `You are the in-game guide for ${g.name}, ${g.subject}.
 You answer players' questions about how the game works, using the game's own source code as the truth.
+Answer ONLY about ${g.name}. If the player asks about a different game, say which game you cover and point them at the switcher rather than guessing.
 
 OUTPUT STYLE — ${s.label}
 ${s.text}
@@ -206,14 +226,14 @@ ${l.text} Aim for roughly ${l.words} words; never pad to reach it.`}
 
 ${report ? "" : FORMATTING}
 
-${AUTHORITY}
+${authorityFor(g)}
 
-${RULES}
-${FAIR_PLAY}
-${liveDataRules(liveData)}
+${rulesFor(g)}
+${g.multiplayer ? FAIR_PLAY : ""}
+${g.live ? liveDataRules(liveData) : NO_LIVE_WORLD}
 ${visualizationRules(visualizations, visualizationRequested)}
 ${FOLLOWUPS}
-${playerContext(context)}
+${g.multiplayer ? playerContext(context) : ""}
 EVIDENCE GATHERED FOR THIS QUESTION (a starting point, not the limit of the game — never describe this section to the player):
 ${indexContext}`;
 }

@@ -10,6 +10,7 @@
 // to a 404 is worse than no link.
 const fs = require("node:fs");
 const path = require("node:path");
+const games = require("./games");
 
 const REPO_DIR = process.env.RAG_REPO || "/root/projects/LSGD-ops-dash/ahd-sandbox";
 const GH = process.env.GITHUB_BASE || "https://github.com/Egg3901/AHDGame/blob";
@@ -25,13 +26,16 @@ const PATH_RE = /\b((?:src|scripts|docs)\/[A-Za-z0-9_./[\]@-]+?\.(?:ts|tsx|js|js
 // d=description, tx=full text. It carries BOTH the engineering docs and the
 // player wiki (k:"wiki", s:"Player Wiki"), so one file serves both citation
 // classes and every link is guaranteed to resolve to a page that exists.
-let _docIndex = null;
-let _docIndexAt = 0;
-function docIndex() {
-  if (_docIndex && Date.now() - _docIndexAt < 600000) return _docIndex;
+// Cached per game: each one publishes its own index under its own docs sub-path,
+// and A House Divided's is at the docs root.
+const _docIndexes = new Map();
+function docIndex(game = null) {
+  const g = game && game.id ? game : games.fallback();
+  const hit = _docIndexes.get(g.id);
+  if (hit && Date.now() - hit.at < 600000) return hit.list;
   const out = [];
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(DOCS_ROOT, "search-index.json"), "utf8"));
+    const raw = JSON.parse(fs.readFileSync(path.join(DOCS_ROOT, g.docsSubdir || "", "search-index.json"), "utf8"));
     for (const it of raw.items || []) {
       const href = it.h; const title = it.t;
       if (!href || !title) continue;
@@ -45,8 +49,8 @@ function docIndex() {
       });
     }
   } catch { /* index is optional; absence just means no doc/wiki citations */ }
-  _docIndex = out; _docIndexAt = Date.now();
-  return _docIndex;
+  _docIndexes.set(g.id, { list: out, at: Date.now() });
+  return out;
 }
 
 // Terms too generic to underline usefully (they would mark half an answer).
@@ -85,8 +89,9 @@ function scorePage(p, needle) {
   return hits / words.length >= 0.6 ? 1 + hits / words.length : 0;
 }
 
-function fileExists(rel) {
-  try { return fs.existsSync(path.join(REPO_DIR, rel)); } catch { return false; }
+function fileExists(rel, game = null) {
+  const root = (game && game.repoDir) || REPO_DIR;
+  try { return fs.existsSync(path.join(root, rel)); } catch { return false; }
 }
 
 /**
@@ -94,14 +99,18 @@ function fileExists(rel) {
  * Returns { text, citations:[{kind,label,url}] }.
  */
 function apply(answer, opts = {}) {
+  const game = opts.game && opts.game.id ? opts.game : games.fallback();
   const cites = [];
   const seen = new Set();
   const push = c => { const k = c.kind + c.url; if (!seen.has(k)) { seen.add(k); cites.push(c); } };
 
   // 1. Code paths the model cited — verified against the indexed tree.
   const text = String(answer || "").replace(PATH_RE, (m, rel, line) => {
-    if (!fileExists(rel)) return m;                      // don't link a guess
-    const url = `${GH}/${GH_REF}/${rel}${line ? `#L${line}` : ""}`;
+    // A game with no public repo still names its files in prose; it just gets no
+    // link, because there is no URL that would resolve.
+    if (!game.githubBase) return m;
+    if (!fileExists(rel, game)) return m;                // don't link a guess
+    const url = `${game.githubBase}/${GH_REF}/${rel}${line ? `#L${line}` : ""}`;
     push({ kind: "code", label: rel.split("/").pop() + (line ? `:${line}` : ""), url, path: rel });
     return m;
   });
@@ -111,7 +120,7 @@ function apply(answer, opts = {}) {
   // than for sharing a common word. Applicability is the whole point: a question
   // with no matching page simply gets no doc citation.
   const needle = `${opts.question || ""} ${text}`.toLowerCase();
-  const ranked = docIndex()
+  const ranked = docIndex(game)
     .map(p => ({ p, score: scorePage(p, needle) }))
     .filter(x => x.score > 0)
     .sort((a, b) => b.score - a.score);

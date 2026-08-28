@@ -10,32 +10,49 @@ const path = require("node:path");
 const fs = require("node:fs");
 const Database = require("better-sqlite3");
 
+const games = require("./games");
+
 const DB_PATH = process.env.RAG_DB || "/root/projects/LSGD-ops-dash/rag/index.db";
 const OLLAMA = process.env.OLLAMA_EMBED_URL || "http://127.0.0.1:11434/api/embed";
 const MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
 const TOP_K = Number(process.env.RAG_TOP_K || 8);
 const MAX_CHARS = Number(process.env.RAG_MAX_CHARS || 22000);
 
-let db = null, ready = false, dbSignature = null, sourceAware = false;
-function open() {
+// One state object per index file. Each game has its own DB (see games.js), and
+// each carries its own connection, vector matrix and path cache, so opening
+// Grand Century never evicts the A House Divided matrix that most questions hit.
+const states = new Map();
+function stateFor(game) {
+  const g = game && game.ragDb ? game : games.fallback();
+  const dbPath = g.id === games.DEFAULT_ID ? DB_PATH : g.ragDb;
+  let st = states.get(dbPath);
+  if (!st) {
+    st = { dbPath, db: null, ready: false, dbSignature: null, sourceAware: false,
+           mat: null, matAt: 0, matCount: 0, pathCache: new Map() };
+    states.set(dbPath, st);
+  }
+  return st;
+}
+
+function open(st) {
   let signature;
   try {
-    const stat = fs.statSync(DB_PATH);
+    const stat = fs.statSync(st.dbPath);
     signature = `${stat.ino}:${stat.size}:${stat.mtimeMs}`;
   } catch { return null; }
-  if (db && signature === dbSignature) return db;
-  if (db) {
-    try { db.close(); } catch {}
-    db = null; _mat = null; _matCount = 0;
+  if (st.db && signature === st.dbSignature) return st.db;
+  if (st.db) {
+    try { st.db.close(); } catch {}
+    st.db = null; st.mat = null; st.matCount = 0;
   }
   try {
-    db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
-    db.pragma("query_only = true");
-    sourceAware = db.prepare("PRAGMA table_info(chunks)").all().some(column => column.name === "source_kind");
-    ready = db.prepare("SELECT COUNT(*) c FROM chunks").get().c > 0;
-    dbSignature = signature;
-  } catch { db = null; ready = false; dbSignature = null; sourceAware = false; }
-  return db;
+    st.db = new Database(st.dbPath, { readonly: true, fileMustExist: true });
+    st.db.pragma("query_only = true");
+    st.sourceAware = st.db.prepare("PRAGMA table_info(chunks)").all().some(column => column.name === "source_kind");
+    st.ready = st.db.prepare("SELECT COUNT(*) c FROM chunks").get().c > 0;
+    st.dbSignature = signature;
+  } catch { st.db = null; st.ready = false; st.dbSignature = null; st.sourceAware = false; }
+  return st.db;
 }
 
 async function embedQuery(text) {
@@ -57,10 +74,11 @@ async function embedQuery(text) {
  * Returns { context, files, count } or null when the index is unavailable, so
  * callers can fall back to the old path rather than answer with nothing.
  */
-async function search(question, { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question) } = {}) {
-  const top = await collect(question, claimType);
+async function search(question, { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question), game = null } = {}) {
+  const st = stateFor(game);
+  const top = await collect(question, claimType, st);
   if (!top) return null;
-  return finish(top, topK, claimType, maxChars);
+  return finish(top, topK, claimType, maxChars, st);
 }
 
 /**
@@ -72,10 +90,11 @@ async function search(question, { topK = TOP_K, maxChars = MAX_CHARS, claimType 
  * evidence was not there. Candidates from each sub-query are merged (max score
  * wins on duplicates) and the shared char budget is spent on the union.
  */
-async function searchMulti(question, subQueries = [], { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question) } = {}) {
+async function searchMulti(question, subQueries = [], { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question), game = null } = {}) {
+  const st = stateFor(game);
   const queries = [question, ...subQueries.map(q => String(q || "").trim()).filter(Boolean).slice(0, 4)];
-  if (queries.length === 1) return search(question, { topK, maxChars, claimType });
-  const lists = await Promise.all(queries.map(q => collect(q, claimType).catch(() => null)));
+  if (queries.length === 1) return search(question, { topK, maxChars, claimType, game });
+  const lists = await Promise.all(queries.map(q => collect(q, claimType, st).catch(() => null)));
   const byKey = new Map();
   for (const list of lists) {
     if (!list) continue;
@@ -87,18 +106,18 @@ async function searchMulti(question, subQueries = [], { topK = TOP_K, maxChars =
   }
   if (!byKey.size) return null;
   const merged = [...byKey.values()].sort((a, b) => b.score - a.score);
-  return finish(merged, topK, claimType, maxChars);
+  return finish(merged, topK, claimType, maxChars, st);
 }
 
 /** Ranked candidate chunks for one query string. null when the index is unavailable. */
-async function collect(question, claimType) {
-  const h = open();
-  if (!h || !ready) return null;
+async function collect(question, claimType, st) {
+  const h = open(st);
+  if (!h || !st.ready) return null;
 
   let qv;
   try { qv = await embedQuery(question); } catch { return null; }
 
-  const M = matrix();
+  const M = matrix(st);
   if (!M || M.n === 0) return null;
   if (M.dims !== qv.length) return null;
 
@@ -116,7 +135,7 @@ async function collect(question, claimType) {
     // Weight in the sweep, not after: otherwise the top-KEEP cutoff is chosen on
     // raw similarity, so an upweighted constants chunk just below the raw cutoff
     // is dropped before its weight could have lifted it above a wiki chunk.
-    scores[i] = dot * weightFor(meta[i].path, meta[i].source, claimType);
+    scores[i] = dot * weightFor(meta[i].path, meta[i].source, claimType, st.sourceAware);
   }
   // Single pass for a cheap score threshold, then materialise only the winners.
   const KEEP = Math.min(n, 200);
@@ -137,7 +156,7 @@ async function collect(question, claimType) {
   // appearing in a handful of chunks carries little semantic signal, while
   // keyword matching finds it instantly. Running both and merging covers the
   // two failure modes — vectors handle paraphrase, keywords handle precision.
-  for (const r of keywordHits(h, question)) {
+  for (const r of keywordHits(h, question, st.sourceAware)) {
     const k = r.path + "#" + r.ord;
     if (seen.has(k)) {
       const ex = top.find(t => t.path === r.path && t.ord === r.ord);
@@ -145,7 +164,7 @@ async function collect(question, claimType) {
       continue;
     }
     seen.add(k);
-    top.push({ ...r, score: r.boost * weightFor(r.path, r.source, claimType) });
+    top.push({ ...r, score: r.boost * weightFor(r.path, r.source, claimType, st.sourceAware) });
   }
 
   top.sort((a, b) => b.score - a.score);
@@ -156,25 +175,24 @@ async function collect(question, claimType) {
 // Held in memory so a question costs one dot-product sweep, not a table scan.
 // 18.6k chunks x 768 dims x 4 bytes is about 57MB, which is cheap next to
 // re-reading SQLite per request. Refreshed as the index grows.
-let _mat = null, _matAt = 0, _matCount = 0;
 const MAT_TTL = 120000;
 
-function matrix() {
-  const h = open();
+function matrix(st) {
+  const h = open(st);
   if (!h) return null;
   const now = Date.now();
   // TTL only. Do NOT invalidate on row-count change: while the index is being
   // built the count moves on every query, which would mean a full reload every
   // single time and made queries 20x SLOWER than the naive version.
-  if (_mat && now - _matAt < MAT_TTL) return _mat;
+  if (st.mat && now - st.matAt < MAT_TTL) return st.mat;
 
   const shape = h.prepare("SELECT dims, COUNT(*) n FROM chunks GROUP BY dims ORDER BY n DESC LIMIT 1").get();
-  if (!shape?.n || !shape?.dims) { _mat = null; return null; }
+  if (!shape?.n || !shape?.dims) { st.mat = null; return null; }
   // Most refresh checks are against an unchanged index. Keep the existing
   // matrix instead of rebuilding hundreds of MB of vectors and source text.
-  if (_mat && _matCount === shape.n && _mat.dims === shape.dims) {
-    _matAt = now;
-    return _mat;
+  if (st.mat && st.matCount === shape.n && st.mat.dims === shape.dims) {
+    st.matAt = now;
+    return st.mat;
   }
 
   const dims = shape.dims;
@@ -183,7 +201,7 @@ function matrix() {
   let n = 0;
   // Iterate so SQLite does not materialise every vector blob and every chunk
   // string in a second giant JS array while the final matrix is being built.
-  const projection = sourceAware
+  const projection = st.sourceAware
     ? "path,ord,text,vec,source_kind source,repository,revision"
     : "path,ord,text,vec,'code' source,'' repository,'' revision";
   for (const r of h.prepare(`SELECT ${projection} FROM chunks WHERE dims=?`).iterate(dims)) {
@@ -195,9 +213,9 @@ function matrix() {
     };
     n++;
   }
-  _mat = { data, dims, n, meta };
-  _matAt = now; _matCount = n;
-  return _mat;
+  st.mat = { data, dims, n, meta };
+  st.matAt = now; st.matCount = n;
+  return st.mat;
 }
 
 const STOP = new Set(("the a an and or but if is are was were be been do does did of to in on for with " +
@@ -221,7 +239,7 @@ function termsIn(question) {
 }
 
 /** FTS5/BM25 hits, merged into the semantic ranking. */
-function keywordHits(h, question) {
+function keywordHits(h, question, sourceAware) {
   const { ids, words } = termsIn(question);
   const out = [];
   const run = (expr, boost, limit) => {
@@ -269,7 +287,7 @@ function inferClaimType(question) {
   return "general";
 }
 
-function weightFor(p, source = "code", claimType = "general") {
+function weightFor(p, source = "code", claimType = "general", sourceAware = false) {
   if (sourceAware) {
     let weight = (AUTHORITY[claimType] || AUTHORITY.general)[source] || 1;
     if (source === "code" && /\.test\.tsx?$/.test(p)) weight *= 0.85;
@@ -284,7 +302,7 @@ function weightFor(p, source = "code", claimType = "general") {
   return 1;
 }
 
-function finish(scored, topK, claimType, maxChars = MAX_CHARS) {
+function finish(scored, topK, claimType, maxChars = MAX_CHARS, st = { sourceAware: false }) {
   // Keep at most 2 chunks per file so one long file cannot crowd out the rest.
   const perFile = new Map(), picked = [];
   for (const s of scored) {
@@ -312,7 +330,7 @@ function finish(scored, topK, claimType, maxChars = MAX_CHARS) {
       source: c.source || "code", repository: c.repository || null,
       revision: c.revision || null, path: c.path, ord: c.ord, score: c.score,
     });
-    const label = sourceAware
+    const label = st.sourceAware
       ? `SOURCE ${c.source} @ ${c.revision} | ${c.path}`
       : c.path;
     blocks.push(`--- ${label} (part ${c.ord + 1}, relevance ${c.score.toFixed(3)}) ---\n${body}`);
@@ -320,7 +338,7 @@ function finish(scored, topK, claimType, maxChars = MAX_CHARS) {
   if (!blocks.length) return null;
 
   return {
-    context: sourceAware
+    context: st.sourceAware
       ? `RETRIEVED EVIDENCE (${claimType} question). For current mechanics, executable code wins conflicts. For design intent, engineering docs win. For player navigation and explanation, shipped wiki prose is preferred unless it conflicts with code.\n\n${blocks.join("\n\n")}`
       : `SOURCE CODE (the actual text of the most relevant parts of the game, retrieved for this question.\nThis is the game's real current behaviour and outranks any documentation):\n\n${blocks.join("\n\n")}`,
     // Only what was actually sent. Reporting picked-but-dropped files made the
@@ -341,28 +359,29 @@ function finish(scored, topK, claimType, maxChars = MAX_CHARS) {
 // — so treating them all as inventions told players to distrust correct answers.
 //
 // Cached, because this runs on every answer against a read-only index.
-const pathCache = new Map();
-function hasPath(path) {
+function hasPath(path, game = null) {
   const key = String(path || "").trim();
   if (!key) return false;
-  if (pathCache.has(key)) return pathCache.get(key);
-  const h = open();
+  const st = stateFor(game);
+  if (st.pathCache.has(key)) return st.pathCache.get(key);
+  const h = open(st);
   if (!h) return false;                       // no index: claim nothing either way
   let found = false;
   try {
     found = !!h.prepare("SELECT 1 FROM chunks WHERE path=? LIMIT 1").get(key);
   } catch { found = false; }
-  if (pathCache.size > 5000) pathCache.clear();
-  pathCache.set(key, found);
+  if (st.pathCache.size > 5000) st.pathCache.clear();
+  st.pathCache.set(key, found);
   return found;
 }
 
-function stats() {
-  const h = open();
+function stats(game = null) {
+  const st = stateFor(game);
+  const h = open(st);
   if (!h) return { ready: false, chunks: 0 };
   try {
     const c = h.prepare("SELECT COUNT(*) c FROM chunks").get().c;
-    if (sourceAware) {
+    if (st.sourceAware) {
       const rows = h.prepare("SELECT * FROM source_revisions ORDER BY kind").all();
       const sources = Object.fromEntries(rows.map(row => [row.kind, {
         repository: row.repository, revision: row.revision,

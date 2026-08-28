@@ -26,6 +26,11 @@ const askPlan = require("./ask-plan");
 const answerGuard = require("./answer-guard");
 const answerAudit = require("./answer-audit");
 const ogImage = require("./og-image");
+const games = require("./games");
+
+// Where the docs build writes its output. Ask reads only the per-game logo from
+// it, so a missing docs build degrades to a 404 mark, never a broken page.
+const DOCS_ROOT = process.env.DOCS_ROOT || "/srv/lakeside-docs";
 
 const PORT = Number(process.env.PORT || 9749);
 const UPSTREAM = process.env.UPSTREAM_URL || "http://127.0.0.1:9724/api/ask-public";
@@ -132,6 +137,21 @@ const server = http.createServer(async (req, res) => {
         const buf = require("node:fs").readFileSync(require("node:path").join(__dirname, "ahd-logo.png"));
         res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buf.length,
           "Cache-Control": "public, max-age=604800", "X-Content-Type-Options": "nosniff" });
+        return res.end(buf);
+      } catch { res.writeHead(404); return res.end(); }
+    }
+
+    // Game marks for the switcher, served same-origin from what the docs build
+    // already produced. That build is also where the Lakeside-mark fallback is
+    // applied, so a game without its own logo resolves correctly here with no
+    // second copy of the rule.
+    if (req.method === "GET" && /^\/game-logo\/[a-z0-9-]{2,32}\.png$/.test(p)) {
+      const g = games.resolve(p.slice("/game-logo/".length, -4));
+      try {
+        const file = require("node:path").join(DOCS_ROOT, g.docsSubdir || "", "logo.png");
+        const buf = require("node:fs").readFileSync(file);
+        res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buf.length,
+          "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" });
         return res.end(buf);
       } catch { res.writeHead(404); return res.end(); }
     }
@@ -258,10 +278,14 @@ const server = http.createServer(async (req, res) => {
       }
       const key = store.userKey(session.identity);
       store.touchUser(key, session.identity, session.context);
+      // ?game= selects which game the page renders for (starters, hero copy,
+      // brand). The switcher navigates here rather than swapping it client-side,
+      // so everything server-rendered agrees with the selection.
       return html(res, 200, page.app({
         identity: session.identity, context: session.context, entitlement: ent,
         usage: store.usage(key, ent), conversations: store.conversations(key), model: MODEL_LABEL,
         styles: prompt.STYLES, lengths: prompt.LENGTHS,
+        game: games.resolve(url.searchParams.get("game")),
       }));
     }
 
@@ -296,6 +320,12 @@ const server = http.createServer(async (req, res) => {
         summary7d: store.auditSummary(Date.now() - 7 * 864e5),
         audits: store.recentAudits(limit),
       });
+    }
+
+    // The switcher's contents. Public: it names games and their public URLs and
+    // nothing else, and the signed-out lander renders the switcher too.
+    if (req.method === "GET" && p === "/api/games") {
+      return json(res, 200, { games: games.publicList(), default: games.DEFAULT_ID });
     }
 
     // Everything below requires a signed-in, entitled user.
@@ -414,6 +444,10 @@ const server = http.createServer(async (req, res) => {
         if (question.length < 5) return json(res, 400, { error: "Please ask a slightly longer question." });
         if (question.length > MAX_Q) return json(res, 400, { error: `Keep questions under ${MAX_Q} characters.` });
 
+        // Which game this question is about. The picker decides unless the
+        // question names a different game outright (see games.forQuestion).
+        const game = games.forQuestion(question, body.game);
+
         const style = prompt.STYLES[body.style] ? body.style : "standard";
         // A report request is a product mode, not a phrasing: deep tier, live
         // data (it spends one live-data question), the house report format, and
@@ -437,7 +471,11 @@ const server = http.createServer(async (req, res) => {
         const visualizationRequested = vizAllowed && visualization.requested(question);
         const visualizations = vizAllowed && (visualizationRequested || (body.visualizations === true && plan.visual !== "none"));
         const convId = /^[A-Za-z0-9_-]{6,40}$/.test(body.convId || "") ? body.convId : crypto.randomUUID().slice(0, 18);
-        const wantMcp = body.useMcp === true || plan.live === "required" || mcp.requiresLive(question) || reportRequested;
+        // Live game state exists only for A House Divided: it is the one game
+        // with a running shared world. For the others there is nothing to query,
+        // so the request never becomes a live one and never spends live quota.
+        const wantMcp = game.live &&
+          (body.useMcp === true || plan.live === "required" || mcp.requiresLive(question) || reportRequested);
 
         // Follow-ups depend on the conversation's prior turns, so the shared
         // answer cache (keyed only on question text) must not touch them: a
@@ -457,7 +495,7 @@ const server = http.createServer(async (req, res) => {
         // Cache is checked BEFORE quota so re-reading an answer is always free.
         // The plan is part of cache identity. A pre-planner answer must never
         // bypass a newer evidence or visualization guard for the same wording.
-        const ckey = `plan:${plan.id}|${style}|${length}|viz:${visualizations ? 1 : 0}|${norm(question)}`;
+        const ckey = `game:${game.id}|plan:${plan.id}|${style}|${length}|viz:${visualizations ? 1 : 0}|${norm(question)}`;
         const hit = cacheable ? store.S.getCache.get(ckey) : null;
         if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
           const cachedModel = hit.model || router.MODELS.flash;
@@ -569,7 +607,7 @@ const server = http.createServer(async (req, res) => {
           // embedding lands nearest. decompose() fails open to [] and
           // searchMulti with no sub-queries is a plain search.
           const subQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion);
-          hits = await retrieve.searchMulti(retrievalQuestion, subQueries, retrieveOpts);
+          hits = await retrieve.searchMulti(retrievalQuestion, subQueries, { ...retrieveOpts, game });
         } catch { hits = null; }
         if (hits?.files?.length) status(`Matched ${hits.files.length} source${hits.files.length === 1 ? "" : "s"} — reading…`);
 
@@ -616,7 +654,7 @@ const server = http.createServer(async (req, res) => {
         // one pass that can rescue it.
         const liveMissedTarget = useMcp && !liveTargeted;
         let investigation = null;
-        if (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget) {
+        if (game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget)) {
           status(useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…");
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction });
@@ -629,14 +667,14 @@ const server = http.createServer(async (req, res) => {
         // for 10s+ before its first token).
         status(`Drafting with ${models.displayFor(route.chain[0])}…`);
 
-        const navBlock = navigation.block(question);
+        const navBlock = game.multiplayer ? navigation.block(question) : "";
         let raw = "", failed = null, failedBusy = false, llmUsage = {}, servedModel = route.model;
         let finishReason = null;
         const genStart = Date.now();
         let firstTokenMs = null;
         try {
           const out = await llm.stream({
-            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, liveData: useMcp, report: reportRequested })
+            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, liveData: useMcp, report: reportRequested, game })
               + (matchedCorrections.length ? `\n\n${corrections.block(matchedCorrections)}` : "")
               + (hits ? `\n\n${hits.context}` : "")
               + (liveBlock ? `\n\n${liveBlock}` : "")
@@ -694,7 +732,7 @@ const server = http.createServer(async (req, res) => {
         const { text: noFu, followups } = prompt.extractFollowups(raw);
         const { text: noConflict, conflicts } = prompt.extractConflicts(noFu);
         if (conflicts.length) store.recordConflicts(conflicts, { question, user_key: key });
-        const cited = cites.apply(noConflict, { question });
+        const cited = cites.apply(noConflict, { question, game });
         const citations = cited.citations;
         const guarded = answerGuard.enforce({
           answer: cited.text, datasets: liveVisualizations, plan,

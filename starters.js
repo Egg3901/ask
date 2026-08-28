@@ -126,6 +126,43 @@ const QUESTIONS = [
   { id: "context-character-recent", category: "basics", requires: "character", live: true, text: "What changed most for {character} over recent turns?" },
 ];
 
+// Starter questions for the single-player games.
+//
+// Kept deliberately small and mechanism-shaped. These games have no live world
+// and no player context, so there are no personal or live variants — every entry
+// is answerable from the game's own code. Categories reuse the shared labels.
+const GAME_QUESTIONS = {
+  "grand-century": [
+    { id: "gc-loop", category: "basics", text: "What happens on each tick, and in what order?" },
+    { id: "gc-pops", category: "world", text: "How do pops grow, migrate, and change occupation?" },
+    { id: "gc-industry", category: "economy", text: "How do factories decide what to produce?" },
+    { id: "gc-market", category: "economy", text: "How are prices set on the world market?" },
+    { id: "gc-war", category: "world", text: "How does a front advance or break in a war?" },
+    { id: "gc-mobilize", category: "world", text: "How are pops turned into armies?" },
+    { id: "gc-politics", category: "politics", text: "What gates which reforms a nation can enact?" },
+    { id: "gc-diplomacy", category: "politics", text: "How do alliances and casus belli work?" },
+    { id: "gc-map", category: "world", text: "Where does the 1820 province map come from?" },
+  ],
+  metroforge: [
+    { id: "mf-demand", category: "world", text: "How is passenger demand generated across the city?" },
+    { id: "mf-routing", category: "world", text: "How do passengers choose a route through the network?" },
+    { id: "mf-track", category: "basics", text: "What are the rules for laying track and placing stations?" },
+    { id: "mf-service", category: "basics", text: "How does a service pattern turn into vehicle movements?" },
+    { id: "mf-city", category: "world", text: "How is the street layout generated?" },
+    { id: "mf-economy", category: "economy", text: "What determines whether a line makes or loses money?" },
+    { id: "mf-growth", category: "world", text: "How does the city react to the network I build?" },
+  ],
+  electioneer: [
+    { id: "el-turn", category: "basics", text: "What happens when I end a campaign turn?" },
+    { id: "el-polling", category: "elections", text: "How is polling calculated between turns?" },
+    { id: "el-spend", category: "elections", text: "How do ad spending and ground game change the result?" },
+    { id: "el-swing", category: "elections", text: "How does a national swing translate into seats?" },
+    { id: "el-uk", category: "elections", text: "How do the UK general elections differ from the US ones?" },
+    { id: "el-events", category: "world", text: "What events can fire mid-campaign, and what do they change?" },
+    { id: "el-scenarios", category: "basics", text: "Which historical elections are playable?" },
+  ],
+};
+
 const REQUIREMENT_ORDER = { corporation: 0, character: 1, party: 2, country: 3 };
 
 function replacements(context) {
@@ -137,7 +174,15 @@ function replacements(context) {
   };
 }
 
-function catalog(context, { liveAvailable = true } = {}) {
+function catalog(context, { liveAvailable = true, game = "ahd" } = {}) {
+  // A single-player game has no player context and no live tier, so its list is
+  // returned as-is rather than run through the personalisation filters.
+  const own = GAME_QUESTIONS[game];
+  if (own) {
+    return own.map(question => ({
+      ...question, label: CATEGORIES[question.category].label, personal: false,
+    }));
+  }
   const values = replacements(context);
   return QUESTIONS
     .filter((question) => !question.requires || values[question.requires])
@@ -162,4 +207,4 @@ function select(items, category = "for-you", offset = 0, limit = 4) {
   return Array.from({ length: Math.min(limit, pool.length) }, (_unused, index) => pool[(start + index) % pool.length]);
 }
 
-module.exports = { CATEGORIES, QUESTIONS, catalog, select };
+module.exports = { CATEGORIES, QUESTIONS, GAME_QUESTIONS, catalog, select };

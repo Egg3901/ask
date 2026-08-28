@@ -12,6 +12,7 @@ const modelRouter = require("./router");
 const models = require("./models");
 const auth = require("./auth");
 const cites = require("./citations");
+const gameRegistry = require("./games");
 
 // Inline jargon annotation: underline terms that have a doc/wiki page, show a
 // blurb on hover/tap, link to the source. The glossary is the same doc/wiki
@@ -20,7 +21,10 @@ const glossaryJson = () => { try { return JSON.stringify(cites.glossary()).repla
 
 // The game's own mark (Liberty Bell), served from /ahd-logo.png. Used wherever
 // the page identifies itself: header brand, landing, gates, shared pages.
-const mark = size => `<img class="brandmark" src="/ahd-logo.png" alt="" width="${size}" height="${size}">`;
+// The switcher's marks come from the docs build, which already applies the
+// Lakeside-mark fallback for a game with no logo of its own.
+const mark = (size, gameId = "ahd") =>
+  `<img class="brandmark" id="brand-mark" src="${gameId === "ahd" ? "/ahd-logo.png" : `/game-logo/${gameId}.png`}" alt="" width="${size}" height="${size}">`;
 const jargonScripts = () => `<script>window.__JARGON=${glossaryJson()};</script><script>${JARGON_JS}</script>`;
 
 // Self-contained rich renderer for the static shared/report pages: the same
@@ -162,6 +166,24 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .brandmark{display:block;flex-shrink:0}
 .gate-card .brandmark{margin:0 auto 16px}
 .ask-brand em{font-style:normal;color:var(--text-3);font-weight:500}
+.gamesw{position:relative;display:inline-flex}
+.gamesw>button{display:inline-flex;align-items:center;gap:5px;background:none;border:0;padding:2px 4px;border-radius:7px;
+  cursor:pointer;font:inherit;font-weight:500;color:var(--text-3);letter-spacing:-.01em}
+.gamesw>button:hover{color:var(--text-1);background:var(--bg-2)}
+.gamesw>button .cv{width:0;height:0;border-top:4px solid currentColor;border-left:3.5px solid transparent;border-right:3.5px solid transparent;opacity:.7}
+.gamesw .gmenu{position:absolute;top:calc(100% + 7px);left:-4px;z-index:70;min-width:255px;
+  max-width:calc(100vw - 28px);background:var(--bg-1);
+  border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 34px -14px rgba(0,0,0,.5);padding:5px;display:none}
+.gamesw>button .gname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gamesw.open .gmenu{display:block}
+.gamesw .gmenu .ghd{font-size:.6875rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);padding:7px 9px 4px}
+.gamesw .gmenu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;
+  padding:7px 9px;border-radius:8px;cursor:pointer;font:inherit;font-size:.875rem;color:var(--text-1)}
+.gamesw .gmenu button:hover{background:var(--bg-2)}
+.gamesw .gmenu button img{width:20px;height:20px;border-radius:5px;flex-shrink:0;object-fit:cover}
+.gamesw .gmenu button.on{font-weight:600}
+.gamesw .gmenu button .gtick{margin-left:auto;opacity:.75}
+.gamesw .gmenu .gnote{font-size:.6875rem;color:var(--text-3);padding:5px 9px 7px;border-top:1px solid var(--line);margin-top:4px}
 .ask-head-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .who{display:inline-flex;align-items:center;gap:7px;font-size:.8125rem;color:var(--text-2);
   border:1px solid var(--border);background:var(--glass-2);padding:.3rem .7rem;border-radius:var(--r-full)}
@@ -384,6 +406,10 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 }
 @media(max-width:560px){
   .ask-head{padding:10px 14px}.hero{padding:12px 0 0}.who b{display:none}.ask-brand em{display:none}
+  .ask-brand{gap:7px;min-width:0}
+  .gamesw{min-width:0}
+  .gamesw>button{max-width:34vw;padding:2px 3px}
+  .gamesw>button .dot{display:none}
   .ask-col{padding:10px 14px 18px;gap:14px}
   .hero-kicker{font-size:.62rem;margin-bottom:6px}
   .hero h1{font-size:clamp(3.8rem,19vw,4.7rem);margin-bottom:16px}
@@ -803,7 +829,8 @@ function notEntitled({ identity, context, reason }) {
   </div></div>`);
 }
 
-function app({ identity, context, entitlement, usage, conversations, model, styles, lengths }) {
+function app({ identity, context, entitlement, usage, conversations, model, styles, lengths, game }) {
+  const activeGame = game && game.id ? game : gameRegistry.fallback();
   const ch = context?.character;
   const corp = context?.corporation;
   const corpRole = corp?.role === "shareholder" ? "Shareholder in" : "CEO of";
@@ -814,7 +841,9 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     corp?.name && `${corpRole} ${corp.name}`,
   ].filter(Boolean).map(esc).join(" · ");
 
-  const starterCatalog = starterQuestions.catalog(context, { liveAvailable: usage.mcpRemaining > 0 });
+  const starterCatalog = starterQuestions.catalog(context, {
+    liveAvailable: activeGame.live && usage.mcpRemaining > 0, game: activeGame.id,
+  });
   // Vary the first paint: a random 3 from the relevant top of the catalog, so
   // reloading the page doesn't show the same starters every time. The client
   // reshuffles again on "new question" and when the browse panel opens.
@@ -852,7 +881,10 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
   <div class="ask-shell">
     <header class="ask-head">
       <button class="iconbtn menubtn" id="menu" aria-label="Menu">${icon("menu", 16) || "≡"}</button>
-      <span class="ask-brand">${mark(26)}Ask <em>· A House Divided</em></span>
+      <span class="ask-brand">${mark(26, activeGame.id)}Ask <span class="gamesw" id="gamesw">
+        <button type="button" id="gamesw-btn" aria-haspopup="true" aria-expanded="false" aria-label="Switch game"><span class="dot">·&nbsp;</span><span class="gname" id="gamesw-name">${esc(activeGame.name)}</span><span class="cv"></span></button>
+        <span class="gmenu" id="gamesw-menu"></span>
+      </span></span>
       <span class="ask-head-right">
         <button class="iconbtn" id="settings" type="button" aria-label="Settings" title="Settings">${icon("settings", 16)}</button>
       </span>
@@ -945,6 +977,8 @@ var LIVE_ICON=${JSON.stringify(icon("zap", { size: 10 }))},ARROW_ICON=${JSON.str
 var MODEL_NAMES=${JSON.stringify(require("./models").displayMap())};
 var VIZ_ALLOWED=${entitlement?.visualizations ? "true" : "false"};
 var MODEL_URLS=${JSON.stringify(require("./models").urlMap())};
+var GAMES=${JSON.stringify(gameRegistry.publicList())};
+var ACTIVE_GAME=${JSON.stringify(activeGame.id)};
 var f=document.getElementById('f'),q=document.getElementById('q'),go=document.getElementById('go'),
     out=document.getElementById('out'),hero=document.getElementById('hero'),body=document.getElementById('body'),
     live=document.getElementById('live'),visualizations=document.getElementById('visualizations'),convs=document.getElementById('convs'),
@@ -959,6 +993,62 @@ var DOC_TITLE=document.title;
 var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
 var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard'};
+
+// ---- game switcher ----------------------------------------------------------
+// The selection is sticky per browser and can be set by ?game= so the docs Ask
+// button lands on the right game. The server still overrides it when a question
+// names a different game outright, so this is a default, not a hard filter.
+function gameById(id){for(var i=0;i<GAMES.length;i++){if(GAMES[i].id===id)return GAMES[i];}return GAMES[0];}
+var GAME=gameById(ACTIVE_GAME);
+var gamesw=document.getElementById('gamesw'),gameswBtn=document.getElementById('gamesw-btn'),
+    gameswMenu=document.getElementById('gamesw-menu'),gameswName=document.getElementById('gamesw-name');
+function renderGameMenu(){
+  if(!gameswMenu)return;
+  var h='<span class="ghd">Lakeside Games</span>';
+  for(var i=0;i<GAMES.length;i++){
+    var g=GAMES[i];
+    h+='<button type="button" data-game="'+esc(g.id)+'" class="'+(g.id===GAME.id?'on':'')+'">'
+      +'<img src="'+(g.id==='ahd'?'/ahd-logo.png':'/game-logo/'+esc(g.id)+'.png')+'" alt="">'
+      +esc(g.short)+(g.id===GAME.id?'<span class="gtick">&#10003;</span>':'')+'</button>';
+  }
+  h+='<span class="gnote">Live game data is available for A House Divided only. The others are answered from their code and docs.</span>';
+  gameswMenu.innerHTML=h;
+}
+function applyGame(){
+  if(gameswName)gameswName.textContent=GAME.name;
+  var bm=document.getElementById('brand-mark');
+  if(bm)bm.src=GAME.id==='ahd'?'/ahd-logo.png':'/game-logo/'+GAME.id+'.png';
+  // A single-player game has no world to query, so the live toggle is not a
+  // choice the player can meaningfully make. Disable it and say why.
+  if(live){
+    var row=live.closest('label')||live.parentElement;
+    if(!GAME.live){live.checked=false;live.disabled=true;if(row){row.style.opacity='.45';row.title='No live data: '+GAME.name+' is single-player.';}}
+    else{live.disabled=false;if(row){row.style.opacity='';row.title='';}}
+  }
+  document.title=GAME.id==='ahd'?DOC_TITLE:('Ask · '+GAME.name);
+  renderGameMenu();
+}
+if(gameswBtn){
+  gameswBtn.addEventListener('click',function(e){
+    e.stopPropagation();
+    gamesw.classList.toggle('open');
+    gameswBtn.setAttribute('aria-expanded',gamesw.classList.contains('open')?'true':'false');
+  });
+  gameswMenu.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-game]');
+    if(!b)return;
+    var picked=gameById(b.getAttribute('data-game'));
+    if(picked.id===GAME.id){gamesw.classList.remove('open');return;}
+    localStorage.setItem('ask.game',picked.id);
+    // Reload rather than swap in place: the starters, hero copy and brand are
+    // rendered server-side per game, so a client-only swap would leave the old
+    // game's suggested questions on screen.
+    location.href=picked.id==='ahd'?'/':'/?game='+encodeURIComponent(picked.id);
+  });
+  document.addEventListener('click',function(e){if(gamesw&&!gamesw.contains(e.target))gamesw.classList.remove('open');});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&gamesw)gamesw.classList.remove('open');});
+}
+applyGame();
 localStorage.removeItem('ask.model');
 visualizations.checked=VIZ_ALLOWED&&localStorage.getItem('ask.visualizations')==='true';
 visualizations.addEventListener('change',function(){localStorage.setItem('ask.visualizations',String(visualizations.checked));});
@@ -1443,7 +1533,7 @@ function submit(){
     else { ctrl.abort(); } };
   fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
     signal:ctrl.signal,
-    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId})})
+    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId,game:GAME.id})})
   .then(function(r){
     // Non-streaming replies (cache hits, quota refusals) still come back as JSON.
     var ct=r.headers.get('content-type')||'';
