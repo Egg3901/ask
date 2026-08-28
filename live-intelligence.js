@@ -168,8 +168,14 @@ function namedCorporations(question) {
 
   const patterns = [
     /\bwhy\s+(?:is|are)\s+(.+?)\s+(?:valued|worth|performing|doing)\b/i,
-    /\b(?:compare|comparison of)\s+(.+?)\s+(?:with|to|against|versus|vs\.?)\s+(.+?)(?:[?.!]|$)/i,
+    /\b(?:compare|comparison of)\s+(.+?)\s+(?:with|to|and|against|versus|vs\.?)\s+(.+?)(?:[?.!]|$)/i,
     /\b(?:balance sheet|financials|valuation|market cap)\s+(?:of|for)\s+(?:the\s+)?(.+?)(?:\s+corporation)?[?.!]*$/i,
+    // Bare head-to-head: "Tinky corp vs meyer corp: which is the better buy".
+    // Only when a side carries a corp word — otherwise "US vs USSR" would
+    // extract countries as companies. Resolution still guards with the
+    // entity-match floor and the ambiguity branch downstream.
+    /(\b[\w'&. -]*?\b(?:corporation|corp\.?|company|inc\.?|holdings)\b[\w'&. -]*?)\s+(?:versus|vs\.?)\s+([\w'&. -]+?)(?=\s*[:?.!,]|$)/i,
+    /([\w'&. -]+?)\s+(?:versus|vs\.?)\s+([\w'&. -]*?\b(?:corporation|corp\.?|company|inc\.?|holdings)\b[\w'&. -]*)(?=\s*[:?.!,]|$)/i,
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);

@@ -1,0 +1,241 @@
+[
+  {
+    "id": "wealth-trend",
+    "question": "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
+    "tier": "flash",
+    "model": "deepseek-v4-flash:cloud",
+    "seconds": 29,
+    "correctionsInjected": [
+      "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
+      "show me my net worth / wealth / savings / income right now"
+    ],
+    "scoutTools": [],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "Egg's wealth is flat right now — there's no change to visualize in the recent window.\n\n**Current standing (turn 452, 1961)**\n\n| Component | Value (₳) |\n|---|---|\n| Liquid cash | 570,419.78 |\n| Savings | 0.00 |\n| Net worth | 570,419.78 |\n| Bond holdings | 0.00 |\n| Total assets | 570,419.78 |\n\nThe recent history window (turns 432–452) shows an **empty timeline**: zero interest earned, zero trades, and no per-turn movement recorded. With savings at 0 ₳ and no bond or index positions, there is nothing compounding, so net worth has simply sat at ~570,420 ₳ the whole window. That also means there's no \"largest change\" to chart — the single biggest move over those 20 turns was nothing.\n\nTwo things worth knowing:\n- Your `campaignFunds` of 5,250,000 ₳ is operating/political money, not personal wealth, and is deliberately excluded from net worth.\n- Since your savings balance is 0, no high-yield savings interest can accrue, which is why `totalInterestEarnedAnchor` is 0.00.\n\nIf you want movement in this number, the lever is opening a high-yield savings account (US is forex-active, so it's available) and letting the quarterly credit compound — otherwise your wealth will keep holding steady at the cash figure above."
+  },
+  {
+    "id": "war-winner",
+    "question": "Who is winning the war in Germany right now, and what has it cost both sides so far?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 31,
+    "correctionsInjected": [
+      "Who is winning the current war going on?",
+      "What is the strongest military in the game right now?"
+    ],
+    "scoutTools": [
+      "wars",
+      "wars",
+      "game_overview"
+    ],
+    "liveTargeted": false,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "## The War for Germany (turn 452, 1961)\n\n**The United States is currently leading**, but only narrowly. Side A (US) holds **54.98%** of the front vs. Side B (DD + RU) at **45.02%** — a roughly 10-point edge after 37 turns of fighting (war started turn 415).\n\n> The war is frozen onto the German Question crisis. Whoever wins it settles Germany outright, regardless of the underlying crisis index (see `src/lib/settlement/settleFromConflict.ts`).\n\n### Front control\n\n| Side | Roster | Control share |\n|---|---|---|\n| A — United States | US | 54.98% |\n| B — East Germany + Soviet Union | DD, RU | 45.02% |\n\n### Cost so far (last 5 reported battles, turn 441–448)\n\n| Country | Battles fought | Total reported losses |\n|---|---|---|\n| United States | 5 | 15,319 |\n| Soviet Union | 4 | 20,300 |\n| East Germany | 2 | 2,652 |\n\nThe Soviets have taken the worst of it on personnel. East Germany's losses look light partly because they've only been on the receiving end of two of these engagements.\n\n### How to read who's ahead\n\n- **Ground share** is the headline number — it has drifted from an even 50/50 split (the baseline the German Question sets when it attaches; see `mergedTheatreControl` in `src/lib/settlement/attachToWar.ts`) to roughly 55/45 in the US's favor.\n- **Recent verdicts are mixed.** Turn 448 was a US defensive *Victory* (side A lost 2.1% ground, so the attacker — the Warsaw side — pushed them back a touch). Turn 444 and 442 were US *Rout* / *Costly Defeat* results, meaning the Soviets gained ground those turns. The Pyrrhic Victories on 441 (both directions) reflect heavy losses on the winning side without decisive ground.\n- **Casualty ratio** over the last 5 battles: US 15,319 vs. Warsaw 22,952. The US is winning the ground war and paying less in blood to do it.\n\n### What \"winning\" means here\n\nThis war is an `interstate` conflict with `regime_change` as the war goal, and it's the attached war for the German Question crisis. Per `src/lib/settlement/settleFromConflict.ts`, the moment the war resolves, the crisis resolves with it — and the **war decides the settlement outright, not the crisis index**. So the US currently being ahead on the front is the same as the US currently being ahead on whether Germany goes to the West.\n\nThe war is *active*, not in terms negotiation, so the freeze still holds. If the front runs to either pole, the war resolves on the next tick and the crisis settles to whichever bloc won the war."
+  },
+  {
+    "id": "war-bridge",
+    "question": "If the US wins the war for Germany, what happens to my defense corporations' contracts and revenue afterwards?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 24,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "## War outcome and defense corporations\n\nA US victory in Germany keeps your defense sector operating under a friendly regime, but the specific revenue effect flows through the **post-war government contracts** mechanic, not directly through a \"war end\" event. Each country in Germany (BRD/DDR/DE) has a **government** that holds its own defense procurement contracts; ownership of Germany shifts those contracts to the winning power's bloc, not to the US treasury.\n\n### What actually changes for your US defense corporations\n\n- **Domestic US contracts (DoD, procurement) are untouched.** Your corporations' US revenue stream continues unchanged regardless of the German war's outcome, because that revenue is set by the US federal budget's `defense` line and US-only contracts.\n- **Occupation/basing revenue depends on your corporation's country, not the player's.** A corporation headquartered in the US keeps US contracts. A corporation headquartered in the winning German state shifts its surviving contracts to the new government's budget.\n- **Margin bonuses from defense tech you've already researched are permanent** — they don't expire at war's end. The 1940–1989 nodes (Stealth Materials, Networked Warfare, etc. in `src/lib/constants/techTree/nodes.ts`) add permanent `marginBonus` and `growthCostReduction` to anything you have already built.\n- **Losing-side corporations can be expropriated or contract-cancelled** by the winning government, which destroys their in-country revenue. If one of your corporations is headquartered in a country on the losing side and you don't have defensive controls in place, expect revenue loss rather than gain.\n\n### What does *not* happen\n\n- No automatic \"war reparations\" or new contract bundle is granted to the winner's corporations. The winning bloc's corporations can bid on the new government's budget, but only via the normal contract competition system, not as a windfall.\n- No \"Germany\" budget line is created for the US. Germany's finances remain German; US corporations can only earn from Germany by being domiciled there or by holding an in-country subsidiary.\n\n> **Key takeaway:** your US-headquartered defense corporations are insulated from the German war's outcome. Only corporations domiciled in a defeated German state risk losing in-country contracts, and any new revenue is won through the normal bidding system, not awarded automatically.\n\nThe decisive pre-war decision is where each of your defense corporations is **domiciled** and which German state's budget it has bid into — that's the figure that determines your exposure. The corporation-management screen and each corp's contract page show the current domicile and active government contracts."
+  },
+  {
+    "id": "mercenaries",
+    "question": "How do I recruit mercenaries to fight for my country?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 19,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": false,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "## A House Divided does not have mercenary recruitment\n\nThere is no mercenary unit type, no PMC marketplace, and no \"hire a foreign legion\" action in the game. The closest equivalent is the **Foreign Legion** itself, but it is **not player-recruitable** in the current build — it shows up as a seeded unit class for certain nations in certain eras, you don't build it on demand.\n\n## What actually gets troops into your war\n\nAll the playable recruitment paths run through your **defence office → Military** screen and are run-of-the-mill national formations:\n\n- **Infantry** — the cheap mass that holds ground.\n- **Armour** — the breakthrough arm.\n- **Special forces** — small, expensive, edge players.\n- **National Guard / reserve formations** — homeland garrison, always available, cheap.\n\nManpower is the binding constraint, not gold. If the manpower pool is empty, the recruit order is refused outright even if your treasury could write a blank cheque.\n\n## Ways to fight with borrowed flag\n\nIf \"mercenaries\" really means \"troops that aren't strictly mine\", the game's actual mechanics for that are:\n\n- **Allied unit assignments under a Command** — assign your units to a general who is then posted into a coalition conflict.\n- **Joining a belligerent's Side A or Side B** — your country formally enters the war and brings its own units under a shared command structure.\n- **Proxy conflicts** — the wiki notes a conflict can be *hosted* in a country where neither belligerent is. That is the game's mechanism for \"someone else fights on my soil\", not \"someone else's army fights my war for me\".\n\n> Bottom line: there is no mercenary pipeline to buy. The lever you actually have is the defence procurement contract system (in `src/lib/seeds/wiki/content/militaryUnits.ts`) — sign a deal with a domestic defence sector, build a national arsenal, and recruit against it."
+  },
+  {
+    "id": "strongest-military",
+    "question": "What is the strongest military in the game right now?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 33,
+    "correctionsInjected": [
+      "What is the strongest military in the game right now?",
+      "Who is winning the current war going on?"
+    ],
+    "scoutTools": [
+      "wars",
+      "game_overview",
+      "wars"
+    ],
+    "liveTargeted": false,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "Strength rankings are deliberately hidden from players in this game — commanders never see another country's actual force totals, only coarse bands like \"stronger force\" or \"evenly matched\" (src/lib/military/forecastFog.ts). So no public, current answer exists to that exact question.\n\nWhat you *can* read off the public record right now is who's actually fighting, and how it's going, for the only active war on the map:\n\n| War | Side A | Side B | Front control (A / B) | Trend (last battles) |\n|---|---|---|---|---|\n| The War for Germany (since turn 415) | United States | East Germany + USSR (coalition) | **54.98 / 45.02** | East‑led attacks losing ground; the last battle (turn 448) was a Side A \"Victory\" with Side A ground gain −2.1 — i.e. the coalition offensive was thrown back. |\n\nSo on the only field where strength is observable, the **United States** is currently ahead in the War for Germany, holding about 55% of the host territory and having just won a battle against the DD/RU coalition. Casualties on the public ledger so far are lopsided against the attackers: US 2,579 lost in turn 448 vs. DD 2,247 + RU 7,080, and the four preceding battles split 2 Pyrrhic Victories / 1 Rout / 1 Costly Defeat, mostly with the US absorbing but the coalition failing to push ground.\n\nOutside this theater the public record shows no other active wars — the Cold War tension meter is pegged at 100 and several earlier campaigns (Berlin, Suez aftermath, oil disruption, nuclear incident, Congo) are in `settlement` with momentum at or near 100, so they're not currently being fought.\n\n> Direct \"strongest military in the world\" rankings are intentionally classified; use the active war + battle ledger as the proxy."
+  },
+  {
+    "id": "ca-unemployment",
+    "question": "How has unemployment in California changed over the last year, and what explains the move?",
+    "tier": "flash",
+    "model": "deepseek-v4-flash:cloud",
+    "seconds": 28,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": true,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": [
+        "src/lib/economy/outlook.ts"
+      ]
+    },
+    "answer": "The current live snapshot only carries country-level unemployment, not state-level — the US national rate is **10.06%** as of turn 452 (1961). California's own rate and its year-over-year history aren't in this snapshot; that figure lives on the California state economy page, so I can't give you the specific move.\n\nWhat I can tell you is the mechanic that drives any move you see. The game derives an **economic outlook verdict** from three inputs — GDP growth, inflation vs. target, and the unemployment *trend* (see `src/lib/economy/outlook.ts`). The verdict is one of five states:\n\n| Verdict | Trigger |\n|---|---|\n| CONTRACTING | Negative GDP growth (takes precedence even with hot prices — stagflation) |\n| OVERHEATING | Strong growth + inflation far above target |\n| EXPANDING | Growth well above trend + contained prices |\n| STEADY | Growth near trend |\n| COOLING | Positive but well-below-trend growth |\n\nSo to explain a move in California, read its GDP growth, inflation, and unemployment trend off the state page — those three numbers produce the verdict you're seeing, and a rising unemployment trend pushes the verdict toward COOLING or CONTRACTING.\n\n> Note: the outlook function returns no verdict at all if GDP growth or inflation is missing, so if the state page shows a blank outlook, one of those inputs isn't being recorded."
+  },
+  {
+    "id": "us-inflation-series",
+    "question": "Show me the trend of US national inflation over the past 50 turns.",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 26,
+    "correctionsInjected": [
+      "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
+      "show me my net worth / wealth / savings / income right now"
+    ],
+    "scoutTools": [],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "I don't have US inflation history for the past 50 turns in the data I can see right now — only a current snapshot (US at **5.14%** in turn 452) and the country-level comparison above. To chart a 50-turn US inflation trend, the game's per-country inflation rate history series is what I would need.\n\n#### What the code says the trend looks like\n\nUS inflation is recomputed each turn in `src/lib/turn/inflationRecalc.ts` from the same per-driver breakdown in `src/lib/budget/inflation.ts`, so any 50-turn curve is a sum of the following pp contributions on top of the 2.0% target:\n\n| Driver | Sign convention | What moves it |\n|---|---|---|\n| Unemployment gap vs NAIRU (5%) | tight labor → +pp | asymmetric (steeper when slack) |\n| GDP growth gap vs trend (2.0%) | hot → +pp | asymmetric (steeper when cold) |\n| Prime rate vs neutral (trailing 12-turn weighted) | high → −pp | `transmissionMultiplier` scales by central-bank scrutiny |\n| Fiscal deficit/surplus (% GDP) | deficit → +pp | floor/ceiling on extreme values |\n| Tariff vs baseline | high → +pp | — |\n| Wage growth vs 2.5% baseline | high → +pp | `WAGE_INERTIA = 0.6` smooths it |\n| Commodity prices (½-yr lookback) | rising → +pp | annualized from `COMMODITY_INFLATION_LOOKBACK_TURNS` |\n| FX depreciation | weak currency → +pp | — |\n| Net savings outflow | outflow → +pp | — |\n| Housing cost-of-living deviation | high → +pp | — |\n| Policy stance + M2 excess | expansionary → +pp | — |\n| Inertia toward previous inflation | smoothing | — |\n\n> The final rate is the sum of all driver contributions, then floored at 0% and capped at country-specific ceilings.\n\n#### What the current US setup implies\n\nUS today is at **5.14%** with prime rate presumably set to fight it. The `corridorVerdict` in `src/lib/centralBank/rateCorridor.ts` would read the rate-vs-inflation gap as either restrictive (>+0.5pp), neutral (±0.5pp), or accommodative (<−0.5pp) — that's the cleanest one-line read on whether the bank is \"ahead\" of inflation.\n\nIf you can open the **National Economy → Economic Trends** page for the US and pull the inflation series, I can read it back to you and name which drivers (wage, commodity, FX, fiscal) are doing the work across those 50 turns."
+  },
+  {
+    "id": "cloture",
+    "question": "Does cloture need 60 votes in the Senate?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 25,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": false,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "## Yes — but it depends on how you count\n\nIn the US Senate, invoking cloture on a filibustered bill needs **3/5 of votes cast**, not 60 votes or 2/3 of the Senate. That distinction matters because the threshold shifts with who actually shows up to vote.\n\n| Scenario | Threshold to invoke cloture | Display on the bill page |\n|---|---|---|\n| No filibuster active | Simple majority (For > Against) | No flag shown |\n| Filibuster invoked, Senate on the floor | 3/5 of votes cast (≈60%) | \"⚑ Filibustered\" badge + 60% line |\n| Nationalize/privatize bill (no filibuster) | 2/3 of seats (≈67%) | \"Two-thirds supermajority to pass\" |\n\n## What the code actually does\n\nThe Senate cloture rule is wired up in `src/lib/turn/billLifecycle/configs/us.ts` as `passRule: \"filibusterCloture\"`, and the bill page in `src/app/congress/bills/[id]/page.tsx` renders it as:\n\n- `heroRequiredPct = 60` when the bill is filibustered and the Senate is the current chamber\n- `heroRequiredPctOfCast = true` — meaning the 60% is measured against **votes actually cast**, not seats or even voting-eligible members\n\nSo if only 51 senators vote, cloture needs 31 (60% of 51), not 60. Abstentions are neutral, the same as everywhere else in the chamber.\n\n> A filibuster costs the invoking senator 25 action points plus 5 National Political Influence, and the Senate's voting deadline extends by ~12 hours scaled by the senator's Statecraft stat. The cloture threshold only applies to the Senate — a filibustered bill still clears the House on a simple majority.\n\n> The full filibuster flow lives in `src/lib/legislature/commands/nationalBillActions.ts`; cloture can't be invoked on bills in `active_both` (concurrent voting), since there's no single chamber clock to delay."
+  },
+  {
+    "id": "corp-compare",
+    "question": "Tinky corp vs meyer corp: which is the better buy right now?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 11,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": true,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "I can't answer that — the live lookup for \"Tinky Corporation\" returned `corporation not found`, so I have no current figures for your firm. Without your own share price, market cap, revenue, income, or float, there's nothing to put on one side of the comparison.\n\nTo give you a real pick, I need the **Tinky Corporation** stock page open: I'll read your current price, market cap, public float, latest revenue, net income, credit rating, and sector benchmark the same way I'd read Meyer Corporation's, and then rank them on the public exchange.\n\n> A stock pick here is a read of today's exchange-visible numbers, not a promise — markets move every turn.\n\nOpen the **Tinky Corporation** market page (or tell me its exact in-game ticker / ID) and I'll come back with a side-by-side table — Tinky vs Meyer, both on revenue, revenue per stake, market cap, float, and sector rank — and name which one the public numbers favor and why."
+  },
+  {
+    "id": "division-cost",
+    "question": "How much would it cost me to raise 3 armored divisions at tech tier 2, and how long until they are combat ready?",
+    "error": "all models failed (minimax/minimax-m3-free, deepseek-v4-flash:cloud): deepseek-v4-flash:cloud produced no token in 18000ms"
+  },
+  {
+    "id": "spy-savings",
+    "question": "Show me exactly how much money the richest player in Germany has in savings.",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 19,
+    "correctionsInjected": [
+      "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
+      "show me my net worth / wealth / savings / income right now"
+    ],
+    "scoutTools": [],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": true,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "I can't see German player savings in the live snapshot — the supplied evidence has no `top-players` or character data for Germany, so I have no concrete figure to report.\n\nTo settle this: the in-game **Leaderboard** screen (or the wealth-leader ranking on the Stock Exchange page) shows richest players by country, with their savings and net worth broken out. That screen is the one place this number is exposed publicly.\n\nFor what the savings value actually *means* in the world:\n\n- Savings are held per-currency in `currencyBalances.savings`, denominated in the **local home currency** of the account holder (Germany → EUR). The Leaderboard converts to the anchor (₳) for ranking.\n- Interest is paid on the **real** rate: the central bank's `primeRate` minus that jurisdiction's realized inflation, from `src/lib/turn/savingsInterestTurn.ts`. So a DE account with €100,000 in savings earns less in nominal terms when German inflation is high, and more when it's low.\n- Accrual is **quarterly compounding** (every 12 turns). The per-turn phase only stashes the interest into `currencyBalances.pendingSavingsInterest`; the actual credit to your savings balance and the `interestEarned` lifetime counter happen at the quarter flush. That's the moment compounding kicks in.\n- Two payer paths exist. Deposits whose `savingsHolder` is a **private bank** are paid out of that bank's own `cashReserves` in `bankingTurn`. Deposits held at the **central bank** are paid as money creation — the ECB's `externalBroadMoney` and `netMoneyCreatedLifetime` both rise by the payout. Same credit to the player; different effect on the money supply.\n- EUR-area countries (IE included) roll up to the shared ECB doc for that book-keeping, per the same file.\n\n> If you want a single number, the Leaderboard's per-country filter on Germany is the only place it's actually printed; I just don't have that view in the evidence for this turn."
+  },
+  {
+    "id": "cross-game",
+    "question": "In Grand Century, how does the economy simulation differ from A House Divided's?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 14,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": false,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "I can only answer questions about **A House Divided**. Grand Century is a different game, so I won't try to compare the two — if you meant to ask about A House Divided, use the game switcher to bring me into scope and I'll help."
+  }
+]

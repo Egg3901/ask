@@ -548,3 +548,16 @@ test("grounds a generic public sector leaderboard without requiring a linked cor
   assert.match(context, /VISUALIZATION DATA/);
   assert.doesNotMatch(context, /not linked to a corporation/i);
 });
+
+test("extracts both sides of a bare head-to-head when one carries a corp word", () => {
+  assert.deepEqual(
+    mcp.namedCorporations("Tinky corp vs meyer corp: which is the better buy right now?"),
+    ["Tinky", "meyer"],
+  );
+  assert.deepEqual(
+    mcp.namedCorporations("Compare Tinky Winky Corporation and Meyer Corporation"),
+    ["Tinky Winky", "Meyer"],
+  );
+  // Countries are not companies: the bare vs-pattern must not fire without a corp word.
+  assert.deepEqual(mcp.namedCorporations("US vs USSR who wins the war"), []);
+});
