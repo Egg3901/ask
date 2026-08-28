@@ -307,6 +307,7 @@ const server = http.createServer(async (req, res) => {
             reports: store.reportClusters(),
             modelStats: store.adminModelStats(),
             correctionRows: corrections.list(),
+            health: store.digest(Date.now() - 7 * 864e5),
           }));
     }
 
@@ -320,6 +321,19 @@ const server = http.createServer(async (req, res) => {
         summary7d: store.auditSummary(Date.now() - 7 * 864e5),
         audits: store.recentAudits(limit),
       });
+    }
+
+    // Health rollup over a window (default 7 days): serving stats per model,
+    // guard-trip counts, the retrieval-miss work queue, and the correction
+    // pipeline state. Staff sessions or the internal digest secret (the weekly
+    // Discord digest runs from cron, which has no browser session).
+    if (req.method === "GET" && p === "/console/health.json") {
+      const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+      const supplied = Buffer.from(bearer), expected = Buffer.from(ASK_SECRET);
+      const internal = Boolean(ASK_SECRET) && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+      if (!internal && (!session || session.context?.isAdmin !== true)) return json(res, session ? 403 : 401, { error: "Staff only." });
+      const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 90);
+      return json(res, 200, store.digest(Date.now() - days * 864e5));
     }
 
     // The switcher's contents. Public: it names games and their public URLs and
@@ -669,7 +683,7 @@ const server = http.createServer(async (req, res) => {
 
         const navBlock = game.multiplayer ? navigation.block(question) : "";
         let raw = "", failed = null, failedBusy = false, llmUsage = {}, servedModel = route.model;
-        let finishReason = null;
+        let finishReason = null, fellThrough = null;
         const genStart = Date.now();
         let firstTokenMs = null;
         try {
@@ -698,7 +712,10 @@ const server = http.createServer(async (req, res) => {
           // The chain may have fallen through to a lower-scored model, so record
           // what actually answered rather than what routing first asked for.
           servedModel = out.model || route.model;
-          if (out.tried?.length) console.error("[ask] fell through:", out.tried.map(t => `${t.model}(${t.error})`).join(" | "), "->", servedModel);
+          if (out.tried?.length) {
+            fellThrough = out.tried.map(t => t.model).join(",");
+            console.error("[ask] fell through:", out.tried.map(t => `${t.model}(${t.error})`).join(" | "), "->", servedModel);
+          }
           // One concise line per answer so slow models, fall-throughs and client
           // disconnects are visible without turning on verbose logging.
           console.log(`[ask] served=${servedModel} tier=${route.tier} live=${useMcp ? 1 : 0} firstTokenMs=${firstTokenMs} totalMs=${Date.now() - genStart} outTok=${llmUsage.completion_tokens || 0} clientGone=${clientGone ? 1 : 0}`);
@@ -754,7 +771,11 @@ const server = http.createServer(async (req, res) => {
           matchedCorrections.length ? corrections.block(matchedCorrections) : "",
           hits?.context, liveBlock, investigation?.text,
         ].filter(Boolean).join("\n\n");
-        if (deepAnswer && evidenceForCheck) {
+        // Deep AND pro: deep is where bridging invention was measured, but pro
+        // exists for exactly the multi-system questions that invite it, and a
+        // check that only runs on ~5% of traffic protects nobody. Flash gets
+        // the async variant below instead of a synchronous wait.
+        if ((deepAnswer || route.tier === "pro") && evidenceForCheck) {
           try {
             groundingNotes = await grounding.check(answer, evidenceForCheck);
             answer += grounding.note(groundingNotes);
@@ -809,7 +830,8 @@ const server = http.createServer(async (req, res) => {
           question, answer, areas: JSON.stringify(areas), citations: JSON.stringify(citations),
           used_mcp: useMcp ? 1 : 0, cached: 0, cost, followup,
           tokens_in: Number(llmUsage.prompt_tokens || 0), tokens_out: Number(llmUsage.completion_tokens || 0), model: servedModel,
-          plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence), ts: Date.now(),
+          plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence),
+          ttft_ms: firstTokenMs, total_ms: Date.now() - genStart, fell_through: fellThrough, ts: Date.now(),
         });
 
         // A refusal despite live evidence is a confident failure — seed a
@@ -821,6 +843,23 @@ const server = http.createServer(async (req, res) => {
           corrections.draft({ question, reason: "described its own evidence to the player instead of answering", sourceAnswerId: answerId }).catch(() => {});
         } else if (truncated) {
           corrections.draft({ question, reason: "answer stopped mid-sentence", sourceAnswerId: answerId }).catch(() => {});
+        }
+
+        // Flash gets the claim audit too, off the request path: the helper can
+        // take 10s+ and a flash player already has the whole answer on screen.
+        // The streamed text can no longer be annotated, so a flagged claim
+        // instead patches the stored row, evicts the shared cache entry (a
+        // code-only flash answer is exactly the kind that gets cached, so one
+        // hallucination would serve every future asker), and seeds a draft.
+        if (!deepAnswer && route.tier !== "pro" && evidenceForCheck) {
+          Promise.resolve().then(async () => {
+            const claims = await grounding.check(answer, evidenceForCheck);
+            if (!claims?.length) return;
+            store.updateGrounding(answerId, claims);
+            store.evictCache(ckey);
+            console.warn(`[ask] async grounding flags answerId=${answerId} claims=${JSON.stringify(claims)}`);
+            return corrections.draft({ question, reason: `ungrounded claims: ${claims.join("; ")}`, sourceAnswerId: answerId });
+          }).catch(() => { /* advisory only */ });
         }
 
         // A report gets its own page. Title comes from the model's own H1, with

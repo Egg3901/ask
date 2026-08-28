@@ -1802,7 +1802,7 @@ function reportView(report) {
   }) + jargonScripts());
 }
 
-function consolePage({ identity, context, users = [], selected = null, reports = [], modelStats = [], correctionRows = [] }) {
+function consolePage({ identity, context, users = [], selected = null, reports = [], modelStats = [], correctionRows = [], health = null }) {
   const models = require("./models");
   const money = n => `$${Number(n || 0).toFixed(Number(n || 0) < 0.01 ? 4 : 2)}`;
   const when = ts => ts ? new Date(ts).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "Never";
@@ -1835,6 +1835,29 @@ function consolePage({ identity, context, users = [], selected = null, reports =
     <h2 style="margin-top:18px">Cost by provider</h2>
     <div style="overflow:auto"><table class="console-table"><thead><tr><th>Provider</th><th>Questions</th><th>Tokens in / out</th><th>Cost</th></tr></thead><tbody>${providerRows}</tbody></table></div>
   </section>`;
+  // Serving health over the last 7 days, from recorded traffic: what actually
+  // answered and how fast, which guards tripped, and the files retrieval keeps
+  // failing to hand over (each one is a concrete chunking/embedding fix).
+  const ms = v => v == null ? "—" : `${(v / 1000).toFixed(1)}s`;
+  const servingRows = (health?.models || []).map(m => `<tr>
+    <td>${esc(models.displayFor(m.model))}<div class="console-muted">${esc(m.model)}</div></td>
+    <td>${num(m.served)}</td><td>${num(m.viaFallthrough)}</td>
+    <td>${esc(ms(m.ttftP50))} / ${esc(ms(m.ttftP90))}</td>
+    <td>${num(m.flagged)}</td>
+    <td>${num(m.up)} 👍 / ${num(m.down)} 👎</td>
+  </tr>`).join("") || `<tr><td colspan="6" class="console-muted">No telemetry yet — recorded from the first answer after 2026-08-28.</td></tr>`;
+  const missRows = (health?.retrievalMisses || []).map(r => `<tr>
+    <td><code style="font-size:.72rem">${esc(r.path)}</code></td><td>${num(r.misses)}</td><td class="console-muted">${esc(when(r.last_ts))}</td>
+  </tr>`).join("") || `<tr><td colspan="3" class="console-muted">No misses recorded. Good.</td></tr>`;
+  const issueRows = (health?.issues || []).map(i => `<tr><td>${esc(i.issue)}</td><td>${num(i.n)}</td></tr>`).join("")
+    || `<tr><td colspan="2" class="console-muted">No guard trips.</td></tr>`;
+  const healthSection = health ? `<section class="console-card"><h2>Serving health (7 days)</h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>Model</th><th>Served</th><th>Via fall-through</th><th>First token p50 / p90</th><th>Guard-flagged</th><th>Verdicts</th></tr></thead><tbody>${servingRows}</tbody></table></div>
+    <h2 style="margin-top:18px">Retrieval misses — files answers cited that retrieval never supplied</h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>File</th><th>Misses</th><th>Last</th></tr></thead><tbody>${missRows}</tbody></table></div>
+    <h2 style="margin-top:18px">Guard trips</h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>Issue</th><th>Count</th></tr></thead><tbody>${issueRows}</tbody></table></div>
+  </section>` : "";
   const totalQuestions = users.reduce((n, u) => n + Number(u.question_count || 0), 0);
   const totalReports = users.reduce((n, u) => n + Number(u.report_count || 0), 0);
   const totalCost = users.reduce((n, u) => n + Number(u.estimated_cost || 0), 0);
@@ -1874,6 +1897,7 @@ function consolePage({ identity, context, users = [], selected = null, reports =
       <div class="console-stat"><small>Rough API cost</small><b>${money(totalCost)}</b></div>
     </div>
     <p class="console-muted" style="font-size:.7rem;margin:-8px 0 14px">Cost is actual token usage × provider rate. Google Gemini (free tier) and OpenRouter free/stealth slugs bill nothing, so they are $0 — the real spend is the DeepSeek fallback, priced at its cache-miss list rate. Cached reads carry no tokens or cost.</p>
+    ${healthSection}
     ${modelUsageSection}
     <div class="console-grid"><section class="console-card"><h2>Users</h2><div style="overflow:auto"><table class="console-table"><thead><tr><th>User</th><th>Questions</th><th>Live</th><th>Reports</th><th>Tokens in / out</th><th>Cost</th><th>Last active</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="console-muted">No users yet.</td></tr>`}</tbody></table></div></section>
       <section class="console-card"><h2>User profile and questions</h2>${detail}</section></div>
@@ -1893,7 +1917,7 @@ function consolePage({ identity, context, users = [], selected = null, reports =
         ${drafts.map(c => `<div class="console-question console-draft" data-draft="${c.id}">
           <b>${esc(c.question)}</b>
           <div class="console-answer console-muted" style="font-size:.75rem">${esc(c.correction)}</div>
-          <textarea class="draft-body" placeholder="Write the verified truth for the model, then activate." rows="2" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:transparent;color:inherit"></textarea>
+          <textarea class="draft-body" placeholder="Write the verified truth for the model, then activate." rows="2" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:transparent;color:inherit">${esc((String(c.correction || "").match(/^\[DRAFT\] Proposed \(auto[^:]*\): ([\s\S]*?)(?:\n\nFlagged because:|$)/) || [])[1] || "")}</textarea>
           <small>${esc(when(c.created))} · from answer #${esc(String(c.source_answer_id || "?"))} · <a href="#" class="console-replay draft-activate" data-draft-id="${c.id}">Activate</a> · <a href="#" class="console-replay" data-corr-toggle="${c.id}" data-corr-active="0">Discard</a></small>
         </div>`).join("")}</div>` : "";
         const settledBlock = settled.map(c => `<div class="console-question${c.active ? "" : " console-muted"}">

@@ -128,6 +128,14 @@ try { db.exec("ALTER TABLE asks ADD COLUMN feedback_source TEXT"); } catch { /* 
 try { db.exec("ALTER TABLE asks ADD COLUMN plan TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN validation TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN evidence TEXT"); } catch { /* already migrated */ }
+// Serving telemetry. These numbers were computed on every answer and logged to
+// journalctl, which meant model quality questions got answered by hand-run
+// benches instead of the production traffic that already contained the answer.
+try { db.exec("ALTER TABLE asks ADD COLUMN ttft_ms INTEGER"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN total_ms INTEGER"); } catch { /* already migrated */ }
+// The models that errored before the one that answered, comma-joined. NULL
+// means the first model in the chain served.
+try { db.exec("ALTER TABLE asks ADD COLUMN fell_through TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE answer_cache ADD COLUMN model TEXT"); } catch { /* already migrated */ }
 // Every answer predating request routing was produced by the single Flash
 // model, so backfilling is factual rather than inferred.
@@ -144,8 +152,8 @@ db.exec(`INSERT OR IGNORE INTO user_profiles(user_key,username,provider,first_se
   FROM asks GROUP BY user_key`);
 
 const S = {
-  insertAsk: db.prepare(`INSERT INTO asks(user_key,username,conv_id,question,answer,areas,citations,used_mcp,cached,tokens_in,tokens_out,cost,followup,model,plan,validation,evidence,ts)
-    VALUES(@user_key,@username,@conv_id,@question,@answer,@areas,@citations,@used_mcp,@cached,@tokens_in,@tokens_out,@cost,@followup,@model,@plan,@validation,@evidence,@ts)`),
+  insertAsk: db.prepare(`INSERT INTO asks(user_key,username,conv_id,question,answer,areas,citations,used_mcp,cached,tokens_in,tokens_out,cost,followup,model,plan,validation,evidence,ttft_ms,total_ms,fell_through,ts)
+    VALUES(@user_key,@username,@conv_id,@question,@answer,@areas,@citations,@used_mcp,@cached,@tokens_in,@tokens_out,@cost,@followup,@model,@plan,@validation,@evidence,@ttft_ms,@total_ms,@fell_through,@ts)`),
   countToday: db.prepare("SELECT COALESCE(SUM(cost),0) c FROM asks WHERE user_key=? AND ts>? AND cached=0"),
   convTurnCount: db.prepare("SELECT COUNT(*) c FROM asks WHERE conv_id=? AND user_key=?"),
   convHistory: db.prepare("SELECT question,answer FROM asks WHERE conv_id=? AND user_key=? ORDER BY ts DESC LIMIT ?"),
@@ -228,6 +236,95 @@ function recentAudits(limit = 100) {
 function auditSummary(sinceMs) {
   try { return S.auditSummary.get(Number(sinceMs) || 0) || { total: 0, not_answered: 0, refused: 0 }; }
   catch { return { total: 0, not_answered: 0, refused: 0 }; }
+}
+
+// Post-hoc grounding: the async claim audit on flash answers finishes after
+// the row is stored, so its findings are patched in rather than recorded.
+S.updateGrounding = db.prepare("UPDATE asks SET validation=json_set(COALESCE(validation,'{}'),'$.grounding',json(?)) WHERE id=?");
+function updateGrounding(answerId, claims) {
+  try { S.updateGrounding.run(JSON.stringify(claims || []), Number(answerId)); } catch {}
+}
+S.evictCache = db.prepare("DELETE FROM answer_cache WHERE q=?");
+function evictCache(q) { try { if (q) S.evictCache.run(String(q)); } catch {} }
+
+// The retrieval work queue. Every answer that cited a real, indexed file the
+// evidence never contained recorded that path in validation.missedPaths; this
+// rolls those up so the files retrieval repeatedly fails to hand over become a
+// ranked chunking/embedding fix list instead of scattered journalctl warnings.
+S.retrievalMisses = db.prepare(`SELECT je.value path, COUNT(*) misses, MAX(asks.ts) last_ts
+  FROM asks, json_each(json_extract(asks.validation,'$.missedPaths')) je
+  WHERE asks.ts>? AND json_valid(asks.validation)
+  GROUP BY je.value ORDER BY misses DESC, last_ts DESC LIMIT ?`);
+function retrievalMisses(sinceMs, limit = 30) {
+  try { return S.retrievalMisses.all(Number(sinceMs) || 0, limit); } catch { return []; }
+}
+
+// Validation issue counts over a window: how often each guard tripped.
+S.issueCounts = db.prepare(`SELECT je.value issue, COUNT(*) n
+  FROM asks, json_each(json_extract(asks.validation,'$.issues')) je
+  WHERE asks.ts>? AND json_valid(asks.validation)
+  GROUP BY je.value ORDER BY n DESC`);
+function issueCounts(sinceMs) {
+  try { return S.issueCounts.all(Number(sinceMs) || 0); } catch { return []; }
+}
+
+// Per-model serving stats from recorded traffic: median first-token latency,
+// how often the model only served because something above it fell through, and
+// the player verdicts. This is the table that replaces hand-run model benches.
+S.servingRows = db.prepare(`SELECT model, ttft_ms, total_ms, fell_through, feedback_rating,
+    CASE WHEN json_valid(validation) AND json_array_length(json_extract(validation,'$.issues'))>0 THEN 1 ELSE 0 END flagged
+  FROM asks WHERE ts>? AND cached=0 AND model IS NOT NULL AND model!='discord-ask'`);
+function servingStats(sinceMs) {
+  let rows;
+  try { rows = S.servingRows.all(Number(sinceMs) || 0); } catch { return []; }
+  const byModel = new Map();
+  for (const r of rows) {
+    const m = byModel.get(r.model) || { model: r.model, served: 0, viaFallthrough: 0, flagged: 0, up: 0, down: 0, ttfts: [] };
+    m.served++;
+    if (r.fell_through) m.viaFallthrough++;
+    if (r.flagged) m.flagged++;
+    if (r.feedback_rating === "up") m.up++;
+    if (r.feedback_rating === "down") m.down++;
+    if (Number.isFinite(r.ttft_ms)) m.ttfts.push(r.ttft_ms);
+    byModel.set(r.model, m);
+  }
+  return [...byModel.values()].map(m => {
+    m.ttfts.sort((a, b) => a - b);
+    const p = q => m.ttfts.length ? m.ttfts[Math.min(m.ttfts.length - 1, Math.floor(q * m.ttfts.length))] : null;
+    const { ttfts, ...rest } = m;
+    return { ...rest, sampled: ttfts.length, ttftP50: p(0.5), ttftP90: p(0.9) };
+  }).sort((a, b) => b.served - a.served);
+}
+
+// One self-contained health snapshot, consumed by the console and the weekly
+// Discord digest. Reads the corrections table directly (this module owns the
+// db handle) to avoid a circular require with corrections.js.
+function digest(sinceMs) {
+  const since = Number(sinceMs) || 0;
+  let answers = { total: 0, live: 0, down: 0, up: 0 };
+  try {
+    answers = db.prepare(`SELECT COUNT(*) total, COALESCE(SUM(used_mcp),0) live,
+        COALESCE(SUM(CASE WHEN feedback_rating='down' THEN 1 ELSE 0 END),0) down,
+        COALESCE(SUM(CASE WHEN feedback_rating='up' THEN 1 ELSE 0 END),0) up
+      FROM asks WHERE ts>? AND cached=0`).get(since);
+  } catch {}
+  let drafts = 0, activeCorrections = 0;
+  try {
+    drafts = db.prepare("SELECT COUNT(*) n FROM corrections WHERE active=0").get().n;
+    activeCorrections = db.prepare("SELECT COUNT(*) n FROM corrections WHERE active=1").get().n;
+  } catch {}
+  let conflictsOpen = 0;
+  try { conflictsOpen = db.prepare("SELECT COUNT(*) n FROM doc_conflicts WHERE status='open'").get().n; } catch {}
+  return {
+    since,
+    answers,
+    audits: auditSummary(since),
+    issues: issueCounts(since),
+    retrievalMisses: retrievalMisses(since, 10),
+    models: servingStats(since),
+    corrections: { active: activeCorrections, draftsPending: drafts },
+    docConflictsOpen: conflictsOpen,
+  };
 }
 
 // Repeat sightings bump `seen` rather than creating duplicates, so the review
@@ -313,6 +410,9 @@ function record(row) {
   row.plan = row.plan || null;
   row.validation = row.validation || null;
   row.evidence = row.evidence || null;
+  row.ttft_ms = row.ttft_ms ?? null;
+  row.total_ms = row.total_ms ?? null;
+  row.fell_through = row.fell_through || null;
   const inserted = S.insertAsk.run(row);
   S.upsertConv.run({ id: row.conv_id, user_key: row.user_key, title: row.question.slice(0, 70), ts: row.ts });
   return Number(inserted.lastInsertRowid);
@@ -515,4 +615,4 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief };
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache };

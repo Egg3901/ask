@@ -87,3 +87,47 @@ test("records Discord helpful and report actions in the admin review queue", () 
   assert.equal(question.used_mcp, 1);
   assert.equal(question.feedback_reason, "Wrong live source");
 });
+
+test("persists serving telemetry and rolls it into per-model stats", () => {
+  const ts = Date.now();
+  recordAnswer({ model: "model-a", ttft_ms: 1000, total_ms: 5000, fell_through: null, ts });
+  recordAnswer({ model: "model-a", ttft_ms: 3000, total_ms: 9000, fell_through: "model-b", ts });
+  const stats = store.servingStats(ts - 1000).find(m => m.model === "model-a");
+  assert.equal(stats.served, 2);
+  assert.equal(stats.viaFallthrough, 1);
+  assert.equal(stats.sampled, 2);
+  assert.equal(stats.ttftP50, 3000);
+  assert.equal(stats.ttftP90, 3000);
+});
+
+test("aggregates missed retrieval paths into a ranked work queue", () => {
+  const ts = Date.now();
+  const validation = JSON.stringify({ issues: [], grounding: [], inventedPaths: [], missedPaths: ["src/lib/turn/bondTurn.ts"] });
+  recordAnswer({ validation, ts });
+  recordAnswer({ validation, ts });
+  recordAnswer({ validation: JSON.stringify({ issues: ["truncated"], missedPaths: ["src/lib/x.ts"] }), ts });
+  const misses = store.retrievalMisses(ts - 1000);
+  assert.equal(misses[0].path, "src/lib/turn/bondTurn.ts");
+  assert.equal(misses[0].misses, 2);
+  const issues = store.issueCounts(ts - 1000);
+  assert.deepEqual(issues.find(i => i.issue === "truncated"), { issue: "truncated", n: 1 });
+});
+
+test("patches grounding flags into a stored row and evicts the cache entry", () => {
+  const id = recordAnswer({ validation: JSON.stringify({ issues: [], grounding: [] }) });
+  store.updateGrounding(id, ["invented a Phillips curve"]);
+  const row = store.db.prepare("SELECT validation FROM asks WHERE id=?").get(id);
+  assert.deepEqual(JSON.parse(row.validation).grounding, ["invented a Phillips curve"]);
+  store.S.putCache.run("cache-key", "answer", "[]", "[]", "model-a", Date.now());
+  store.evictCache("cache-key");
+  assert.equal(store.S.getCache.get("cache-key"), undefined);
+});
+
+test("digest reports answers, corrections pipeline, and audit rollup in one shape", () => {
+  const digest = store.digest(Date.now() - 60000);
+  assert.ok(digest.answers.total >= 1);
+  assert.ok(Array.isArray(digest.retrievalMisses));
+  assert.ok(Array.isArray(digest.models));
+  assert.equal(typeof digest.corrections.draftsPending, "number");
+  assert.equal(typeof digest.audits.total, "number");
+});
