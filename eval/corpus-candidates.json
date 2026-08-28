@@ -1,0 +1,14 @@
+[
+  {
+    "question": "Who is winning the current war going on?",
+    "truth": "The game does track who is winning a war. Each conflict records front control of the host territory (side A share + side B share = 100, starting 50/50), per-battle verdicts, and country-level casualties, all on the public record. Answer from the live wars lookup: the leading side is the one whose control share has grown since the start. Never claim the game has no notion of who is winning.",
+    "addedBy": "fable-ops",
+    "created": 1787898240689
+  },
+  {
+    "question": "What is the strongest military in the game right now?",
+    "truth": "Per-unit military power is computed in code (aggregateForce in src/lib/constants/military.ts: base power x posture x tech tier x veterancy x equipment x personnel strength ratio), but the game deliberately never shows players other nations totals: commanders see only coarse bands like stronger force or evenly matched (src/lib/military/forecastFog.ts). Say that strength rankings are classified in-game by design, then point to what IS public via the live wars lookup: who is at war, front control, battle verdicts and casualties.",
+    "addedBy": "fable-ops",
+    "created": 1787898240690
+  }
+]
