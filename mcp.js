@@ -66,7 +66,7 @@ async function listTools(server = "gamestate") {
   return _tools;
 }
 
-const WANTS_STATE = /\b(right now|currently|current|my |mine|our |latest|this turn|per turn|a turn|why did|why is|compare|comparison|peer|benchmark|rank|largest public (?:companies|corporations|businesses)|how much do i|how much am i|what happened|valued|valuation|market cap|balance sheet|economy|gdp|inflation|unemployment|exchange rate|forex|currency|public corporations?|stock market|election|poll|supply|demand|map|heatmap|choropleth|regional|active players?|online players?|player counts?|net[\s-]?worth|wealth|savings|income|earnings|holdings|inequality|richest|poorest|wealthiest|campaign funds?)\b/i;
+const WANTS_STATE = /\b(right now|currently|current|my |mine|our |latest|this turn|per turn|a turn|why did|why is|compare|comparison|peer|benchmark|rank|largest public (?:companies|corporations|businesses)|how much do i|how much am i|what happened|valued|valuation|market cap|balance sheet|economy|gdp|inflation|unemployment|exchange rate|forex|currency|public corporations?|stock market|election|poll|supply|demand|map|heatmap|choropleth|regional|active players?|online players?|player counts?|net[\s-]?worth|wealth|savings|income|earnings|holdings|inequality|richest|poorest|wealthiest|campaign funds?|wars?|battle|front line|invasion|casualt(?:y|ies)|cold war|tension)\b/i;
 const REQUIRED_LIVE_CANDIDATE_MAP = /^(?=.*\b(?:map|heatmap|choropleth)\b)(?=.*\b(?:candidate|candidates|filings?)\b)(?=.*\b(?:senate|house|governor|president)\b)[\s\S]*$/i;
 
 function looksLive(question) {

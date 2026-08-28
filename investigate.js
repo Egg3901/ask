@@ -71,6 +71,10 @@ const LIVE_ALLOWLIST = new Set([
   // trace_character. trace_bonds stays out: it is a forensic holdings
   // breakdown, and nothing in the failure corpus needed it.
   "character_balance_sheet",
+  // The public war record: belligerents, front control, battle verdicts,
+  // campaigns, tension. The tool itself enforces the public conflict tier
+  // (no rosters, no force composition), so it is safe for any asker.
+  "wars",
 ]);
 
 // Tools that read one character's private standing. Non-staff askers are pinned

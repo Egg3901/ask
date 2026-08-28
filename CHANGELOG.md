@@ -2,6 +2,14 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.5.2 - 2026-08-28
+
+### Added
+- War questions now get real answers. Who is at war, which countries are on each side, who holds how much of the front, the latest battle verdicts with casualties, the wider campaigns like Vietnam and Berlin, and the cold-war tension meter all come from the live public record.
+
+### What stays unanswered, on purpose
+- Army strength rankings and force composition. The game shows commanders coarse bands ("stronger force", "evenly matched"), never numbers, and Ask sees exactly what a non-belligerent player sees. Ask will now say that instead of guessing.
+
 ## 1.5.1 - 2026-08-27
 
 ### Added
