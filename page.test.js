@@ -356,3 +356,18 @@ test("the model chip links to the model it names", () => {
   assert.equal(urls["stealth/ox-alpha"], "https://openrouter.ai/stealth/ox-alpha");
   assert.match(scripts, /rel="noopener"/);
 });
+
+test("another game's page never shows the asker's AHD character or corporation", () => {
+  const games = require("./games");
+  // Unique names: "Lakeside"/"Ada" would collide with the site's own copy.
+  const persona = {
+    username: "probe",
+    character: { name: "Zzada Kestrel", country: "United Kingdom", party: "Liberal" },
+    corporation: { name: "Zzcorp Holdings" },
+  };
+  const html = render({ game: games.resolve("grand-century"), context: persona });
+  assert.ok(!html.includes("Zzada"), "character name leaked onto another game's page");
+  assert.ok(!html.includes("Zzcorp"), "corporation name leaked onto another game's page");
+  const ahd = render({ game: games.resolve("ahd"), context: persona });
+  assert.ok(ahd.includes("Zzada"), "AHD page still shows the persona");
+});
