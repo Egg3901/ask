@@ -10,5 +10,11 @@
     "truth": "Per-unit military power is computed in code (aggregateForce in src/lib/constants/military.ts: base power x posture x tech tier x veterancy x equipment x personnel strength ratio), but the game deliberately never shows players other nations totals: commanders see only coarse bands like stronger force or evenly matched (src/lib/military/forecastFog.ts). Say that strength rankings are classified in-game by design, then point to what IS public via the live wars lookup: who is at war, front control, battle verdicts and casualties.",
     "addedBy": "fable-ops",
     "created": 1787898240690
+  },
+  {
+    "question": "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
+    "truth": "Per-turn wealth history IS available live: the character_wealth_history lookup returns net worth, cash, savings, stocks, bonds and funds per turn (anchor-converted, comparable across turns) plus the largest net-worth move precomputed. Answer wealth-trend questions with those numbers and chart them; never answer with the rolling-change formula or claim no time series exists.",
+    "addedBy": "fable-ops",
+    "created": 1787918787759
   }
 ]

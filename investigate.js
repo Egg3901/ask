@@ -78,11 +78,15 @@ const LIVE_ALLOWLIST = new Set([
   // Regional macro trend series ({turn, value} per metric) — the same public
   // data the state pages chart, for "how has X changed" questions.
   "macro_history",
+  // Per-turn wealth series for one character. Pinned to the asker below,
+  // exactly like character_balance_sheet — history is no less private than
+  // the current balance.
+  "character_wealth_history",
 ]);
 
 // Tools that read one character's private standing. Non-staff askers are pinned
 // to their own character on every one of these, never just the first.
-const SELF_ONLY_TOOLS = new Set(["trace_character", "character_balance_sheet"]);
+const SELF_ONLY_TOOLS = new Set(["trace_character", "character_balance_sheet", "character_wealth_history"]);
 
 const SEARCH_CODE_DEF = {
   type: "function",

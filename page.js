@@ -831,8 +831,12 @@ function notEntitled({ identity, context, reason }) {
 
 function app({ identity, context, entitlement, usage, conversations, model, styles, lengths, game }) {
   const activeGame = game && game.id ? game : gameRegistry.fallback();
-  const ch = context?.character;
-  const corp = context?.corporation;
+  // The signed-in persona is an A House Divided identity. On any other game's
+  // page it is a stranger's character and company in the header, so it stays
+  // off — which also flips the starters and headings to their generic forms.
+  const showPersona = activeGame.id === "ahd";
+  const ch = showPersona ? context?.character : null;
+  const corp = showPersona ? context?.corporation : null;
   const corpRole = corp?.role === "shareholder" ? "Shareholder in" : "CEO of";
   const contextLine = [
     ch?.name,

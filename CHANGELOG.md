@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.5.3 - 2026-08-28
+
+### Fixed
+- "Show how my savings and wealth changed over recent turns" now answers with your actual turn-by-turn numbers, including your single biggest move, instead of describing the formula. Thanks to the player report that caught it.
+- Switching to another game no longer shows your A House Divided character and corporation in the header. Your AHD identity belongs on AHD's page.
+
 ## 1.5.2 - 2026-08-28
 
 ### Added
