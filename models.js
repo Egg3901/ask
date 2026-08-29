@@ -85,9 +85,9 @@ const CATALOG = {
   },
   "glm-5.3-flash:cloud": {
     display: "GLM 5.3 Flash",
-    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 27062,
+    provider: "ollama", tier: "pro", score: null, ttftP50Ms: 21844,
     efforts: null,
-    note: "GLM 5.3 Flash via the Ollama cloud tag — FREE, loopback. TRIED ON PRO 2026-08-27 AND PULLED THE SAME HOUR: 27s median to first token and a 75s tail, which is far too slow in front of a streaming answer. Its one real strength is that it never narrated its own evidence bundle across 15 runs, the best of any model tested. Not routed. Do not re-try it without solving the first-token latency.",
+    note: "GLM 5.3 Flash via the Ollama cloud tag: free, loopback. Pro-tier lead and the visualization model from 2026-08-29. Re-benched that day on the real prompt: 8.8s / 21.8s / 29.7s to first token. It was pulled on 2026-08-27 for exactly that latency, and what changed is the leash, not the model. Pro allows 60s to first token (ASK_TTFT_PRO_MS) where flash allows 18s, so the same numbers that made it unusable on flash are comfortable here. Its real strength is grounding: across 15 runs it never narrated its own evidence bundle, the best of any model tested, which is what a chart-bearing answer most needs. NEVER put it on the flash chain: at an 18s deadline two runs in three produce no token at all and fall through.",
   },
   "gpt-oss:120b-cloud": {
     display: "GPT-OSS 120B",
@@ -187,6 +187,11 @@ function chainFrom(lead) {
 }
 
 const CHAINS = {
+  // These built-in defaults are the SAFETY NET, not the live routing: production
+  // sets ASK_CHAIN_* (see .env) and leads flash with DeepSeek Flash on Ollama
+  // cloud and pro with GLM 5.3 Flash. What is hardcoded here stays restricted to
+  // bench-SCORED models, so that losing the env config degrades to a chain that
+  // is known to answer rather than to whichever free tag was fashionable.
   flash: (process.env.ASK_CHAIN_FLASH || "deepseek-v4-flash,nvidia/nemotron-3-ultra-550b-a55b:free").split(",").map(s => s.trim()).filter(Boolean),
   pro: (process.env.ASK_CHAIN_PRO || "nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean),
   deep: (process.env.ASK_CHAIN_DEEP || "stealth/ox-alpha,nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean),
