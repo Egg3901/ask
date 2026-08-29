@@ -4,6 +4,7 @@
   "description": "Grounded Q&A over a live game's source, docs, and state.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "commonjs",
+  "engines": { "node": "22.x" },
   "scripts": {
     "start": "node server.js",
     "test": "node --test"
