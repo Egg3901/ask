@@ -85,8 +85,14 @@ function loginRedirect(res, returnTo = "/") {
 /** Step 2: exchange the single-use handoff code for an opaque session. */
 async function completeLogin(res, code, next = "/") {
   if (!INTERNAL_TOKEN) { res.writeHead(500).end("auth not configured"); return; }
-  const { ok, data } = await postJson(`${AUTH_INTERNAL}/internal/redeem`, { code },
-    { Authorization: `Bearer ${INTERNAL_TOKEN}` });
+  let ok = false, data = null;
+  try {
+    ({ ok, data } = await postJson(`${AUTH_INTERNAL}/internal/redeem`, { code },
+      { Authorization: `Bearer ${INTERNAL_TOKEN}` }));
+  } catch (e) {
+    // A broker that is unreachable/slow must not crash the whole service.
+    console.warn("[auth] redeem call failed:", e?.cause?.code || e?.message);
+  }
   if (!ok || !data?.sessionToken) {
     res.writeHead(302, { Location: "/?auth=failed", "Cache-Control": "no-store" });
     return res.end();
