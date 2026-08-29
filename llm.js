@@ -229,14 +229,16 @@ function isRateLimit(e) {
   return Number(e?.status) === 429 || /\b429\b/.test(String(e?.message || "")) || e?.rateLimited === true;
 }
 
-async function walk({ system, history = [], question, deep = false, tier = null, chain, model, effort, onDelta, signal }) {
+async function walk({ system, history = [], question, longAnswer = false, tier = null, chain, model, effort, onDelta, signal }) {
   const rawOrder = (chain && chain.length ? chain : [model || DEFAULT_MODEL]).filter(Boolean);
   // Skip models currently benched by the circuit breaker. If that would skip the
   // whole chain, keep the last one (the reliable paid backstop) — better a slow
   // answer than none.
   let order = rawOrder.filter(id => !isCoolingDown(id));
   if (!order.length) order = rawOrder.slice(-1);
-  const want = effort || (deep ? "high" : "low");
+  // Reasoning effort follows the tier, never the requested length: asking for a
+  // longer answer is not asking the model to think harder.
+  const want = effort || (tier === "deep" ? "high" : tier === "pro" ? "medium" : "low");
   // Reasoning tokens are billed against max_tokens, so a model that thinks hard
   // on a 7k-token prompt can exhaust the budget before writing anything.
   //
@@ -245,11 +247,14 @@ async function walk({ system, history = [], question, deep = false, tier = null,
   // ceiling thinking. This is a cap and not a spend, and the LENGTH rules still
   // bound how much prose the model writes, so raising it costs nothing on the
   // answers that were already finishing cleanly.
-  const maxTokens = deep ? Number(process.env.ASK_MAX_TOKENS_DEEP || 32000) : Number(process.env.ASK_MAX_TOKENS || 16000);
-  // First-token deadline by tier: flash is fast (DeepSeek) so keep it tight; the
-  // reasoning tiers (Mimo for pro, Ox Alpha for deep) legitimately think for a
-  // while, so give pro a long leash and deep none at all.
-  const ttft = (deep || tier === "deep") ? 0
+  // Token ceiling follows the requested LENGTH, so the fast model can be asked
+  // for a long answer. It is a cap and not a spend: the prompt's length rules
+  // still bound how much prose gets written.
+  const maxTokens = longAnswer ? Number(process.env.ASK_MAX_TOKENS_DEEP || 32000) : Number(process.env.ASK_MAX_TOKENS || 16000);
+  // First-token deadline follows the TIER, and nothing else. A long answer from
+  // the fast model is still the fast model, and it must not inherit the deep
+  // tier's unlimited leash just because the player asked for more words.
+  const ttft = tier === "deep" ? 0
     : tier === "pro" ? Number(process.env.ASK_TTFT_PRO_MS || 60000)
     : FIRST_TOKEN_TIMEOUT_MS;
   const emitted = { any: false };

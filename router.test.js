@@ -46,10 +46,38 @@ test("routes cross-system analysis to Pro", () => {
   }).tier, "pro");
 });
 
+test("length does not touch routing: it says how much to write, not how hard to think", () => {
+  // These were one control and are now two. Asking for a long answer used to add
+  // 6 to the score and drag a simple lookup onto a reasoning model; asking for a
+  // short one made a genuinely hard question cheap.
+  const q = "How do actions work?";
+  const base = router.choose({ question: q }).tier;
+  for (const length of ["concise", "standard", "deep"]) {
+    assert.equal(router.choose({ question: q, length }).tier, base, `${length} must not change the tier`);
+  }
+  // The same holds for a question that genuinely earns a reasoning tier.
+  const hard = "Why does inflation interact with the central bank prime rate across turns?";
+  const hardBase = router.choose({ question: hard }).tier;
+  assert.equal(router.choose({ question: hard, length: "concise" }).tier, hardBase,
+    "a concise answer to a hard question is still the hard question");
+});
+
+test("an explicit effort overrides routing, and only staff ever send one", () => {
+  const q = "How do actions work?";
+  assert.equal(router.choose({ question: q, effort: "quick" }).tier, "flash");
+  assert.equal(router.choose({ question: q, effort: "balanced" }).tier, "pro");
+  assert.equal(router.choose({ question: q, effort: "thorough" }).tier, "deep");
+  assert.ok(router.choose({ question: q, effort: "thorough" }).reasons.includes("thorough requested"));
+  // Auto and an unknown value both fall back to routing from the question.
+  const auto = router.choose({ question: q }).tier;
+  assert.equal(router.choose({ question: q, effort: "auto" }).tier, auto);
+  assert.equal(router.choose({ question: q, effort: "nonsense" }).tier, auto);
+  assert.equal(router.choose({ question: q, effort: "nonsense" }).effortChoice, "auto");
+  // A report is a multi-section deliverable; "quick" cannot produce one.
+  assert.equal(router.choose({ question: "Generate a report on the economy", report: true, effort: "quick" }).tier, "deep");
+});
+
 test("deep tier is reserved for multi-part responses and reports; nothing else", () => {
-  // The plain "deep" length toggle does NOT force the slow deep tier for a simple
-  // single-part question — it goes to pro (Mimo), just with a longer answer.
-  assert.equal(router.choose({ question: "How do actions work?", length: "deep" }).tier, "pro");
   // A genuine multi-part question takes deep (Ox Alpha).
   const multi = router.choose({ question: "1. How is inflation calculated? 2. What is the current rate?" });
   assert.equal(multi.tier, "deep");

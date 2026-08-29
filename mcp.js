@@ -120,8 +120,80 @@ async function liveContext(question, context, callTool = null) {
   return (await liveIntelligence(question, context, callTool)).text;
 }
 
+// ── Live-data provenance ────────────────────────────────────────────────────
+// The evidence log records raw tool ids like "gamestate:trace_corp", with the
+// namespace, duplicates, and code-search calls all mixed in. A player reading
+// "what was this answer built from" needs the live READS named in their own
+// vocabulary, and needs them kept distinct from the code and docs the citations
+// already cover.
+
+// Calls that search the repository rather than read the running world. They are
+// already represented by the file citations, so listing them again as "live
+// data" would overstate what the answer actually saw.
+const CODE_TOOLS = new Set(["search_code", "search_history", "show_change", "read_file", "list_files", "grep"]);
+
+const LIVE_LABELS = {
+  game_overview: "Game overview",
+  countries: "Countries",
+  country_fiscal: "Country finances",
+  parties: "Parties",
+  elections: "Elections",
+  top_players: "Top players",
+  macro_history: "Economic history",
+  wars: "Wars and fronts",
+  entity_search: "Entity lookup",
+  corporation_rankings: "Corporation rankings",
+  extraction_market: "Extraction market",
+  fx_quote: "Exchange rates",
+  geo_aggregate: "Regional aggregates",
+  legislation_catalog: "Legislation",
+  map_snapshot: "Map snapshot",
+  analytics_query: "Analytics",
+  analytics_catalog: "Analytics",
+  election_sim_results: "Election projections",
+  economy_pulse: "Economy pulse",
+  engine_health: "Engine health",
+  recent_turns: "Recent turns",
+  trace_corp: "Corporation detail",
+  trace_sector: "Sector detail",
+  trace_character: "Character detail",
+  trace_election: "Election detail",
+  trace_race: "Race detail",
+  trace_ledger: "Ledger",
+  trace_account: "Account history",
+  trace_bonds: "Bond market",
+  trace_actions: "Action history",
+  trace_approval: "Approval history",
+  character_balance_sheet: "Balance sheet",
+  character_wealth_history: "Wealth history",
+  country_groups: "Country groups",
+};
+
+/**
+ * Clean, deduplicated list of the live game data an answer actually read.
+ * Order is preserved (first read first) because it reflects how the answer was
+ * assembled. Unknown tools fall back to a de-underscored name rather than being
+ * dropped: a source we cannot label is still a source that was used.
+ */
+function liveSources(tools = []) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(tools) ? tools : []) {
+    const name = String(raw || "").split(":").pop().trim();
+    if (!name || CODE_TOOLS.has(name) || seen.has(name)) continue;
+    seen.add(name);
+    out.push({
+      id: name,
+      label: LIVE_LABELS[name] || name.replace(/_/g, " ").replace(/^./, c => c.toUpperCase()),
+    });
+  }
+  return out;
+}
+
 module.exports = {
   listTools,
+  liveSources,
+  LIVE_LABELS,
   liveContext,
   liveIntelligence,
   looksLive,

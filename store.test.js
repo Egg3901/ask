@@ -369,3 +369,14 @@ test("the visualization allowance never reports a negative remainder", () => {
   assert.ok(u.vizUsed >= 3);
   assert.equal(u.vizRemaining, 0);
 });
+
+test("an answer that never read live data does not spend the live allowance", () => {
+  const ent = { questions: 10, mcp: 4, viz: 2 };
+  const before = store.usage("ahd:user-1", ent).mcpUsed;
+  // Live mode on, but the answer came entirely from code: used_mcp stays 0.
+  recordAnswer({ question: "Answered from code", answer: BODY, used_mcp: 0, ts: Date.now() });
+  assert.equal(store.usage("ahd:user-1", ent).mcpUsed, before);
+  // An answer that really read the world does spend one.
+  recordAnswer({ question: "Answered from live state", answer: BODY, used_mcp: 1, ts: Date.now() });
+  assert.equal(store.usage("ahd:user-1", ent).mcpUsed, before + 1);
+});

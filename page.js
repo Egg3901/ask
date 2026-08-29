@@ -493,6 +493,7 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
 .sheet-head .x{margin-left:auto;background:transparent;border:none;color:var(--text-3);font-size:1.25rem;cursor:pointer;line-height:1}
 .sheet-body{padding:18px;display:flex;flex-direction:column;gap:20px}
 .setting-group>label{display:block;font-size:.69rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:8px}
+.setting-note{display:block;margin-top:7px;font-size:.68rem;line-height:1.4;color:var(--text-3)}
 .setting-group .seg{width:100%}
 .setting-group .segbtn{flex:1;padding:.55rem .65rem;font-size:.78rem}
 .setting-live{display:flex;align-items:center;gap:12px;padding:12px 13px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--glass-2)}
@@ -679,6 +680,14 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
 .toggle input{width:16px;height:16px;accent-color:var(--accent)}
 
 /* ── citations + conflict ───────────────────────────────────────────────── */
+/* Live-data provenance. Deliberately its own row above the file citations: the
+   running world and the source tree are different kinds of evidence, and an
+   answer that read live state should say which part of it. */
+.livesrc{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px;font-size:.72rem}
+.livesrc-h{display:inline-flex;align-items:center;gap:5px;color:var(--text-3);margin-right:2px}
+.livesrc-h svg{width:12px;height:12px}
+.livechip{padding:.16rem .5rem;border:1px solid var(--border);border-radius:var(--r-full);color:var(--text-2);white-space:nowrap}
+.livesrc-t{color:var(--text-3);opacity:.8}
 .srcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;min-width:0}
 .src{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;padding:.24rem .6rem;border-radius:var(--r-full);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   border:1px solid var(--border);background:var(--glass-2);color:var(--text-2);text-decoration:none;transition:all var(--t)}
@@ -1061,7 +1070,7 @@ function notEntitled({ identity, context, reason }) {
   </div></div>`, "", "", undefined, "doc");
 }
 
-function app({ identity, context, entitlement, usage, conversations, model, styles, lengths, game }) {
+function app({ identity, context, entitlement, usage, conversations, model, styles, lengths, efforts = null, game }) {
   const activeGame = game && game.id ? game : gameRegistry.fallback();
   // The signed-in persona is an A House Divided identity. On any other game's
   // page it is a stranger's character and company in the header, so it stays
@@ -1166,7 +1175,10 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <label class="setting-live"><input type="checkbox" id="live"><span>Use live game data<small>Include your current character and corporation state.</small></span></label>
     <label class="setting-live"><input type="checkbox" id="visualizations"><span>Use visualizations<small>Allow a diagram, chart, or game map when it makes the answer clearer.${usage?.vizLimit ? ` ${usage.vizLimit} a day on your plan.` : ""}</small></span></label>
     <div class="setting-group"><label>Response style</label><div class="seg">${segBtns(styles, "style", "standard")}</div></div>
-    <div class="setting-group"><label>Response length</label><div class="seg">${segBtns(lengths, "length", "standard")}</div></div>
+    <div class="setting-group"><label>Response length</label><div class="seg">${segBtns(lengths, "length", "standard")}</div>
+      <small class="setting-note">How much is written. Independent of how hard the model thinks.</small></div>
+    ${efforts ? `<div class="setting-group"><label>Reasoning effort</label><div class="seg">${segBtns(efforts, "effort", "auto")}</div>
+      <small class="setting-note">Staff only. Auto routes from the question, which is what every player gets.</small></div>` : ""}
   </div>
 </div></div>
 
@@ -1227,7 +1239,7 @@ var f=document.getElementById('f'),q=document.getElementById('q'),go=document.ge
 var DOC_TITLE=document.title;
 var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
-var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard'};
+var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard',effort:localStorage.getItem('ask.effort')||'auto'};
 
 // ---- game switcher ----------------------------------------------------------
 // The selection is sticky per browser and can be set by ?game= so the docs Ask
@@ -1289,7 +1301,7 @@ if(gameswBtn){
 }
 applyGame();
 localStorage.removeItem('ask.model');
-visualizations.checked=VIZ_ALLOWED&&localStorage.getItem('ask.visualizations')==='true';
+visualizations.checked=VIZ_ALLOWED&&localStorage.getItem('ask.visualizations')!=='false';
 visualizations.addEventListener('change',function(){localStorage.setItem('ask.visualizations',String(visualizations.checked));});
 var replayQuestion=new URLSearchParams(location.search).get('replay');
 if(replayQuestion){q.value=replayQuestion.slice(0,500);setTimeout(function(){q.focus();q.dispatchEvent(new Event('input'));},0);}
@@ -1380,7 +1392,7 @@ settingsPanel.addEventListener('click',function(e){
   localStorage.setItem('ahd-theme',b.dataset.themeValue);syncTheme();
 });
 syncTheme();
-live.checked=localStorage.getItem('ask.live')==='true'&&!live.disabled;
+live.checked=localStorage.getItem('ask.live')!=='false'&&!live.disabled;
 function syncLiveMode(){
   liveMode.disabled=live.disabled;
   liveMode.setAttribute('aria-pressed',live.checked?'true':'false');
@@ -1526,7 +1538,8 @@ var ICO={copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
          wiki:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>',
          docs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>',
          warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
-         bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>'};
+         bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+         live:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 000 12.8M18.4 5.6a9 9 0 010 12.8"/></svg>'};
 
 function addTurn(question,res){
   var turn=document.createElement('div');turn.className='ask-turn';
@@ -1547,6 +1560,15 @@ function fill(turn,target,d){
     ? 'You have used all '+d.vizLimit+' charts and maps for today, so this one is answered in prose. Your allowance resets at midnight UTC.'
     : 'This one is answered in prose.')+'</div>';
   if(d.reportUrl)h+='<div class="ask-viz-note"><a href="'+esc(d.reportUrl)+'" target="_blank" rel="noopener">Open this report as its own shareable page &rarr;</a></div>';
+  // What live game state the answer read, named plainly and kept distinct from
+  // the code and docs the citations cover. An answer built on the running world
+  // should say so, and say which part of it.
+  var lv=(d.liveSources||[]);
+  if(lv.length){
+    h+='<div class="livesrc"><span class="livesrc-h">'+ICO.live+'Live game data read</span>'+
+      lv.map(function(l){return '<span class="livechip">'+esc(l.label)+'</span>';}).join('')+
+      '<span class="livesrc-t">as of this answer</span></div>';
+  }
   var cs=(d.citations||[]);
   if(cs.length){
     // Compact chips stay inline; the full list with kinds folds away so a long
@@ -1775,7 +1797,7 @@ function submit(){
     else { ctrl.abort(); } };
   fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
     signal:ctrl.signal,
-    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId,game:GAME.id,tz:LOCAL_TZ})})
+    body:JSON.stringify({question:text,style:S.style,length:S.length,effort:S.effort,useMcp:live.checked,visualizations:visualizations.checked,convId:convId,game:GAME.id,tz:LOCAL_TZ})})
   .then(function(r){
     // Non-streaming replies (cache hits, quota refusals) still come back as JSON.
     var ct=r.headers.get('content-type')||'';

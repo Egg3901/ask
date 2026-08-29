@@ -561,3 +561,35 @@ test("extracts both sides of a bare head-to-head when one carries a corp word", 
   // Countries are not companies: the bare vs-pattern must not fire without a corp word.
   assert.deepEqual(mcp.namedCorporations("US vs USSR who wins the war"), []);
 });
+
+// ── Live-data provenance ────────────────────────────────────────────────────
+
+test("live sources name the game state an answer read, without the plumbing", () => {
+  const out = mcp.liveSources([
+    "gamestate:game_overview", "gamestate:trace_corp", "gamestate:trace_sector",
+    "gamestate:trace_sector", "investigate:entity_search", "investigate:search_code",
+  ]);
+  assert.deepEqual(out.map(s => s.label),
+    ["Game overview", "Corporation detail", "Sector detail", "Entity lookup"]);
+  // Namespaces are stripped, repeats collapse, and order is first-read-first.
+  assert.deepEqual(out.map(s => s.id),
+    ["game_overview", "trace_corp", "trace_sector", "entity_search"]);
+});
+
+test("code searches are not passed off as live data", () => {
+  // These are already covered by the file citations. Listing them as live reads
+  // would claim the answer saw the running world when it only read the repo.
+  assert.deepEqual(mcp.liveSources(["investigate:search_code", "investigate:show_change", "investigate:search_history"]), []);
+});
+
+test("an unlabelled tool is still reported rather than silently dropped", () => {
+  const out = mcp.liveSources(["gamestate:some_new_tool"]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].label, "Some new tool");
+});
+
+test("live sources survive junk input", () => {
+  for (const input of [null, undefined, [], ["", null, ":"], "not an array"]) {
+    assert.deepEqual(mcp.liveSources(input), []);
+  }
+});

@@ -300,6 +300,9 @@ const server = http.createServer(async (req, res) => {
         identity: session.identity, context: session.context, entitlement: ent,
         usage: store.usage(key, ent), conversations: store.conversations(key), model: MODEL_LABEL,
         styles: prompt.STYLES, lengths: prompt.LENGTHS,
+        // The reasoning control only renders for staff; everyone else is on auto
+        // and has no dial to misread.
+        efforts: ent.staff ? router.EFFORTS : null,
         game: games.resolve(url.searchParams.get("game")),
       }));
     }
@@ -607,15 +610,29 @@ const server = http.createServer(async (req, res) => {
         // Live game state exists only for A House Divided: it is the one game
         // with a running shared world. For the others there is nothing to query,
         // so the request never becomes a live one and never spends live quota.
-        const wantMcp = game.live &&
-          (body.useMcp === true || plan.live === "required" || mcp.requiresLive(question) || reportRequested);
+        // Two different things, and they used to be one.
+        //
+        // REQUIRED: the question cannot be answered honestly without reading the
+        // running world. PREFERRED: live mode is simply switched on, which is now
+        // the default, so it says nothing about whether this question needs it.
+        //
+        // Conflating them meant that once live mode defaulted on, every question
+        // would hit the live gate and a spent live allowance would 429 questions
+        // that never wanted live data in the first place.
+        const liveRequired = game.live && (plan.live === "required" || mcp.requiresLive(question) || reportRequested);
+        const liveWanted = game.live && (liveRequired || body.useMcp === true);
+        const wantMcp = liveWanted;
 
         // Follow-ups depend on the conversation's prior turns, so the shared
         // answer cache (keyed only on question text) must not touch them: a
         // "what about the UK?" cached from one thread would otherwise be served
         // verbatim into an unrelated one. Only a fresh first turn is cacheable.
         const isFollowup = store.nextCost(convId, key).followup > 0;
-        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested });
+        // Reasoning effort is staff-only. Everyone else is routed from the
+        // question, which is a better signal than a dropdown the asker has no
+        // basis to set, and it keeps the slow tier from being chosen by habit.
+        const effortChoice = ent.staff && router.EFFORTS[body.effort] ? body.effort : "auto";
+        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice });
         // A player can pin the answer model in Settings. Only the whitelist is
         // honoured (never DeepSeek — that stays the invisible backstop), and it
         // keeps the tier's effort/token budget; just the lead model changes, with
@@ -665,9 +682,12 @@ const server = http.createServer(async (req, res) => {
           });
         }
         const useMcp = wantMcp && usage.mcpRemaining > 0;
-        if (wantMcp && !useMcp) {
+        // Only refuse when the question genuinely needs live data. If the toggle
+        // is merely on, answer from code and docs instead of failing: the player
+        // asked a question, not for a specific data source.
+        if (liveRequired && !useMcp) {
           return json(res, 429, {
-            error: `You've used all ${usage.mcpLimit} live-data questions for today. Ask without live data, or try tomorrow.`,
+            error: `You've used all ${usage.mcpLimit} live-data questions for today. This one needs live game state, so try again tomorrow.`,
             usage, quota: true,
           });
         }
@@ -860,7 +880,8 @@ const server = http.createServer(async (req, res) => {
             // they carry more of the thread than a one-shot lookup needs.
             history: store.history(convId, key, deepAnswer ? DEEP_HISTORY_TURNS : 3),
             question,
-            deep: length === "deep",
+            // Length sets the token ceiling; the tier sets how hard it thinks.
+            longAnswer: length === "deep",
             tier: route.tier,
             chain: route.chain,
             effort: route.effort,
@@ -986,10 +1007,20 @@ const server = http.createServer(async (req, res) => {
         if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {
           store.S.putCache.run(ckey, answer, JSON.stringify(areas), JSON.stringify(citations), servedModel, Date.now());
         }
+        // Did this answer actually read the running world? liveEvidence.tools is
+        // appended to by the heuristic live pass and by the scout, and holds
+        // code-search calls too, so the live-read test is the cleaned list.
+        const liveSourcesUsed = mcp.liveSources(liveEvidence.tools);
+        const liveDataRead = useMcp && liveSourcesUsed.length > 0;
+
         const answerId = store.record({
           user_key: key, username: session.identity.username || null, conv_id: convId,
           question, answer, areas: JSON.stringify(areas), citations: JSON.stringify(citations),
-          used_mcp: useMcp ? 1 : 0, cached: 0, cost, followup,
+          // Charge the live-data allowance only if live data was actually READ.
+          // Enabling live mode and then answering entirely from code costs the
+          // player nothing, and this also makes used_mcp mean what the console
+          // has always claimed it means: answers that really hit the game.
+          used_mcp: liveDataRead ? 1 : 0, cached: 0, cost, followup,
           tokens_in: Number(llmUsage.prompt_tokens || 0), tokens_out: Number(llmUsage.completion_tokens || 0), model: servedModel,
           plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence),
           ttft_ms: firstTokenMs, total_ms: Date.now() - genStart, fell_through: fellThrough, ts: Date.now(),
@@ -1046,6 +1077,8 @@ const server = http.createServer(async (req, res) => {
         send("done", {
           convId, answerId, answer, areas, citations, cached: false, usedMcp: useMcp,
           cost, followup, followupsLeft, followups, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0, reportUrl,
+          // What live game state this answer actually read, named for a player.
+          liveSources: liveSourcesUsed,
           model: router.label(servedModel),
           modelId: servedModel,
           modelName: models.displayFor(servedModel),

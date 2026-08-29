@@ -40,12 +40,14 @@ test("keeps every output and display preference in one settings sheet", () => {
   assert.match(panel, /data-opt="length"/);
 });
 
-test("visualizations are opt-in and constrained by the prompt", () => {
+test("visualizations are on by default and constrained by the prompt", () => {
   const html = render();
   const off = prompt.build();
   const on = prompt.build({ visualizations: true });
 
-  assert.match(html, /localStorage\.getItem\('ask\.visualizations'\)==='true'/);
+  // On unless explicitly turned off. The prompt constraints below are what keep
+  // that safe: the model still only draws one when it genuinely helps.
+  assert.match(html, /localStorage\.getItem\('ask\.visualizations'\)!=='false'/);
   assert.match(off, /Do not include Mermaid diagrams/);
   assert.match(on, /Use at most one visualization/);
   assert.match(on, /AHD map/);
@@ -643,4 +645,42 @@ test("a staff thumb is never rendered as a player verdict", () => {
   assert.doesNotMatch(html, /player reported/);
   assert.doesNotMatch(html, /player liked/);
   assert.match(html, /data-rating="bad"/);
+});
+
+test("an answer says which live game data it read, separately from its file citations", () => {
+  const html = render();
+  assert.match(html, /var lv=\(d\.liveSources\|\|\[\]\)/);
+  assert.match(html, /Live game data read/);
+  assert.match(html, /livechip/);
+  // Distinct from the file citation list, which is a different kind of evidence.
+  assert.match(html, /Sources used \('\+cs\.length\+'\)/);
+  assert.match(html, /\.livesrc\{[^}]*display:flex/);
+});
+
+test("reasoning effort is a staff control and length is everyone's", () => {
+  const router = require("./router");
+  const staff = render({ efforts: router.EFFORTS });
+  const player = render();
+  const panelOf = h => h.match(/<div class="sheet" id="settingsPanel"[\s\S]*?<!-- settings:end -->/)?.[0] || "";
+
+  assert.match(panelOf(staff), /Reasoning effort/);
+  assert.match(panelOf(staff), /data-opt="effort"/);
+  assert.doesNotMatch(panelOf(player), /Reasoning effort/, "players get no dial they have no basis to set");
+  // Length is a separate control for everyone, and says so.
+  for (const html of [staff, player]) {
+    assert.match(panelOf(html), /Response length/);
+    assert.match(panelOf(html), /Independent of how hard the model thinks/);
+  }
+  // Whatever is chosen has to actually reach the server.
+  assert.match(staff, /effort:S\.effort/);
+});
+
+test("live data and visualizations are on by default, and an explicit off still wins", () => {
+  const html = render();
+  // Defaulting off meant the two most interesting things Ask does were invisible
+  // until a player went looking in Settings for them.
+  assert.match(html, /live\.checked=localStorage\.getItem\('ask\.live'\)!=='false'/);
+  assert.match(html, /visualizations\.checked=VIZ_ALLOWED&&localStorage\.getItem\('ask\.visualizations'\)!=='false'/);
+  // Not simply forced on: someone who turned them off keeps them off.
+  assert.doesNotMatch(html, /live\.checked=true;\s*$/m);
 });

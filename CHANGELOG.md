@@ -2,6 +2,28 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.8.0 - 2026-08-29
+
+### Added
+- Answers now say which live game data they read. A new line above the sources
+  names the parts of the running world the answer actually looked at, kept
+  separate from the code and docs in the citation list.
+
+### Changed
+- Live game data and charts are both ON by default. They were the two most
+  interesting things Ask does and you had to go find them in Settings first. If
+  you have turned either off, it stays off.
+- Response length and reasoning effort are two controls now instead of one.
+  Asking for a long answer no longer forces the slow model, and asking for a
+  short one no longer makes a hard question cheap. You can have three thorough
+  sentences, or a long answer from the fast model.
+- A question that never actually read live game data no longer spends your
+  live-data allowance. Leaving live mode on costs you nothing on questions
+  answered from the code.
+- Having live mode on no longer blocks a question when your live-data allowance
+  is gone. Only questions that genuinely need the running world are held back;
+  everything else is answered from code and docs as normal.
+
 ## 1.7.0 - 2026-08-29
 
 ### Added
