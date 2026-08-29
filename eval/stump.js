@@ -50,6 +50,9 @@ const CASES = [
   { id: "change-elections", live: false, q: "Did something change with elections recently? My snap election fired at a different time than I expected." },
   { id: "change-stocks", live: true, q: "Why did my stocks fall this week? Was it a code change?" },
   { id: "change-none", live: false, q: "Why did my approval suddenly drop after I passed a popular bill?" },
+  { id: "reported-inflation-action", live: true, q: "What would lower US inflation fastest?" },
+  { id: "audited-gdp-formula", live: true, q: "How is GDP growth calculated each turn?" },
+  { id: "reported-broad-history", live: true, q: "What changed with Econ mechanics in the last 48 hours?" },
 ];
 
 async function runCase(c) {
@@ -67,7 +70,10 @@ async function runCase(c) {
   let historyBlock = "";
   const changeQuestion = history.changeish(c.q) && await history.available(game);
   if (changeQuestion) {
-    const recent = await history.evidence({ game, question: c.q, paths: hits?.files || [], code: hits?.context || "" }).catch(() => null);
+    const recent = await history.evidence({
+      game, question: c.q, paths: hits?.files || [], code: hits?.context || "",
+      sinceDays: history.sinceDaysFor(c.q),
+    }).catch(() => null);
     historyBlock = recent ? recent.text : "";
   }
 
@@ -84,8 +90,9 @@ async function runCase(c) {
   let investigation = null;
   const liveMissedTarget = c.live && !liveTargeted;
   const trendish = /\b(trend|history|over (?:the )?(?:last|past|recent)|chang(?:e|ed|es|ing)|since (?:19|20)\d\d|turn.by.turn|evolv)/i.test(c.q);
-  const chaseChange = changeQuestion && historyBlock === "";
-  if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish) || chaseChange) {
+  const chaseChange = changeQuestion && (historyBlock === "" || history.broadChangeQuestion(c.q));
+  const needsMechanicEvidence = investigate.needsMechanicEvidence(c.q);
+  if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish) || chaseChange || needsMechanicEvidence) {
     investigation = await investigate.run({ question: c.q, context: CONTEXT, useLive: c.live, deep: false, game, changeQuestion }).catch(() => null);
   }
   const navBlock = navigation.block(c.q);
@@ -133,7 +140,7 @@ async function runCase(c) {
       process.stderr.write(`[stump] ${c.id} FAILED: ${e.message}\n`);
       results.push({ id: c.id, question: c.q, error: String(e.message || e) });
     }
-    const file = path.join(__dirname, "stump-results.json");
+    const file = process.env.ASK_STUMP_OUTPUT || path.join(__dirname, "stump-results.json");
     fs.writeFileSync(file, JSON.stringify(results, null, 2));
   }
   console.log(`wrote ${results.length} results`);

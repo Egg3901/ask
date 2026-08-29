@@ -262,6 +262,133 @@ function keywordHits(h, question, sourceAware) {
   return out;
 }
 
+function exactTerms(question) {
+  const raw = String(question || "");
+  const words = raw.match(/\b[A-Za-z][A-Za-z0-9]{2,}\b/g) || [];
+  const useful = words.filter(word => !STOP.has(word.toLowerCase())).slice(0, 10);
+  const terms = new Map(termsIn(raw).ids.map(term => [term, 5]));
+  for (const word of useful) terms.set(word, Math.max(terms.get(word) || 0, /^[A-Z]{2,6}$/.test(word) ? 2 : 1));
+  // Player prose says "GDP growth" while the code says `gdpGrowth`. FTS5 does
+  // not split camel case, so explicitly bridge adjacent prose tokens.
+  for (let i = 0; i < useful.length - 1; i++) {
+    const a = useful[i].toLowerCase();
+    const b = useful[i + 1];
+    const camel = a + b[0].toUpperCase() + b.slice(1).toLowerCase();
+    terms.set(camel, Math.max(terms.get(camel) || 0, 4));
+  }
+  return [...terms]
+    .filter(([term]) => /^[A-Za-z0-9_.\/-]{2,80}$/.test(term))
+    .slice(0, 20)
+    .map(([term, weight]) => ({ term, weight }));
+}
+
+function exactContext(rows, maxChars, st) {
+  let budget = maxChars;
+  const blocks = [], files = [];
+  const perFile = new Map();
+  for (const row of rows) {
+    const seen = perFile.get(row.path) || 0;
+    if (seen >= 2) continue;
+    const body = String(row.text || "").slice(0, 6200);
+    if (!body || body.length > budget) continue;
+    budget -= body.length;
+    perFile.set(row.path, seen + 1);
+    files.push(row.path);
+    const label = st.sourceAware
+      ? `SOURCE ${row.source || "code"} @ ${row.revision || "unknown"} | ${row.path}`
+      : row.path;
+    blocks.push(`--- ${label} (part ${Number(row.ord) + 1}) ---\n${body}`);
+  }
+  if (!blocks.length) return null;
+  return {
+    context: `EXACT INDEXED SOURCE MATCHES (literal symbols, phrases, and paths):\n\n${blocks.join("\n\n")}`,
+    files: [...new Set(files)],
+    count: blocks.length,
+  };
+}
+
+function exactQuality(row, term) {
+  let score = /\.test\.[cm]?[jt]sx?$|\/__tests__\/|\/__fixtures__\//i.test(row.path) ? -8 : 3;
+  if (/\/lib\/(?:metricEngine|turn)\//.test(row.path)) score += 8;
+  if (/\/components?\/|\/types?\//.test(row.path)) score -= 5;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b(?:const|let|var|function|class|interface|type)\\s+${escaped}\\b|\\b${escaped}\\s*=`, "i").test(row.text)) score += 18;
+  return score;
+}
+
+function addExactCandidate(byKey, row, term, score) {
+  const key = `${row.path}#${row.ord}`;
+  const existing = byKey.get(key);
+  if (existing) {
+    // Repeating a common word across query variants should not let a fixture
+    // crowd out the file that defines the requested symbol. Preserve the best
+    // individual signal and use distinct matches only as a small tie-breaker.
+    existing.exactScore = Math.max(existing.exactScore, score);
+    existing.termHits.add(term.toLowerCase());
+    if (row.rank != null) existing.rank = Math.min(existing.rank, row.rank);
+    return;
+  }
+  byKey.set(key, { ...row, exactScore: score, termHits: new Set([term.toLowerCase()]) });
+}
+
+/** Literal indexed-code search for the scout when semantic retrieval misses. */
+function searchExact(question, { limit = 8, maxChars = 18000, game = null } = {}) {
+  const st = stateFor(game);
+  const h = open(st);
+  if (!h || !st.ready) return null;
+  const projection = st.sourceAware
+    ? "c.source_kind source,c.repository,c.revision"
+    : "'code' source,'' repository,'' revision";
+  const byKey = new Map();
+  for (const { term, weight } of exactTerms(question)) {
+    try {
+      const pathProjection = st.sourceAware
+        ? "source_kind source,repository,revision"
+        : "'code' source,'' repository,'' revision";
+      const pathRows = h.prepare(
+        `SELECT path,ord,text,${pathProjection},0 rank FROM chunks
+         WHERE source_kind='code' AND lower(path) LIKE ? ORDER BY path,ord LIMIT ?`,
+      ).all(`%${term.toLowerCase()}%`, Math.max(20, Math.min(80, limit * 5)));
+      for (const row of pathRows) {
+        const score = weight * 10 + 6 + exactQuality(row, term);
+        addExactCandidate(byKey, row, term, score);
+      }
+    } catch { /* path search is an enhancement */ }
+    try {
+      const rows = h.prepare(
+        `SELECT c.path,c.ord,c.text,${projection},bm25(chunks_fts) rank
+         FROM chunks_fts f JOIN chunks c ON c.id=f.rowid
+         WHERE chunks_fts MATCH ? AND c.source_kind='code'
+         ORDER BY rank LIMIT ?`,
+      ).all(`"${term.replace(/"/g, '""')}"`, Math.max(100, Math.min(500, limit * 25)));
+      for (const row of rows) {
+        const score = weight * 10 + exactQuality(row, term);
+        addExactCandidate(byKey, row, term, score);
+      }
+    } catch { /* one invalid FTS term must not break the evidence pass */ }
+  }
+  const rows = [...byKey.values()]
+    .sort((a, b) => b.exactScore - a.exactScore || b.termHits.size - a.termHits.size || a.rank - b.rank || a.path.localeCompare(b.path))
+    .slice(0, Math.max(1, Math.min(20, limit)));
+  return exactContext(rows, maxChars, st);
+}
+
+/** Read a known path from the index. Works when Ask runs without a repo clone. */
+function readIndexedFile(filePath, { maxChars = 18000, game = null } = {}) {
+  const key = String(filePath || "").trim().replace(/^\.\//, "");
+  if (!key || key.includes("..") || key.startsWith("/") || /(?:^|\/)\.env|\.(?:pem|key|p12|pfx)$/i.test(key)) return null;
+  const st = stateFor(game);
+  const h = open(st);
+  if (!h || !st.ready) return null;
+  const projection = st.sourceAware
+    ? "source_kind source,repository,revision"
+    : "'code' source,'' repository,'' revision";
+  const rows = h.prepare(
+    `SELECT path,ord,text,${projection} FROM chunks WHERE source_kind='code' AND path=? ORDER BY ord LIMIT 40`,
+  ).all(key);
+  return exactContext(rows, maxChars, st);
+}
+
 // Source authority applied to ranking, not just to the prompt.
 //
 // The repo contains its own wiki and guide prose (src/lib/seeds/wiki/content,
@@ -396,4 +523,4 @@ function stats(game = null) {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
-module.exports = { inferClaimType, search, searchMulti, stats, embedQuery, hasPath };
+module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, stats, embedQuery, hasPath };

@@ -24,6 +24,8 @@ const require = createRequire(import.meta.url);
 const guard = require("../answer-guard.js");
 const navigation = require("../navigation.js");
 const investigate = require("../investigate.js");
+const mcp = require("../mcp.js");
+const retrieve = require("../retrieve.js");
 
 const CORPUS = process.env.ASK_EVAL_CORPUS
   || "/root/misc/ask-remediation/review/golden_corpus.json";
@@ -61,7 +63,9 @@ const CHECKS = {
 
   // The guard that keeps a bundle-narrating answer out of the shared cache.
   deeper_retrieval: () => guard.detectBundleNarration("The supplied source does not cover that.") === true
-    && guard.detectBundleNarration("The salvage fraction is 0.2, in src/lib/constants/corporations.ts.") === false,
+    && guard.detectBundleNarration("The salvage fraction is 0.2, in src/lib/constants/corporations.ts.") === false
+    && typeof retrieve.searchExact === "function"
+    && typeof retrieve.readIndexedFile === "function",
 
   // Prompt-level contracts. Asserted against the built system prompt so a
   // rewrite that drops them fails here rather than in front of a player.
@@ -84,8 +88,12 @@ const CHECKS = {
       && askPlan.create("what corporations should I buy").live === "required";
   },
 
-  // Genuinely absent: no war or military tool exists on the gamestate server.
-  missing_data_plane: () => null,
+  missing_data_plane: async () => {
+    const tools = await mcp.listTools("gamestate");
+    if (!Array.isArray(tools)) return null;
+    const names = new Set(tools.map(tool => tool.name));
+    return ["wars", "macro_history", "character_wealth_history"].every(name => names.has(name));
+  },
 
   // Mixed bag with no single mechanism; only the replay harness can judge these.
   general: () => null,
@@ -105,7 +113,7 @@ console.log(`capability probe over ${corpus.length} graded questions\n`);
 for (const [cap, rows] of [...byCap].sort((a, b) => b[1].length - a[1].length)) {
   const check = CHECKS[cap];
   let result;
-  try { result = check ? check(rows[0]) : null; } catch (err) { result = false; }
+  try { result = check ? await check(rows[0]) : null; } catch (err) { result = false; }
   const ids = rows.map(r => r.id).slice(0, 8).join(",");
   if (result === null) {
     unproven += rows.length;

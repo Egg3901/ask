@@ -3,6 +3,12 @@ const assert = require("node:assert");
 const grounding = require("./grounding");
 const investigate = require("./investigate");
 
+test("causal and formula questions require a mechanic evidence pass", () => {
+  assert.equal(investigate.needsMechanicEvidence("What would lower US inflation fastest?"), true);
+  assert.equal(investigate.needsMechanicEvidence("How is GDP growth calculated each turn?"), true);
+  assert.equal(investigate.needsMechanicEvidence("What is the US inflation rate?"), false);
+});
+
 test("no ungrounded claims means no note at all", () => {
   assert.equal(grounding.note([]), "");
   assert.equal(grounding.note(null), "");

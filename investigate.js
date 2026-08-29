@@ -102,6 +102,33 @@ const SEARCH_CODE_DEF = {
   },
 };
 
+const INDEX_BROWSE_DEFS = [
+  {
+    type: "function",
+    function: {
+      name: "grep_code",
+      description: "Search exact symbols and words in the indexed source. Use after search_code misses a formula, function, constant, or named mechanic. This handles camelCase such as gdpGrowth and works without filesystem access.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Exact mechanic, symbol, phrase, or likely filename to find." } },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description: "Read all indexed chunks for an exact source path returned by search_code or grep_code.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string", description: "Exact repository-relative source path." } },
+        required: ["path"],
+      },
+    },
+  },
+];
+
 // Change history. Separate from search_code because they answer different
 // questions: search_code says what the game does, these say when it started
 // doing it. A player reporting that something broke, dropped or "used to" work
@@ -144,6 +171,7 @@ const SYSTEM = `You are the research scout for a help system answering player qu
 Work like an investigator:
 - Read the question and the evidence already collected. Decide what is still missing to answer it fully and precisely.
 - Call tools to fill exactly those gaps. Follow leads: if an excerpt references a constant, file, or system you have not seen, search for it. If the question names a corporation, country, or election and live tools are available, look it up.
+- If semantic search misses a formula or named mechanic, call grep_code with its exact words or likely camelCase symbol, then read_file on the matching path. Do not report a mechanic absent until both search styles miss it.
 - If the player says something changed, broke, dropped, got worse, or used to work differently, search the change history for the files the code excerpts came from, then read the one change that fits. Current code cannot date a change; only the history can.
 - Prefer few, well-aimed calls. Stop as soon as the evidence would let a careful writer answer with real numbers and mechanisms.
 - A search that finds nothing is itself evidence: it means the game likely does not model that thing. Note it, do not keep rephrasing the same hunt more than once.
@@ -152,6 +180,11 @@ ESTABLISHED: <what the gathered evidence shows, one compressed sentence>
 UNKNOWN: <what you searched for and could not find, or "nothing" if the evidence is complete>
 
 Never call a tool for data about other players' private holdings or hidden information. Public data only.`;
+
+function needsMechanicEvidence(question) {
+  return /\b(?:calculat(?:e|ed|ion)|formula|affect(?:s|ed|ing)?|impact|cause|causing|driv(?:e|es|ing)|lower|reduce|cut|curb|raise|increase|decrease|fastest|how does|what happens if)\b/i
+    .test(String(question || ""));
+}
 
 function cap(text, limit = RESULT_CAP) {
   const s = String(text || "");
@@ -175,16 +208,24 @@ async function liveToolDefs() {
   } catch { return []; }
 }
 
-async function execute(name, args, { useLive, context, game }) {
+async function execute(name, args, { useLive, context, game, historyDays }) {
   if (name === "search_code") {
     const found = await retrieve.search(String(args.query || ""), { topK: 5, maxChars: 9000, game });
     return found ? found.context : "No matching source found for that query.";
+  }
+  if (name === "grep_code") {
+    const found = retrieve.searchExact(String(args.query || ""), { limit: 8, maxChars: 14000, game });
+    return found ? found.context : "No exact indexed source match found for that query.";
+  }
+  if (name === "read_file") {
+    const found = retrieve.readIndexedFile(String(args.path || ""), { maxChars: 18000, game });
+    return found ? found.context : "No indexed source file exists at that path.";
   }
   if (name === "search_history") {
     const paths = args.path ? [String(args.path)] : [];
     const found = await history.search({
       game, query: String(args.query || ""), paths,
-      sinceDays: Number(args.days) || history.SINCE_DAYS,
+      sinceDays: Number(args.days) || historyDays || history.SINCE_DAYS,
     });
     if (!found.length) return "No shipped changes found for that in the window searched.";
     const dated = await history.withDeployDates(game, found);
@@ -227,7 +268,8 @@ async function execute(name, args, { useLive, context, game }) {
 async function run({ question, context = null, useLive = false, deep = false, onAction = null, game = null, changeQuestion = false }) {
   const caps = deep ? CAPS.deep : CAPS.standard;
   const historyDefs = (await history.available(game)) ? HISTORY_TOOL_DEFS : [];
-  const defs = [SEARCH_CODE_DEF, ...historyDefs, ...(useLive ? await liveToolDefs() : [])];
+  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, ...historyDefs, ...(useLive ? await liveToolDefs() : [])];
+  const historyDays = history.sinceDaysFor(question);
   const started = Date.now();
 
   const isStaff = context?.isAdmin === true || context?.isModerator === true;
@@ -270,7 +312,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
       const name = tc.function?.name || "";
       if (onAction) { try { onAction(name, args); } catch {} }
       let result;
-      try { result = await execute(name, args, { useLive, context, game }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
+      try { result = await execute(name, args, { useLive, context, game, historyDays }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
       return { tc, name, args, result: cap(result) };
     }));
 
@@ -313,4 +355,4 @@ async function run({ question, context = null, useLive = false, deep = false, on
   };
 }
 
-module.exports = { run, LIVE_ALLOWLIST, SELF_ONLY_TOOLS };
+module.exports = { run, needsMechanicEvidence, LIVE_ALLOWLIST, SELF_ONLY_TOOLS };
