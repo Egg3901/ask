@@ -3,9 +3,10 @@
 // Deliberately NOT the ops shell — no sidebar, no nav, no staff chrome. Just the
 // conversation column, so it reads as a product rather than a tool with the
 // dashboard bolted on.
-const OPS = "/root/projects/LSGD-ops-dash";
-const { TOKENS_CSS } = require(`${OPS}/design-system`);
-const { icon, THEME_HEAD } = require(`${OPS}/ui-kit`);
+// Vendored from LSGD-ops-dash (design-system.js + ui-kit.js) so ask-site is
+// self-contained off-box. Re-sync these two files if the ops design system changes.
+const { TOKENS_CSS } = require("./vendor/design-system");
+const { icon, THEME_HEAD } = require("./vendor/ui-kit");
 const starterQuestions = require("./starters");
 const changelog = require("./changelog");
 const legal = require("./legal");
