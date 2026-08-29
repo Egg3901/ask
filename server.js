@@ -1139,4 +1139,6 @@ try {
   process.exit(1);
 }
 
-server.listen(PORT, "127.0.0.1", () => console.log(`ask-site listening on 127.0.0.1:${PORT}`));
+// Default to loopback so the box stays behind Caddy; Railway sets HOST=0.0.0.0 for public ingress.
+const BIND_HOST = process.env.HOST || "127.0.0.1";
+server.listen(PORT, BIND_HOST, () => console.log(`ask-site listening on ${BIND_HOST}:${PORT}`));
