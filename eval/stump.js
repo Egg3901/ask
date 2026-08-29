@@ -23,6 +23,7 @@ const answerGuard = require("../answer-guard");
 const askPlan = require("../ask-plan");
 const games = require("../games");
 const navigation = require("../navigation");
+const history = require("../history");
 
 // A believable non-staff player context, so self-pinned tools exercise the
 // real privacy path instead of a staff bypass.
@@ -46,6 +47,9 @@ const CASES = [
   { id: "division-cost", live: true, q: "How much would it cost me to raise 3 armored divisions at tech tier 2, and how long until they are combat ready?" },
   { id: "spy-savings", live: true, q: "Show me exactly how much money the richest player in Germany has in savings." },
   { id: "cross-game", live: false, q: "In Grand Century, how does the economy simulation differ from A House Divided's?" },
+  { id: "change-elections", live: false, q: "Did something change with elections recently? My snap election fired at a different time than I expected." },
+  { id: "change-stocks", live: true, q: "Why did my stocks fall this week? Was it a code change?" },
+  { id: "change-none", live: false, q: "Why did my approval suddenly drop after I passed a popular bill?" },
 ];
 
 async function runCase(c) {
@@ -57,6 +61,15 @@ async function runCase(c) {
   const subQueries = route.tier === "flash" ? [] : await grounding.decompose(c.q).catch(() => []);
   const hits = await retrieve.searchMulti(c.q, subQueries, { game }).catch(() => null);
   const matched = await corrections.match(c.q).catch(() => []);
+
+  // Change questions: the deterministic git-history pass, then the scout only
+  // when it found nothing — same gating as the server.
+  let historyBlock = "";
+  const changeQuestion = history.changeish(c.q) && await history.available(game);
+  if (changeQuestion) {
+    const recent = await history.evidence({ game, question: c.q, paths: hits?.files || [], code: hits?.context || "" }).catch(() => null);
+    historyBlock = recent ? recent.text : "";
+  }
 
   let liveBlock = "", liveTargeted = false;
   if (c.live) {
@@ -71,14 +84,16 @@ async function runCase(c) {
   let investigation = null;
   const liveMissedTarget = c.live && !liveTargeted;
   const trendish = /\b(trend|history|over (?:the )?(?:last|past|recent)|chang(?:e|ed|es|ing)|since (?:19|20)\d\d|turn.by.turn|evolv)/i.test(c.q);
-  if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish)) {
-    investigation = await investigate.run({ question: c.q, context: CONTEXT, useLive: c.live, deep: false }).catch(() => null);
+  const chaseChange = changeQuestion && historyBlock === "";
+  if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish) || chaseChange) {
+    investigation = await investigate.run({ question: c.q, context: CONTEXT, useLive: c.live, deep: false, game, changeQuestion }).catch(() => null);
   }
   const navBlock = navigation.block(c.q);
 
-  const system = prompt.build({ style: "standard", length: "standard", context: CONTEXT, indexContext: "", visualizations: false, visualizationRequested: false, liveData: c.live, report: false, game })
+  const system = prompt.build({ style: "standard", length: "standard", context: CONTEXT, indexContext: "", visualizations: false, visualizationRequested: false, liveData: c.live, report: false, game, changeHistory: historyBlock !== "" })
     + (matched.length ? `\n\n${corrections.block(matched)}` : "")
     + (hits ? `\n\n${hits.context}` : "")
+    + (historyBlock ? `\n\n${historyBlock}` : "")
     + (liveBlock ? `\n\n${liveBlock}` : "")
     + (investigation ? `\n\n${investigation.text}` : "")
     + (navBlock ? `\n\n${navBlock}` : "");
@@ -87,7 +102,7 @@ async function runCase(c) {
   const raw = out.text || "";
   const { text: answer } = prompt.extractFollowups(raw);
 
-  const evidence = [matched.length ? corrections.block(matched) : "", hits?.context, liveBlock, investigation?.text].filter(Boolean).join("\n\n");
+  const evidence = [matched.length ? corrections.block(matched) : "", hits?.context, historyBlock, liveBlock, investigation?.text].filter(Boolean).join("\n\n");
   const claims = await grounding.check(answer, evidence).catch(() => []);
   const split = grounding.classifyPaths(answer, evidence, retrieve.hasPath);
   const issues = answerGuard.inspect(answer, plan);

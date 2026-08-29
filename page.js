@@ -110,11 +110,10 @@ if(out.length){if(last<text.length)out.push(document.createTextNode(text.slice(l
 // and went stale the moment the budgets changed.
 function tierRows() {
   const player = auth.PLAYER;
+  const row = (name, t) => `<div class="gate-tier"><b>${name}</b> ${t.questions} questions a day · ${t.mcp} with live game data · ${t.viz} with a chart or map</div>`;
   return [
-    `<div class="gate-tier"><b>Every player</b> ${player.questions} questions a day · ${player.mcp} with live game data</div>`,
-    ...Object.values(auth.TIERS)
-      .sort((a, b) => a.questions - b.questions)
-      .map(t => `<div class="gate-tier"><b>${t.label}</b> ${t.questions} a day · ${t.mcp} with live data · charts and maps</div>`),
+    row("Every player", player),
+    ...Object.values(auth.TIERS).sort((a, b) => a.questions - b.questions).map(t => row(t.label, t)),
   ].join("\n      ");
 }
 
@@ -159,6 +158,11 @@ const ASK_THEME_CSS = `
 const ASK_CSS = `
 html,body{height:100%}
 body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
+/* Document pages (lander, gates, changelog, legal, shared views) are ordinary
+   scrolling documents. Without this they inherit the chat shell's locked
+   100dvh body and anything past the fold is simply unreachable. */
+body.doc{height:auto;min-height:100dvh;overflow:visible}
+body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
 .ask-shell{display:flex;flex-direction:column;height:100dvh;min-height:0;min-width:0;overflow:hidden}
 .ask-head{flex:0 0 auto;z-index:20;display:flex;align-items:center;gap:var(--s-3);
   padding:14px clamp(16px,4vw,24px);border-bottom:1px solid var(--border);
@@ -506,7 +510,171 @@ body{background:var(--bg-0);color:var(--text);height:100dvh;overflow:hidden}
 .console-user{font-weight:600;color:var(--text)}.console-muted{color:var(--text-3)}.console-profile{padding:15px}.console-profile h3{font-size:1.2rem;margin-bottom:4px}.console-facts{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.console-fact{font-size:.68rem;border:1px solid var(--border);border-radius:var(--r-full);padding:.2rem .55rem;color:var(--text-2)}
 .console-question{padding:12px 15px;border-top:1px solid var(--border)}.console-question:first-child{border-top:0}.console-question b{display:block;font-size:.82rem;line-height:1.4}.console-question small{display:block;color:var(--text-3);margin-top:5px}.console-answer{color:var(--text-2);font-size:.75rem;line-height:1.45;margin-top:7px;white-space:pre-wrap;max-height:110px;overflow:auto}
 .console-reports{margin-top:16px}.console-cluster{padding:12px 15px;border-top:1px solid var(--border)}.console-cluster:first-of-type{border-top:0}.console-cluster h3{font-size:.8rem}.console-cluster h3 span{color:var(--text-3);font-weight:500}.console-report{margin-top:9px;font-size:.74rem;color:var(--text-2);line-height:1.45}.console-replay{display:inline-block;margin-top:4px;font-size:.7rem;color:var(--accent)}
-@media(max-width:820px){.console-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.console-grid{grid-template-columns:1fr}.console-table th:nth-child(4),.console-table td:nth-child(4){display:none}}
+.console-range{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface)}
+.console-range .range-btn{padding:.3rem .55rem;border-radius:calc(var(--r-sm) - 2px);font-size:.72rem;color:var(--text-3);font-variant-numeric:tabular-nums}
+.console-range .range-btn:hover{color:var(--text);background:var(--glass-2)}
+.console-range .range-btn.on{color:var(--on-accent);background:var(--accent)}
+.console-tabs{display:flex;gap:2px;margin:0 0 18px;border-bottom:1px solid var(--border);overflow-x:auto}
+.console-tab{display:inline-flex;align-items:center;gap:7px;padding:.55rem .8rem;background:transparent;border:0;border-bottom:2px solid transparent;
+  color:var(--text-3);font-size:.82rem;font-weight:500;cursor:pointer;white-space:nowrap;margin-bottom:-1px;transition:color var(--t),border-color var(--t)}
+.console-tab:hover{color:var(--text-2)}
+.console-tab.on{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+.console-tab i{font-style:normal;font-size:.66rem;padding:.05rem .35rem;border-radius:var(--r-full);background:var(--glass-3);color:var(--text-2);font-variant-numeric:tabular-nums}
+.kpi-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+@media(min-width:1100px){.kpi-row{grid-template-columns:repeat(6,minmax(0,1fr))}.kpi-tile b{font-size:1.4rem}}
+/* ── review + questions screens ─────────────────────────────────────────── */
+.console-nav{display:flex;align-items:center;gap:2px;margin:0 0 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.console-nav .console-link{margin-left:auto;border:0}
+.console-nav a.console-tab{text-decoration:none}
+.rev-stats{margin-bottom:10px}
+/* These subs carry a real sentence, so they wrap rather than truncate. */
+.rev-stats .kpi-sub{white-space:normal;overflow:visible;line-height:1.3}
+.rev-a p:first-child{margin-top:0}
+.rev-a>:last-child{margin-bottom:0}
+.rev-a h2,.rev-a h3,.rev-a h4{font-size:.92rem;margin:12px 0 6px;color:var(--text)}
+.rev-a p,.rev-a ul,.rev-a ol,.rev-a blockquote{margin-bottom:9px}
+.rev-a ul,.rev-a ol{padding-left:20px}
+.rev-progress{height:4px;border-radius:99px;background:var(--glass-3);overflow:hidden;margin-bottom:18px}
+.rev-progress i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width var(--t)}
+.rev-stage{position:relative;min-height:280px}
+.rev-deck{position:relative}
+.rev-card{position:relative;z-index:2;border:1px solid var(--border);background:var(--surface);border-radius:var(--r-md);
+  padding:18px 20px;box-shadow:var(--e2);transition:transform .13s ease-in,opacity .13s ease-in}
+.rev-card.fly-left{transform:translateX(-46px) rotate(-2deg);opacity:0}
+.rev-card.fly-right{transform:translateX(46px) rotate(2deg);opacity:0}
+.rev-card.fly-down{transform:translateY(28px);opacity:0}
+/* The peeking lip UNDER the top card: this is a stack, and there is more to do.
+   Behind it the card would simply hide it, since the card is opaque. */
+.rev-next{position:absolute;left:14px;right:14px;bottom:-7px;height:14px;z-index:1;border:1px solid var(--border);
+  border-top:0;border-radius:0 0 var(--r-md) var(--r-md);background:var(--surface-2)}
+.rev-meta{font-size:.74rem;margin-bottom:9px}
+.rev-q{font-size:1.18rem;line-height:1.35;letter-spacing:-.02em;margin-bottom:10px}
+.rev-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.rev-tag{font-size:.66rem;padding:.12rem .45rem;border-radius:var(--r-full);border:1px solid var(--border);color:var(--text-2)}
+.rev-tag.warn{border-color:var(--border-2);color:var(--text)}
+.rev-tag.good{border-color:var(--border-2);color:var(--text-2)}
+.rev-tools{font-size:.7rem;color:var(--text-3);margin-bottom:8px}
+.rev-a{font-size:.82rem;line-height:1.55;color:var(--text-2);white-space:pre-wrap;max-height:42vh;overflow:auto;
+  padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-1)}
+.rev-foot{font-size:.68rem;margin-top:9px}
+.rev-done{text-align:center;padding:48px 16px}
+.rev-done h2{font-size:1.3rem;margin-bottom:8px}
+.rev-done p{max-width:44ch;margin:0 auto 14px}
+.rev-done .console-link{display:inline-flex}
+.rev-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 10px}
+.rev-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.7rem;border-radius:var(--r-md);
+  border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:.85rem;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:all var(--t)}
+.rev-btn:hover{color:var(--text);background:var(--glass-2);border-color:var(--border-2);transform:translateY(-1px)}
+.rev-btn kbd{font-family:var(--font-mono,monospace);font-size:.62rem;font-weight:400;color:var(--text-3);
+  border:1px solid var(--border);border-radius:4px;padding:.02rem .3rem}
+.rev-btn.good:hover{box-shadow:inset 0 -2px 0 var(--accent)}
+.rev-btn.bad:hover{box-shadow:inset 0 -2px 0 var(--border-2)}
+.rev-reason{border:1px solid var(--border-2);background:var(--surface);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px}
+.rev-reason-head{font-size:.84rem;font-weight:600;margin-bottom:10px}
+.rev-reason-head small{font-weight:400;display:block;margin-top:2px}
+.rev-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.rev-chip{font-size:.74rem;padding:.3rem .6rem;border-radius:var(--r-full);border:1px solid var(--border);
+  background:transparent;color:var(--text-2);cursor:pointer;font-family:var(--font);transition:all var(--t)}
+.rev-chip:hover{color:var(--text);border-color:var(--border-2);background:var(--glass-2)}
+.rev-reason textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--field-bg);color:inherit;font-size:.8rem;resize:vertical}
+.rev-reason-foot{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.rev-primary{padding:.42rem .8rem;border-radius:var(--r-sm);border:1px solid transparent;background:var(--accent);
+  color:var(--on-accent);font-weight:600;font-size:.78rem;cursor:pointer;font-family:var(--font);transition:filter var(--t)}
+.rev-primary:hover{filter:brightness(1.08)}
+.rev-link{background:none;border:0;color:var(--text-3);font-size:.74rem;cursor:pointer;font-family:var(--font);text-decoration:underline}
+.rev-link:hover:not(:disabled){color:var(--text)}
+.rev-link:disabled{opacity:.4;cursor:default;text-decoration:none}
+.rev-hint{display:flex;align-items:center;gap:14px;font-size:.72rem;flex-wrap:wrap}
+.rev-hint kbd{font-family:var(--font-mono,monospace);font-size:.66rem;border:1px solid var(--border);border-radius:4px;padding:.02rem .28rem}
+.q-toolbar{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);margin-bottom:10px}
+.q-toolbar input[type=search]{flex:1;min-width:180px;padding:.45rem .6rem;border:1px solid var(--border);
+  border-radius:var(--r-sm);background:var(--field-bg);color:inherit;font-size:.8rem}
+.q-filters{display:flex;flex-wrap:wrap;margin-bottom:14px}
+.q-list{padding:0}
+.q-row{border-bottom:1px solid var(--border)}
+.q-row:last-child{border-bottom:0}
+.q-row summary{display:grid;grid-template-columns:150px minmax(0,1fr) 140px 120px;gap:12px;align-items:center;
+  padding:11px 15px;cursor:pointer;font-size:.78rem;list-style:none}
+.q-row summary::-webkit-details-marker{display:none}
+.q-row summary:hover{background:var(--glass-2)}
+.q-row[open] summary{background:var(--glass-2);border-bottom:1px solid var(--border)}
+.q-when{color:var(--text-3);font-size:.7rem;font-variant-numeric:tabular-nums}
+.q-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.q-who{color:var(--text-3);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q-verdict{text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.q-thumbs{display:inline-flex;gap:2px;flex-shrink:0}
+.q-thumb{display:inline-flex;align-items:center;justify-content:center;width:26px;height:24px;padding:0;
+  border:1px solid transparent;border-radius:var(--r-sm);background:transparent;color:var(--text-3);cursor:pointer;transition:all var(--t)}
+.q-thumb svg{width:14px;height:14px}
+.q-thumb:hover{color:var(--text);background:var(--glass-2);border-color:var(--border)}
+.q-thumb.on{color:var(--text);border-color:var(--border-2);background:var(--glass-3)}
+.q-thumb.on svg{fill:currentColor;fill-opacity:.18}
+.q-thumbs-failed{outline:1px solid var(--border-2);border-radius:var(--r-sm)}
+.q-body{padding:12px 15px 15px}
+.q-detail{font-size:.7rem;margin-bottom:8px;line-height:1.5}
+.q-actions{display:flex;gap:14px;margin-top:8px}
+.q-pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;font-size:.74rem}
+.q-pager .console-link.disabled{opacity:.4}
+@media(max-width:820px){
+  .q-row summary{grid-template-columns:minmax(0,1fr) auto;gap:6px}
+  .q-when,.q-who{grid-column:1/-1;font-size:.66rem}
+  .rev-a{max-height:50vh}
+}
+.kpi-tile{border:1px solid var(--border);background:var(--surface);border-radius:var(--r-md);padding:13px 14px;min-width:0}
+.kpi-tile small{display:block;color:var(--text-3);font-size:.67rem;text-transform:uppercase;letter-spacing:.06em}
+.kpi-tile b{display:block;font-size:1.65rem;font-weight:650;letter-spacing:-.03em;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.kpi-sub{display:block;color:var(--text-3);font-size:.68rem;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpi-delta{display:inline-block;margin-top:6px;font-size:.66rem;padding:.1rem .38rem;border-radius:var(--r-full);border:1px solid var(--border);color:var(--text-2)}
+.kpi-delta.up::before{content:"▲ ";font-size:.6em;vertical-align:1px}
+.kpi-delta.down::before{content:"▼ ";font-size:.6em;vertical-align:1px}
+/* ── charts ───────────────────────────────────────────────────────────────
+   Monochrome by design: the two series in a chart are separated by mark form
+   (columns vs a line) and the legend, so they survive any colour vision. */
+.viz-body{padding:14px 15px 16px}
+.viz{width:100%;height:auto;overflow:visible}
+.viz-grid{stroke:var(--border);stroke-width:1;shape-rendering:crispEdges}
+.viz-tick{fill:var(--text-3);font-size:10px;font-family:var(--font)}
+.viz-val{fill:var(--text-2);font-size:10px;font-weight:600;font-family:var(--font)}
+.viz-bar{fill:var(--accent);fill-opacity:.85;transition:fill-opacity var(--t)}
+.viz-hit{fill:transparent}
+.viz-col:hover .viz-bar{fill-opacity:1}
+.viz-col:hover .viz-hit{fill:var(--glass-2)}
+.viz-line{fill:none;stroke:var(--text-3);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.viz-line.accent{stroke:var(--accent);stroke-opacity:.9}
+.viz-dot{fill:var(--text-2);stroke:var(--surface);stroke-width:2}
+.viz-dot.accent{fill:var(--accent)}
+.viz-area{fill:var(--accent);fill-opacity:.1}
+.viz-legend{display:flex;gap:14px;margin-bottom:8px;font-size:.72rem;color:var(--text-2)}
+.viz-key{display:inline-flex;align-items:center;gap:6px}
+.viz-key i{display:block;border-radius:2px}
+.viz-key .k-bar{width:9px;height:9px;background:var(--accent);opacity:.85}
+/* Stack segments separate by lightness, not hue, and the legend names both. */
+.viz-bar.seg-in{fill-opacity:.42}
+.viz-bar.seg-out{fill-opacity:.92}
+.viz-col:hover .viz-bar.seg-in{fill-opacity:.55}
+.viz-key .k-bar.seg-in{opacity:.42}
+.viz-key .k-bar.seg-out{opacity:.92}
+.viz-key .k-line{width:14px;height:2px;background:var(--text-3)}
+.viz-note{font-size:.68rem;line-height:1.45;margin-top:10px}
+.viz-empty{padding:26px 4px;text-align:center;color:var(--text-3);font-size:.78rem}
+.viz-table{margin-top:12px}
+.viz-table summary{cursor:pointer;font-size:.72rem;color:var(--text-3);padding:4px 0}
+.viz-table summary:hover{color:var(--text)}
+.viz-table table{margin-top:8px;border:1px solid var(--border);border-radius:var(--r-sm)}
+.console-toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.console-toolbar input[type=search]{flex:1;min-width:150px;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r-sm);
+  background:var(--field-bg);color:inherit;font-size:.78rem}
+.console-check{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;color:var(--text-2);white-space:nowrap;cursor:pointer}
+.console-check input{width:14px;height:14px;accent-color:var(--accent)}
+.console-toolbar .console-muted{font-size:.7rem;margin-left:auto;font-variant-numeric:tabular-nums}
+.badge-active{display:inline-block;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;padding:.04rem .3rem;
+  border-radius:var(--r-full);border:1px solid var(--border-2);color:var(--text-2)}
+.console-card h2 .console-muted{font-weight:400;font-size:.74rem}
+@media(max-width:980px){.kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:820px){.console-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.console-grid{grid-template-columns:1fr}.console-table th:nth-child(4),.console-table td:nth-child(4){display:none}
+  .console-top{flex-wrap:wrap}.console-top a{margin-left:0}}
 .toggle{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--text-2)}
 .toggle input{width:16px;height:16px;accent-color:var(--accent)}
 
@@ -694,7 +862,7 @@ function ogHead({ title, description, image, url }) {
 <meta name="theme-color" content="#000000">`;
 }
 
-function shell(inner, extraJs = "", head = "", title = "Ask \u00b7 A House Divided") {
+function shell(inner, extraJs = "", head = "", title = "Ask \u00b7 A House Divided", bodyClass = "") {
   return `<!doctype html><html lang="en" data-theme="dark"><head>${THEME_HEAD}
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${esc(title)}</title>
@@ -728,7 +896,7 @@ svg{display:block;width:14px;height:14px;flex-shrink:0}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
-${ASK_CSS}</style></head><body>${inner}${extraJs}</body></html>`;
+${ASK_CSS}</style></head><body${bodyClass ? ` class="${bodyClass}"` : ""}>${inner}${extraJs}</body></html>`;
 }
 
 function changelogPage() {
@@ -773,7 +941,7 @@ function changelogPage() {
   .cl-items li::before{content:'';position:absolute;left:2px;top:.6em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
   .cl-empty{color:var(--text-2)}
   </style>`;
-  return shell(inner, "", css);
+  return shell(inner, "", css, "What's new \u00b7 Ask", "doc");
 }
 
 // Reuses the changelog page's chrome so the legal pages are unmistakably part
@@ -822,7 +990,7 @@ function legalPage(slug) {
   .lg-list li b{color:var(--text);font-weight:600}
   .lg-foot{margin-top:32px;padding-top:20px;border-top:1px solid var(--border);color:var(--text-2);font-size:.86rem}
   </style>`;
-  return shell(inner, "", css, `${doc.title} \u00b7 Ask`);
+  return shell(inner, "", css, `${doc.title} \u00b7 Ask`, "doc");
 }
 
 function signedOut({ failed = false, notFound = false } = {}) {
@@ -832,7 +1000,7 @@ function signedOut({ failed = false, notFound = false } = {}) {
       <h1>Link not found</h1>
       <p>This shared conversation no longer exists, or the link was revoked.</p>
       <a class="gate-btn" href="/">Go to Ask</a>
-    </div></div>`);
+    </div></div>`, "", "", "Ask \u00b7 A House Divided", "doc");
   }
   const examples = [
     "How is inflation calculated?",
@@ -866,7 +1034,7 @@ function signedOut({ failed = false, notFound = false } = {}) {
     title: "Ask · A House Divided",
     description: "Answers about how A House Divided actually works, taken from the game's live code, with citations and live game-state lookups.",
     url: SELF_ORIGIN,
-  }));
+  }), "Ask · A House Divided", "doc");
 }
 
 // Ask is open to every player, so the only ways to land here are a restricted
@@ -890,7 +1058,7 @@ function notEntitled({ identity, context, reason }) {
     <p>${body}</p>
     ${banned || isPrivate ? "" : `<a class="gate-btn" href="/">Try again</a>`}
     <div style="margin-top:18px"><form method="POST" action="/auth/logout"><button class="signout" type="submit">Sign out</button></form></div>
-  </div></div>`);
+  </div></div>`, "", "", undefined, "doc");
 }
 
 function app({ identity, context, entitlement, usage, conversations, model, styles, lengths, game }) {
@@ -996,9 +1164,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
       <button type="button" class="segbtn" data-theme-value="dark">OLED black</button>
     </div></div>
     <label class="setting-live"><input type="checkbox" id="live"><span>Use live game data<small>Include your current character and corporation state.</small></span></label>
-    <label class="setting-live${entitlement?.visualizations ? "" : " setting-locked"}"><input type="checkbox" id="visualizations"${entitlement?.visualizations ? "" : " disabled"}><span>Use visualizations<small>${entitlement?.visualizations
-      ? "Allow a diagram, chart, or game map when it makes the answer clearer."
-      : "Charts, diagrams, and game maps are a supporter feature. Answers stay in prose."}</small></span></label>
+    <label class="setting-live"><input type="checkbox" id="visualizations"><span>Use visualizations<small>Allow a diagram, chart, or game map when it makes the answer clearer.${usage?.vizLimit ? ` ${usage.vizLimit} a day on your plan.` : ""}</small></span></label>
     <div class="setting-group"><label>Response style</label><div class="seg">${segBtns(styles, "style", "standard")}</div></div>
     <div class="setting-group"><label>Response length</label><div class="seg">${segBtns(lengths, "length", "standard")}</div></div>
   </div>
@@ -1069,6 +1235,10 @@ var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.g
 // names a different game outright, so this is a default, not a hard filter.
 function gameById(id){for(var i=0;i<GAMES.length;i++){if(GAMES[i].id===id)return GAMES[i];}return GAMES[0];}
 var GAME=gameById(ACTIVE_GAME);
+// The browser's own IANA zone, sent with every question so an answer can say
+// "today" and mean the player's today. Never inferred server-side from an IP or
+// a locale: a wrong zone is worse than none.
+var LOCAL_TZ=(function(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch(e){return ''}})();
 var gamesw=document.getElementById('gamesw'),gameswBtn=document.getElementById('gamesw-btn'),
     gameswMenu=document.getElementById('gamesw-menu'),gameswName=document.getElementById('gamesw-name');
 function renderGameMenu(){
@@ -1370,9 +1540,12 @@ function addTurn(question,res){
 function fill(turn,target,d){
   setFlags(turn,d);
   var h=md(d.answer);
-  // The question asked for a chart the tier does not include. Answering in prose
-  // and saying nothing would read as the model ignoring the request.
-  if(d.vizBlocked)h+='<div class="ask-viz-note">Charts, diagrams, and game maps are a supporter feature, so this one is answered in prose.</div>';
+  // The question asked for a chart that could not be drawn. The model is told to
+  // say so itself; this note carries the number, which the model has no business
+  // asserting, and names when it comes back.
+  if(d.vizBlocked)h+='<div class="ask-viz-note">'+(d.vizLimit
+    ? 'You have used all '+d.vizLimit+' charts and maps for today, so this one is answered in prose. Your allowance resets at midnight UTC.'
+    : 'This one is answered in prose.')+'</div>';
   if(d.reportUrl)h+='<div class="ask-viz-note"><a href="'+esc(d.reportUrl)+'" target="_blank" rel="noopener">Open this report as its own shareable page &rarr;</a></div>';
   var cs=(d.citations||[]);
   if(cs.length){
@@ -1602,7 +1775,7 @@ function submit(){
     else { ctrl.abort(); } };
   fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
     signal:ctrl.signal,
-    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId,game:GAME.id})})
+    body:JSON.stringify({question:text,style:S.style,length:S.length,useMcp:live.checked,visualizations:visualizations.checked,convId:convId,game:GAME.id,tz:LOCAL_TZ})})
   .then(function(r){
     // Non-streaming replies (cache hits, quota refusals) still come back as JSON.
     var ct=r.headers.get('content-type')||'';
@@ -1782,7 +1955,7 @@ function sharedView(conv) {
     description: snippet || "A shared Ask conversation. Answers come from the game's live code.",
     image: conv.shareToken ? `${SELF_ORIGIN}/s/${conv.shareToken}/og.png` : undefined,
     url: conv.shareToken ? `${SELF_ORIGIN}/s/${conv.shareToken}` : undefined,
-  }) + sharedScripts());
+  }) + sharedScripts(), undefined, "doc");
 }
 
 // A generated report on its own shareable page. The renderer is deliberately
@@ -1868,10 +2041,173 @@ function reportView(report) {
     description: snippet || "A generated report from a live Ask question.",
     image: report.token ? `${SELF_ORIGIN}/r/${report.token}/og.png` : undefined,
     url: report.token ? `${SELF_ORIGIN}/r/${report.token}` : undefined,
-  }) + jargonScripts());
+  }) + jargonScripts(), undefined, "doc");
 }
 
-function consolePage({ identity, context, users = [], selected = null, reports = [], modelStats = [], correctionRows = [], health = null }) {
+// ── Console charts ──────────────────────────────────────────────────────────
+// Server-rendered inline SVG. No chart library, no client fetch, no layout
+// shift, and it survives print and a blocked CDN. The page's palette is
+// monochrome, so the two series in one chart are told apart by mark form
+// (columns vs line) and a legend, never by hue alone.
+
+/** Round an axis maximum up to a clean number, so ticks read 0 / 20 / 40. */
+function niceCeil(n) {
+  if (!(n > 0)) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(n)));
+  for (const step of [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]) if (n <= step * mag) return step * mag;
+  return 10 * mag;
+}
+const shortDay = d => {
+  const [, m, day] = String(d).split("-");
+  return `${["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m)] || ""} ${Number(day)}`;
+};
+/**
+ * A column with a 4px rounded data-end and square corners at the baseline.
+ * `round: false` for a stacked segment that has another segment sitting on it.
+ */
+function columnPath(x, y, w, h, round = true) {
+  if (h <= 0.5) return "";
+  const b = y + h;
+  if (!round) return `M${x} ${b}V${y}H${x + w}V${b}Z`;
+  const r = Math.min(4, w / 2, h);
+  return `M${x} ${b}V${y + r}Q${x} ${y} ${x + r} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${b}Z`;
+}
+
+/**
+ * One chart: columns for the primary measure, an optional line for a second
+ * measure ON THE SAME SCALE (never a second axis — two units means two charts).
+ */
+function columnChart({ points = [], valueKey, lineKey = null, stack = null, seriesLabel = "", lineLabel = "", unit = "", height = 250, format = null }) {
+  if (!points.length) return `<div class="viz-empty">Nothing recorded in this range yet.</div>`;
+  // The viewBox is sized to the card's real inner width so the SVG renders at
+  // roughly 1:1 — scaled up, 10px axis text would tower over the page's own type.
+  const W = 1080, padR = 14, padT = 20, padB = 26;
+  const fmt = format || (n => Number(n).toLocaleString());
+  const padL = format ? 56 : 40;   // compact ticks ("1.2M") need more gutter than "50"
+  const plotW = W - padL - padR, plotH = height - padT - padB;
+  // A stack's column height is the sum of its segments; the axis is scaled to
+  // the total, not to any one part.
+  const values = points.map(p => stack
+    ? stack.reduce((n, s) => n + (Number(p[s.key]) || 0), 0)
+    : Number(p[valueKey]) || 0);
+  const lineValues = lineKey ? points.map(p => Number(p[lineKey]) || 0) : [];
+  const top = niceCeil(Math.max(1, ...values, ...lineValues));
+  const y = v => padT + plotH - (Math.max(0, Number(v) || 0) / top) * plotH;
+  const band = plotW / points.length;
+  const barW = Math.max(2, Math.min(24, band - 2));   // 2px surface gap between neighbours
+  const cx = i => padL + i * band + band / 2;
+
+  const ticks = [0, top / 2, top].map(t => `<line x1="${padL}" y1="${y(t).toFixed(1)}" x2="${W - padR}" y2="${y(t).toFixed(1)}" class="viz-grid"/>
+    <text x="${padL - 7}" y="${(y(t) + 3.5).toFixed(1)}" class="viz-tick" text-anchor="end">${esc(Number.isInteger(t) ? fmt(t) : fmt(Number(t.toFixed(1))))}</text>`).join("");
+
+  // Label the extreme, and the latest day when it is far enough away to not
+  // collide. Never a number on every column. A label is also dropped when the
+  // line series passes through where it would sit — an unreadable number is
+  // worse than none, and the tooltip and table still carry the value.
+  const peak = values.indexOf(Math.max(...values));
+  const last = points.length - 1;
+  const clearOfLine = i => !lineKey || Math.abs(y(values[i]) - y(lineValues[i])) > 14;
+  const labelled = new Set();
+  if (values[peak] > 0 && clearOfLine(peak)) labelled.add(peak);
+  if (last - peak >= 2 && values[last] > 0 && clearOfLine(last)) labelled.add(last);
+
+  const GAP = 2;   // the surface gap that separates touching marks
+  const bars = points.map((p, i) => {
+    const v = values[i];
+    const x = cx(i) - barW / 2, top0 = y(v), h = padT + plotH - top0;
+    const parts = stack
+      ? ` · ${stack.map(s => `${esc(s.label)} ${esc(fmt(Number(p[s.key]) || 0))}`).join(" · ")}`
+      : lineKey ? ` · ${esc(lineLabel)} ${esc(fmt(Number(p[lineKey] || 0)))}` : "";
+    const tip = `${esc(shortDay(p.day))}: ${esc(fmt(v))}${unit ? ` ${esc(unit)}` : ""}${parts}`;
+    const label = labelled.has(i) && v > 0
+      ? `<text x="${cx(i).toFixed(1)}" y="${(top0 - 5).toFixed(1)}" class="viz-val" text-anchor="middle">${esc(fmt(v))}</text>` : "";
+    // Stacked: draw bottom-up, only the topmost segment gets the rounded data
+    // end, and every segment below one loses 2px off its top for the gap.
+    let marks;
+    if (stack) {
+      let below = 0;
+      marks = stack.map((s, si) => {
+        const sv = Number(p[s.key]) || 0;
+        if (sv <= 0) return "";
+        const isTop = si === stack.length - 1;
+        const segTop = y(below + sv), segBottom = y(below);
+        below += sv;
+        // The gap comes off this segment's TOP edge, so it lands between the
+        // segments and the stack stays anchored to the baseline.
+        const inset = isTop ? 0 : GAP;
+        const segH = Math.max(0, segBottom - segTop - inset);
+        return `<path d="${columnPath(x, segTop + inset, barW, segH, isTop)}" class="viz-bar ${esc(s.className)}"/>`;
+      }).join("");
+    } else {
+      marks = `<path d="${columnPath(x, top0, barW, h)}" class="viz-bar"/>`;
+    }
+    return `<g class="viz-col"><title>${tip}</title>
+      <rect x="${(cx(i) - band / 2).toFixed(1)}" y="${padT}" width="${band.toFixed(1)}" height="${plotH}" class="viz-hit"/>
+      ${marks}${label}</g>`;
+  }).join("");
+
+  // The end marker only goes on when the line finishes clear of the final
+  // column. Inside the bar its surface ring reads as a notch cut in the data.
+  const endDot = lineKey && lineValues[last] > values[last]
+    ? `<circle cx="${cx(last).toFixed(1)}" cy="${y(lineValues[last]).toFixed(1)}" r="4" class="viz-dot"/>` : "";
+  const line = lineKey ? `<polyline class="viz-line" points="${points.map((p, i) => `${cx(i).toFixed(1)},${y(p[lineKey]).toFixed(1)}`).join(" ")}"/>${endDot}` : "";
+
+  // ~6 x-labels, evenly spaced, so they never collide however long the range.
+  const every = Math.max(1, Math.ceil(points.length / 6));
+  const xLabels = points.map((p, i) => (i % every === 0 || i === last)
+    ? `<text x="${cx(i).toFixed(1)}" y="${height - 6}" class="viz-tick" text-anchor="middle">${esc(shortDay(p.day))}</text>` : "").join("");
+
+  const legend = stack
+    ? `<div class="viz-legend">${stack.slice().reverse().map(s => `<span class="viz-key"><i class="k-bar ${esc(s.className)}"></i>${esc(s.label)}</span>`).join("")}</div>`
+    : lineKey ? `<div class="viz-legend"><span class="viz-key"><i class="k-bar"></i>${esc(seriesLabel)}</span><span class="viz-key"><i class="k-line"></i>${esc(lineLabel)}</span></div>` : "";
+  const summary = `${seriesLabel || "Series"}: ${fmt(values.reduce((a, b) => a + b, 0))} across ${points.length} days, peak ${fmt(Math.max(...values))} on ${shortDay(points[peak].day)}.`;
+  return `${legend}<svg class="viz" viewBox="0 0 ${W} ${height}" role="img" aria-label="${esc(summary)}" preserveAspectRatio="xMidYMid meet">
+    ${ticks}${bars}${line}${xLabels}</svg>`;
+}
+
+/**
+ * A running total: one monotonic series, so an area reads the growth better
+ * than columns would. Never merged into the daily chart — a lifetime total and
+ * a daily rate differ by orders of magnitude, and that is what a second y-axis
+ * would be papering over.
+ */
+function areaChart({ points = [], valueKey, format = n => n.toLocaleString(), unit = "", height = 200 }) {
+  if (!points.length) return `<div class="viz-empty">Nothing recorded in this range yet.</div>`;
+  const W = 1080, padL = 56, padR = 14, padT = 20, padB = 26;
+  const plotW = W - padL - padR, plotH = height - padT - padB;
+  const values = points.map(p => Number(p[valueKey]) || 0);
+  const top = niceCeil(Math.max(1, ...values));
+  const y = v => padT + plotH - (Math.max(0, Number(v) || 0) / top) * plotH;
+  const x = i => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
+  const last = points.length - 1;
+
+  const ticks = [0, top / 2, top].map(t => `<line x1="${padL}" y1="${y(t).toFixed(1)}" x2="${W - padR}" y2="${y(t).toFixed(1)}" class="viz-grid"/>
+    <text x="${padL - 7}" y="${(y(t) + 3.5).toFixed(1)}" class="viz-tick" text-anchor="end">${esc(format(t))}</text>`).join("");
+  const line = points.map((p, i) => `${x(i).toFixed(1)},${y(values[i]).toFixed(1)}`).join(" ");
+  const area = `${padL},${(padT + plotH).toFixed(1)} ${line} ${(W - padR).toFixed(1)},${(padT + plotH).toFixed(1)}`;
+  const hits = points.map((p, i) => `<g class="viz-col"><title>${esc(shortDay(p.day))}: ${esc(format(values[i]))}${unit ? ` ${esc(unit)}` : ""}</title>
+    <rect x="${(x(i) - plotW / points.length / 2).toFixed(1)}" y="${padT}" width="${(plotW / points.length).toFixed(1)}" height="${plotH}" class="viz-hit"/></g>`).join("");
+
+  const every = Math.max(1, Math.ceil(points.length / 6));
+  const xLabels = points.map((p, i) => (i % every === 0 || i === last)
+    ? `<text x="${x(i).toFixed(1)}" y="${height - 6}" class="viz-tick" text-anchor="middle">${esc(shortDay(p.day))}</text>` : "").join("");
+  // One direct label, on the value the chart exists to show: where it stands now.
+  const endLabel = `<text x="${(x(last) - 6).toFixed(1)}" y="${(y(values[last]) - 9).toFixed(1)}" class="viz-val" text-anchor="end">${esc(format(values[last]))}</text>`;
+
+  return `<svg class="viz" viewBox="0 0 ${W} ${height}" role="img" aria-label="Running total reaching ${esc(format(values[last]))}${unit ? ` ${esc(unit)}` : ""} on ${esc(shortDay(points[last].day))}." preserveAspectRatio="xMidYMid meet">
+    ${ticks}<polygon class="viz-area" points="${area}"/><polyline class="viz-line accent" points="${line}"/>
+    <circle cx="${x(last).toFixed(1)}" cy="${y(values[last]).toFixed(1)}" r="4" class="viz-dot accent"/>${endLabel}${hits}${xLabels}</svg>`;
+}
+
+/** The numbers behind a chart, always reachable — colour is never the only channel. */
+function vizTable(points, columns) {
+  const head = columns.map(c => `<th>${esc(c.label)}</th>`).join("");
+  const body = points.slice().reverse().map(p => `<tr><td>${esc(p.day)}</td>${columns.slice(1).map(c => `<td>${esc(c.get(p))}</td>`).join("")}</tr>`).join("");
+  return `<details class="viz-table"><summary>View the numbers</summary>
+    <div style="overflow:auto"><table class="console-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></details>`;
+}
+
+function consolePage({ identity, context, users = [], selected = null, reports = [], modelStats = [], correctionRows = [], health = null, activity = null, days = 30, tab = "overview" }) {
   const models = require("./models");
   const money = n => `$${Number(n || 0).toFixed(Number(n || 0) < 0.01 ? 4 : 2)}`;
   const when = ts => ts ? new Date(ts).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "Never";
@@ -1931,8 +2267,93 @@ function consolePage({ identity, context, users = [], selected = null, reports =
   const totalReports = users.reduce((n, u) => n + Number(u.report_count || 0), 0);
   const totalCost = users.reduce((n, u) => n + Number(u.estimated_cost || 0), 0);
   const totalTokens = users.reduce((n, u) => n + Number(u.tokens_in || 0) + Number(u.tokens_out || 0), 0);
-  const rows = users.map(u => `<tr>
-    <td><a class="console-user" href="/console?user=${encodeURIComponent(u.user_key)}">${esc(u.username || u.user_key)}</a><div class="console-muted">${esc(u.role || u.provider || "player")}</div></td>
+
+  // ── Audience and volume ───────────────────────────────────────────────────
+  const act = activity || { series: [], totals: {}, active: {}, windowDays: 7, perDay: 0, questionsToday: 0 };
+  const series = act.series || [];
+  const A = act.active || {};
+  const T = act.totals || {};
+  const activeSet = new Set(A.keys || []);
+  const windowDays = act.windowDays || 7;
+  const pct = (a, b) => b > 0 ? `${Math.round((a / b) * 100)}%` : "—";
+  const delta = (now, before) => {
+    if (!before) return now ? `<span class="kpi-delta up">new</span>` : "";
+    const change = Math.round(((now - before) / before) * 100);
+    if (change === 0) return `<span class="kpi-delta flat">level vs previous ${windowDays}d</span>`;
+    return `<span class="kpi-delta ${change > 0 ? "up" : "down"}">${change > 0 ? "+" : ""}${change}% vs previous ${windowDays}d</span>`;
+  };
+  const providerSplit = Object.entries(A.byProvider || {}).sort((a, b) => b[1] - a[1])
+    .map(([p, n]) => `${num(n)} ${esc(p)}`).join(" · ") || "no one yet";
+  const helpfulRate = ratePct(T.up, T.down);
+  // Token counts run to millions; spelled out in full they stop being readable
+  // at a glance, which is the only job a stat tile has.
+  const compact = n => {
+    const v = Number(n) || 0;
+    if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+    if (v >= 1e6) return `${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
+    if (v >= 1e4) return `${Math.round(v / 1e3)}K`;
+    if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+    return v.toLocaleString();
+  };
+  const tok = act.tokens || {};
+  const kpis = [
+    { label: `Active users (${windowDays}d)`, value: num(A.wau), sub: providerSplit, delta: delta(Number(A.wau || 0), Number(A.prevWau || 0)) },
+    { label: "Active today", value: num(A.dau), sub: `${num(A.windowActive)} seen in the last ${days} days` },
+    { label: "Questions today", value: num(act.questionsToday), sub: `${num(T.questions)} over ${days} days` },
+    { label: "Questions per day", value: (Number(act.perDay) || 0).toFixed(1), sub: `average over ${days} days` },
+    { label: "New users", value: num(T.newUsers), sub: `first seen in ${days} days` },
+    { label: "Tokens per day", value: compact(tok.perDay), sub: `${compact(tok.today)} today` },
+    { label: `Tokens (${days}d)`, value: compact(T.tokens), sub: `${compact(T.tokensIn)} in · ${compact(T.tokensOut)} out` },
+    { label: "Tokens all time", value: compact(tok.allTime), sub: "cached answers are free" },
+    { label: "Live-data answers", value: pct(Number(T.live || 0), Number(T.questions || 0)), sub: `${num(T.live)} of ${num(T.questions)} hit the game` },
+    { label: "Rated helpful", value: helpfulRate, sub: `${num(T.up)} up · ${num(T.down)} reported` },
+    { label: `API cost (${days}d)`, value: money(T.cost), sub: `${money(totalCost)} all time` },
+    { label: "Reported answers", value: num(T.down), sub: `${num(totalReports)} all time` },
+  ].map(k => `<div class="kpi-tile"><small>${esc(k.label)}</small><b>${k.value}</b>
+    <span class="kpi-sub">${k.sub || ""}</span>${k.delta || ""}</div>`).join("");
+
+  const rangeLinks = [7, 30, 90].map(d => `<a class="range-btn${d === days ? " on" : ""}" href="/console?days=${d}&tab=overview">${d}d</a>`).join("");
+  const activitySection = `<section class="console-card">
+    <h2>Questions per day <span class="console-muted">· UTC days, cached answers included</span></h2>
+    <div class="viz-body">${columnChart({ points: series, valueKey: "questions", lineKey: "live", seriesLabel: "Questions", lineLabel: "Used live game data", unit: "questions" })}
+      ${series.length ? vizTable(series, [
+        { label: "Day" }, { label: "Questions", get: p => num(p.questions) }, { label: "Live", get: p => num(p.live) },
+        { label: "Cached", get: p => num(p.cached) }, { label: "Askers", get: p => num(p.askers) }, { label: "Cost", get: p => money(p.cost) },
+      ]) : ""}</div>
+  </section>
+  <section class="console-card">
+    <h2>Active users <span class="console-muted">· a sign-in or a question, web or Discord</span></h2>
+    <div class="viz-body">${columnChart({ points: series, valueKey: "dau", lineKey: "wau", seriesLabel: "Active that day", lineLabel: `Active in the trailing ${windowDays} days`, unit: "users" })}
+      <p class="console-muted viz-note">The line is the number the week is judged on: everyone who signed in or asked at least once in the ${windowDays} days ending that day. History from before the presence log existed was reconstructed from recorded questions and from each account's first and last sign-in, so the oldest bars under-report visits that left no other trace.</p>
+      ${series.length ? vizTable(series, [
+        { label: "Day" }, { label: "Active", get: p => num(p.dau) }, { label: `Active (${windowDays}d)`, get: p => num(p.wau) },
+        { label: "Asked", get: p => num(p.askers) }, { label: "New", get: p => num(p.newUsers) },
+      ]) : ""}</div>
+  </section>
+  <section class="console-card">
+    <h2>Tokens per day <span class="console-muted">· billable reads only, cached answers cost nothing</span></h2>
+    <div class="viz-body">${columnChart({ points: series, seriesLabel: "Tokens", unit: "tokens", format: compact,
+      stack: [{ key: "tokensIn", label: "Prompt (in)", className: "seg-in" }, { key: "tokensOut", label: "Generated (out)", className: "seg-out" }] })}
+      ${series.length ? vizTable(series, [
+        { label: "Day" }, { label: "In", get: p => num(p.tokensIn) }, { label: "Out", get: p => num(p.tokensOut) },
+        { label: "Total", get: p => num(p.tokens) }, { label: "Questions", get: p => num(p.questions) }, { label: "Cost", get: p => money(p.cost) },
+      ]) : ""}</div>
+  </section>
+  <section class="console-card">
+    <h2>Total tokens served <span class="console-muted">· running total, all time</span></h2>
+    <div class="viz-body">${areaChart({ points: series, valueKey: "tokensCumulative", unit: "tokens", format: compact })}
+      <p class="console-muted viz-note">${Number(tok.beforeWindow) > 0
+        ? `The curve carries forward the ${compact(tok.beforeWindow)} tokens served before this range, so it reads as the lifetime total rather than restarting at the left edge. `
+        : `Nothing was served before this range, so the curve is the whole history. `}Its slope is the daily rate in the chart above.</p>
+      ${series.length ? vizTable(series, [
+        { label: "Day" }, { label: "Served that day", get: p => num(p.tokens) }, { label: "Running total", get: p => num(p.tokensCumulative) },
+      ]) : ""}</div>
+  </section>`;
+
+  const isActive = u => activeSet.has(u.user_key);
+  const rows = users.map(u => `<tr data-search="${esc(String(u.username || "").toLowerCase() + " " + String(u.user_key).toLowerCase() + " " + String(u.role || u.provider || "").toLowerCase())}" data-active="${isActive(u) ? 1 : 0}">
+    <td><a class="console-user" href="/console?user=${encodeURIComponent(u.user_key)}&days=${days}&tab=users">${esc(u.username || u.user_key)}</a>
+      <div class="console-muted">${esc(u.role || u.provider || "player")}${isActive(u) ? ` <span class="badge-active">active</span>` : ""}</div></td>
     <td>${Number(u.question_count || 0).toLocaleString()}</td>
     <td>${Number(u.live_count || 0).toLocaleString()}</td>
     <td>${Number(u.report_count || 0).toLocaleString()}</td>
@@ -1956,21 +2377,54 @@ function consolePage({ identity, context, users = [], selected = null, reports =
       <div class="console-facts">${facts}</div><div class="console-muted">First seen ${esc(when(p.first_seen))} · Last seen ${esc(when(p.last_seen))} · Estimated cost ${money(selected.estimated_cost)}</div></div>${questions}`;
   }
   const reportQueue = reports.length ? reports.map(cluster => `<div class="console-cluster"><h3>${esc(cluster.category)} <span>· ${Number(cluster.count).toLocaleString()} report${cluster.count === 1 ? "" : "s"}</span></h3>${cluster.reports.map(report => `<div class="console-report"><b>${esc(report.question)}</b>${report.feedback_reason ? `<div>“${esc(report.feedback_reason)}”</div>` : ""}<div class="console-muted">${esc(report.username || report.user_key)} · ${esc(when(report.feedback_ts || report.ts))}${report.plan?.id ? ` · plan: ${esc(report.plan.id)}` : ""}</div><a class="console-replay" href="/?replay=${encodeURIComponent(report.question)}">Open replay</a></div>`).join("")}</div>`).join("") : `<div class="console-question console-muted">No reports yet.</div>`;
+  const pendingDrafts = correctionRows.filter(c => !c.active && String(c.correction || "").startsWith("[DRAFT]")).length;
+  const TABS = [
+    { id: "overview", label: "Overview" },
+    { id: "users", label: "Users", count: users.length },
+    { id: "quality", label: "Quality", count: totalReports },
+    { id: "memory", label: "Corrections", count: pendingDrafts },
+  ];
+  const openTab = TABS.some(t => t.id === tab) ? tab : "overview";
+  const tabBar = TABS.map(t => `<button type="button" class="console-tab${t.id === openTab ? " on" : ""}" data-tab="${t.id}"
+    role="tab" aria-selected="${t.id === openTab ? "true" : "false"}">${esc(t.label)}${t.count ? `<i>${num(t.count)}</i>` : ""}</button>`).join("");
+
   return shell(`<div class="console-shell"><div class="console-wrap">
-    <div class="console-top"><div><div class="hero-kicker">Admin</div><h1>Ask console</h1></div><a class="console-link" href="/">Back to Ask</a></div>
-    <div class="console-stats">
-      <div class="console-stat"><small>Users</small><b>${users.length.toLocaleString()}</b></div>
-      <div class="console-stat"><small>Questions</small><b>${totalQuestions.toLocaleString()}</b></div>
-      <div class="console-stat"><small>Reports</small><b>${totalReports.toLocaleString()}</b></div>
-      <div class="console-stat"><small>Tokens</small><b>${totalTokens.toLocaleString()}</b></div>
-      <div class="console-stat"><small>Rough API cost</small><b>${money(totalCost)}</b></div>
+    <div class="console-top"><div><div class="hero-kicker">Admin</div><h1>Ask console</h1></div>
+      <div class="console-range" role="group" aria-label="Time range">${rangeLinks}</div>
+      <a class="console-link" href="/">Back to Ask</a></div>
+    <div class="console-tabs" role="tablist">${tabBar}</div>
+
+    <div data-panel="overview"${openTab === "overview" ? "" : " hidden"}>
+      <div class="kpi-row">${kpis}</div>
+      ${activitySection}
+      ${healthSection}
     </div>
-    <p class="console-muted" style="font-size:.7rem;margin:-8px 0 14px">Cost is actual token usage × provider rate. Google Gemini (free tier) and OpenRouter free/stealth slugs bill nothing, so they are $0 — the real spend is the DeepSeek fallback, priced at its cache-miss list rate. Cached reads carry no tokens or cost.</p>
-    ${healthSection}
-    ${modelUsageSection}
-    <div class="console-grid"><section class="console-card"><h2>Users</h2><div style="overflow:auto"><table class="console-table"><thead><tr><th>User</th><th>Questions</th><th>Live</th><th>Reports</th><th>Tokens in / out</th><th>Cost</th><th>Last active</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="console-muted">No users yet.</td></tr>`}</tbody></table></div></section>
-      <section class="console-card"><h2>User profile and questions</h2>${detail}</section></div>
-    <section class="console-card console-reports"><h2>Reported-answer queue</h2>${reportQueue}</section>
+
+    <div data-panel="users"${openTab === "users" ? "" : " hidden"}>
+      <div class="console-stats">
+        <div class="console-stat"><small>Accounts</small><b>${users.length.toLocaleString()}</b></div>
+        <div class="console-stat"><small>Active (${windowDays}d)</small><b>${num(A.wau)}</b></div>
+        <div class="console-stat"><small>Questions all time</small><b>${totalQuestions.toLocaleString()}</b></div>
+        <div class="console-stat"><small>Tokens</small><b>${totalTokens.toLocaleString()}</b></div>
+        <div class="console-stat"><small>Rough API cost</small><b>${money(totalCost)}</b></div>
+      </div>
+      <div class="console-grid"><section class="console-card"><h2>Users</h2>
+        <div class="console-toolbar">
+          <input id="userSearch" type="search" placeholder="Filter by name, id or role" aria-label="Filter users">
+          <label class="console-check"><input type="checkbox" id="activeOnly"> Active only</label>
+          <span class="console-muted" id="userCount"></span>
+        </div>
+        <div style="overflow:auto"><table class="console-table" id="userTable"><thead><tr><th>User</th><th>Questions</th><th>Live</th><th>Reports</th><th>Tokens in / out</th><th>Cost</th><th>Last active</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="console-muted">No users yet.</td></tr>`}</tbody></table></div></section>
+        <section class="console-card"><h2>User profile and questions</h2>${detail}</section></div>
+    </div>
+
+    <div data-panel="quality"${openTab === "quality" ? "" : " hidden"}>
+      ${modelUsageSection}
+      <p class="console-muted" style="font-size:.7rem;margin:10px 0 14px">Cost is actual token usage × provider rate. Google Gemini (free tier) and OpenRouter free/stealth slugs bill nothing, so they are $0 — the real spend is the DeepSeek fallback, priced at its cache-miss list rate. Cached reads carry no tokens or cost.</p>
+      <section class="console-card console-reports"><h2>Reported-answer queue</h2>${reportQueue}</section>
+    </div>
+
+    <div data-panel="memory"${openTab === "memory" ? "" : " hidden"}>
     <section class="console-card console-reports"><h2>Corrections (memory)</h2>
       <p class="console-muted" style="font-size:.72rem">Staff-verified lessons. A future question semantically close to the recorded one gets the verified truth injected above the retrieved code.</p>
       <form id="corr-form" style="display:grid;gap:8px;margin:10px 0 16px">
@@ -1997,7 +2451,43 @@ function consolePage({ identity, context, users = [], selected = null, reports =
         return draftBlock + settledBlock;
       })()}
     </section>
+    </div>
     <script>
+    // Tabs. Every panel is already in the document, so switching is instant and
+    // the range links keep working with JS off — the server honours ?tab=.
+    (function(){
+      var tabs=[].slice.call(document.querySelectorAll('.console-tab'));
+      var panels=[].slice.call(document.querySelectorAll('[data-panel]'));
+      function show(name,push){
+        tabs.forEach(function(t){var on=t.dataset.tab===name;t.classList.toggle('on',on);t.setAttribute('aria-selected',on?'true':'false');});
+        panels.forEach(function(p){p.hidden=p.dataset.panel!==name;});
+        if(push){try{var q=new URLSearchParams(location.search);q.set('tab',name);history.replaceState(null,'',location.pathname+'?'+q);}catch(e){}}
+      }
+      tabs.forEach(function(t){t.addEventListener('click',function(){show(t.dataset.tab,true);});});
+      // Range links must stay on the tab you were reading.
+      document.querySelectorAll('.range-btn').forEach(function(a){a.addEventListener('click',function(){
+        try{var u=new URL(a.href,location.origin),cur=document.querySelector('.console-tab.on');
+          if(cur)u.searchParams.set('tab',cur.dataset.tab);
+          var user=new URLSearchParams(location.search).get('user');if(user)u.searchParams.set('user',user);
+          a.href=u.pathname+'?'+u.searchParams;}catch(e){}
+      });});
+    })();
+    // User filter: name, id, role, and an active-only switch.
+    (function(){
+      var box=document.getElementById('userSearch'),only=document.getElementById('activeOnly'),
+          out=document.getElementById('userCount'),table=document.getElementById('userTable');
+      if(!table)return;
+      var rows=[].slice.call(table.querySelectorAll('tbody tr[data-search]'));
+      function apply(){
+        var q=(box.value||'').trim().toLowerCase(),shown=0;
+        rows.forEach(function(r){
+          var hit=(!q||r.dataset.search.indexOf(q)>-1)&&(!only.checked||r.dataset.active==='1');
+          r.hidden=!hit;if(hit)shown++;
+        });
+        out.textContent=shown===rows.length?rows.length+' users':shown+' of '+rows.length+' users';
+      }
+      box.addEventListener('input',apply);only.addEventListener('change',apply);apply();
+    })();
     document.getElementById('corr-form').addEventListener('submit',function(e){e.preventDefault();
       var f=e.target;fetch('/api/corrections',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
         body:JSON.stringify({question:f.question.value,correction:f.correction.value})})
@@ -2019,4 +2509,423 @@ function consolePage({ identity, context, users = [], selected = null, reports =
   </div></div>`);
 }
 
-module.exports = { app, signedOut, notEntitled, sharedView, reportView, consolePage, changelogPage, legalPage, esc };
+/** Embed a value in a <script> without letting its contents close the tag. */
+function jsonScript(value) {
+  return JSON.stringify(value === undefined ? null : value)
+    .replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+
+/** The staff nav, shared by every console screen so they read as one tool. */
+function consoleNav(current) {
+  const items = [
+    { href: "/console", id: "console", label: "Dashboard" },
+    { href: "/console/review", id: "review", label: "Review" },
+    { href: "/console/questions", id: "questions", label: "Questions" },
+  ];
+  return `<nav class="console-nav">${items.map(i => `<a class="console-tab${i.id === current ? " on" : ""}"
+    href="${i.href}"${i.id === current ? ` aria-current="page"` : ""}>${esc(i.label)}</a>`).join("")}
+    <a class="console-link" href="/">Back to Ask</a></nav>`;
+}
+
+/** Everything the reviewer needs to judge one answer, and nothing more. */
+function reviewCard(row) {
+  return {
+    id: row.id,
+    question: String(row.question || ""),
+    answer: String(row.answer || ""),
+    username: row.username || row.user_key || "Unknown",
+    userKey: row.user_key || "",
+    who: [row.role, row.country, row.party].filter(Boolean).join(" · "),
+    model: row.model || "",
+    modelName: require("./models").displayFor(row.model) || row.model || "",
+    ts: row.ts,
+    live: row.used_mcp ? 1 : 0,
+    cached: row.cached ? 1 : 0,
+    plan: row.plan?.id || "",
+    tools: Array.isArray(row.evidence?.tools) ? row.evidence.tools : [],
+    issues: Array.isArray(row.validation?.issues) ? row.validation.issues : [],
+    tokens: Number(row.tokens_in || 0) + Number(row.tokens_out || 0),
+    cost: Number(row.estimated_cost || 0),
+    ttft: row.ttft_ms == null ? null : Number(row.ttft_ms),
+  };
+}
+
+const REVIEW_REASONS = [
+  "Wrong facts", "Did not answer", "Stale or missing live data",
+  "Refused wrongly", "Bad chart or map", "Leaked internals", "Too vague",
+];
+
+/**
+ * Card-at-a-time review over unjudged answers. Keyboard first: this exists to
+ * clear a backlog, and a queue you clear with the mouse does not get cleared.
+ */
+function reviewPage({ identity, context, cards = [], counts = {}, oldestFirst = false }) {
+  const c = counts || {};
+  const judged = Number(c.reviewed || 0);
+  const pending = Number(c.pending || 0);
+  const denom = judged + pending;
+  const donePct = denom ? Math.round((judged / denom) * 100) : 0;
+  const stat = (label, value, sub = "") => `<div class="kpi-tile"><small>${esc(label)}</small><b>${esc(String(value))}</b>${sub ? `<span class="kpi-sub">${esc(sub)}</span>` : ""}</div>`;
+
+  return shell(`<div class="console-shell"><div class="console-wrap">
+    <div class="console-top"><div><div class="hero-kicker">Admin</div><h1>Answer review</h1></div>
+      <div class="console-range" role="group" aria-label="Queue order">
+        <a class="range-btn${oldestFirst ? "" : " on"}" href="/console/review">Newest</a>
+        <a class="range-btn${oldestFirst ? " on" : ""}" href="/console/review?order=oldest">Oldest</a>
+      </div></div>
+    ${consoleNav("review")}
+    <div class="kpi-row rev-stats">
+      ${stat("Left to judge", pending.toLocaleString(), "never seen by us or the sampler")}
+      ${stat("Judged", judged.toLocaleString(), donePct + "% of the queue")}
+      ${stat("Good", Number(c.good || 0).toLocaleString())}
+      ${stat("Bad", Number(c.bad || 0).toLocaleString())}
+      ${stat("Skipped", Number(c.skipped || 0).toLocaleString())}
+      ${stat("Already covered", (Number(c.playerJudged || 0) + Number(c.modelJudged || 0)).toLocaleString(),
+        `${Number(c.playerJudged || 0)} rated by players · ${Number(c.modelJudged || 0)} by the sampler`)}
+    </div>
+    <div class="rev-progress" role="progressbar" aria-valuenow="${donePct}" aria-valuemin="0" aria-valuemax="100"
+      aria-label="Review progress"><i style="width:${donePct}%"></i></div>
+
+    <div class="rev-stage">
+      <div class="rev-deck" id="revDeck"></div>
+      <div class="rev-done" id="revDone" hidden>
+        <h2>Queue clear</h2>
+        <p class="console-muted">Nothing left that we or the QA sampler have not already looked at. New answers land here as players ask them.</p>
+        <a class="console-link" href="/console/questions">See every question instead</a>
+      </div>
+    </div>
+
+    <div class="rev-bar" id="revBar">
+      <button type="button" class="rev-btn bad" data-verdict="bad"><span>Bad</span><kbd>←</kbd></button>
+      <button type="button" class="rev-btn skip" data-verdict="skip"><span>Skip</span><kbd>space</kbd></button>
+      <button type="button" class="rev-btn good" data-verdict="good"><span>Good</span><kbd>→</kbd></button>
+    </div>
+    <div class="rev-reason" id="revReason" hidden>
+      <div class="rev-reason-head">Why was it bad? <small class="console-muted">One click files it and moves on. This seeds a correction draft.</small></div>
+      <div class="rev-chips">${REVIEW_REASONS.map(r => `<button type="button" class="rev-chip" data-reason="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      <textarea id="revNote" rows="2" placeholder="Or write what was actually wrong, then press Enter"></textarea>
+      <div class="rev-reason-foot">
+        <button type="button" class="rev-primary" id="revNoteSave">File it</button>
+        <button type="button" class="rev-link" id="revNoteSkip">File without a reason</button>
+        <button type="button" class="rev-link" id="revNoteCancel">Cancel (Esc)</button>
+      </div>
+    </div>
+    <div class="rev-hint console-muted">
+      <span><kbd>←</kbd> bad · <kbd>space</kbd> skip · <kbd>→</kbd> good · <kbd>Z</kbd> undo</span>
+      <button type="button" class="rev-link" id="revUndo" disabled>Undo last</button>
+      <span id="revStatus" aria-live="polite"></span>
+    </div>
+  </div></div>
+  ${sharedScripts()}
+  <script>
+  (function(){
+    var DECK = ${jsonScript(cards.map(reviewCard))};
+    var ORDER = ${jsonScript(oldestFirst ? "oldest" : "newest")};
+    var deck = document.getElementById('revDeck'), done = document.getElementById('revDone');
+    var bar = document.getElementById('revBar'), reason = document.getElementById('revReason');
+    var note = document.getElementById('revNote'), status = document.getElementById('revStatus');
+    var undoBtn = document.getElementById('revUndo');
+    var history = [], loading = false, pendingBad = null;
+
+    function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+    function when(ts){ if(!ts) return ''; var d=new Date(ts); return d.toISOString().replace('T',' ').slice(0,16)+' UTC'; }
+    function chip(text){ return '<span class="rev-tag">'+esc(text)+'</span>'; }
+
+    function cardHtml(card){
+      var tags = '';
+      if(card.live) tags += chip('live data');
+      if(card.cached) tags += chip('cached');
+      if(card.plan) tags += chip('plan: '+card.plan);
+      (card.issues||[]).forEach(function(i){ tags += '<span class="rev-tag warn">'+esc(i)+'</span>'; });
+      var toolLine = (card.tools&&card.tools.length) ? '<div class="rev-tools">Live tools: '+esc(card.tools.join(', '))+'</div>' : '';
+      var cost = card.cost ? ' · $'+card.cost.toFixed(card.cost<0.01?4:2) : '';
+      var ttft = card.ttft==null ? '' : ' · first token '+(card.ttft/1000).toFixed(1)+'s';
+      return '<article class="rev-card" data-id="'+card.id+'">'
+        + '<div class="rev-meta"><b>'+esc(card.username)+'</b>'
+        + (card.who?'<span class="console-muted"> · '+esc(card.who)+'</span>':'')
+        + '<span class="console-muted"> · '+esc(when(card.ts))+'</span>'
+        + '<span class="console-muted"> · '+esc(card.modelName||card.model)+esc(cost)+esc(ttft)+'</span></div>'
+        + '<h2 class="rev-q">'+esc(card.question)+'</h2>'
+        + (tags?'<div class="rev-tags">'+tags+'</div>':'')
+        + toolLine
+        + '<div class="rev-a" data-md></div>'
+        + '<div class="rev-foot console-muted">Answer #'+card.id+'</div>'
+        + '</article>';
+    }
+
+    function render(){
+      if(!DECK.length){ deck.innerHTML=''; done.hidden=false; bar.hidden=true; closeReason(); return; }
+      done.hidden=true; bar.hidden=false;
+      // Only the top card is real; the one behind it is a visual stack cue.
+      var html = cardHtml(DECK[0]);
+      if(DECK[1]) html += '<div class="rev-next" aria-hidden="true"></div>';
+      deck.innerHTML = html;
+      // The answer goes in as text and is rendered by the same markdown pass the
+      // player's page uses — judging raw '##' and pipe tables is judging the
+      // wrong artifact. textContent first, so nothing in an answer can inject.
+      var body = deck.querySelector('.rev-a');
+      if(body){
+        body.textContent = DECK[0].answer || '';
+        if(window.__hydrateShared) try{ window.__hydrateShared(); }catch(e){}
+        body.removeAttribute('data-md');
+      }
+      deck.scrollTop = 0;
+    }
+
+    function refill(){
+      if(loading || DECK.length > 5) return;
+      loading = true;
+      fetch('/console/review.json?limit=25&order='+ORDER,{credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var have = {}; DECK.forEach(function(c){ have[c.id]=1; });
+          history.forEach(function(h){ have[h.id]=1; });
+          (d.cards||[]).forEach(function(row){
+            if(have[row.id]) return;
+            DECK.push({id:row.id,question:row.question||'',answer:row.answer||'',
+              username:row.username||row.user_key||'Unknown',userKey:row.user_key||'',
+              who:[row.role,row.country,row.party].filter(Boolean).join(' · '),
+              model:row.model||'',modelName:row.model||'',ts:row.ts,
+              live:row.used_mcp?1:0,cached:row.cached?1:0,plan:(row.plan&&row.plan.id)||'',
+              tools:(row.evidence&&row.evidence.tools)||[],issues:(row.validation&&row.validation.issues)||[],
+              tokens:(row.tokens_in||0)+(row.tokens_out||0),cost:row.estimated_cost||0,
+              ttft:row.ttft_ms==null?null:row.ttft_ms});
+          });
+          if(d.counts) paintCounts(d.counts);
+          if(!deck.querySelector('.rev-card')) render();
+        })
+        .catch(function(){})
+        .then(function(){ loading=false; });
+    }
+
+    function paintCounts(c){
+      var tiles = document.querySelectorAll('.rev-stats .kpi-tile b');
+      if(tiles.length>=5){
+        tiles[0].textContent = Number(c.pending||0).toLocaleString();
+        tiles[1].textContent = Number(c.reviewed||0).toLocaleString();
+        tiles[2].textContent = Number(c.good||0).toLocaleString();
+        tiles[3].textContent = Number(c.bad||0).toLocaleString();
+        tiles[4].textContent = Number(c.skipped||0).toLocaleString();
+      }
+      var denom = Number(c.reviewed||0)+Number(c.pending||0);
+      var pct = denom ? Math.round(Number(c.reviewed||0)/denom*100) : 0;
+      var barEl = document.querySelector('.rev-progress');
+      if(barEl){ barEl.setAttribute('aria-valuenow',pct); barEl.firstElementChild.style.width = pct+'%'; }
+    }
+
+    function fly(dir){
+      var el = deck.querySelector('.rev-card');
+      if(!el) return;
+      el.classList.add('fly-'+dir);
+    }
+
+    function commit(card, rating, reasonText){
+      fetch('/api/console/review',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+        body:JSON.stringify({answerId:card.id,rating:rating,reason:reasonText||''})})
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d && d.counts) paintCounts(d.counts); if(d && d.error) say(d.error); })
+        .catch(function(){ say('Could not save that verdict — it stays in the queue.'); });
+    }
+
+    function say(msg){ status.textContent = msg || ''; }
+
+    function verdict(rating, reasonText){
+      var card = DECK[0];
+      if(!card) return;
+      closeReason();
+      fly(rating==='bad'?'left':rating==='good'?'right':'down');
+      history.push({id:card.id, card:card});
+      undoBtn.disabled = false;
+      DECK.shift();
+      commit(card, rating==='skip'?null:rating, reasonText);
+      say(rating==='skip'?'Skipped #'+card.id:'Filed #'+card.id+' as '+rating);
+      window.setTimeout(function(){ render(); refill(); }, 130);
+    }
+
+    function openReason(){
+      pendingBad = DECK[0];
+      if(!pendingBad) return;
+      reason.hidden = false;
+      note.value = '';
+      note.focus();
+    }
+    function closeReason(){ reason.hidden = true; pendingBad = null; }
+
+    bar.addEventListener('click', function(e){
+      var btn = e.target.closest('[data-verdict]');
+      if(!btn) return;
+      if(btn.dataset.verdict==='bad') openReason(); else verdict(btn.dataset.verdict);
+    });
+    reason.addEventListener('click', function(e){
+      var chipBtn = e.target.closest('[data-reason]');
+      if(chipBtn){ verdict('bad', chipBtn.dataset.reason); return; }
+    });
+    document.getElementById('revNoteSave').addEventListener('click', function(){ verdict('bad', note.value.trim()); });
+    document.getElementById('revNoteSkip').addEventListener('click', function(){ verdict('bad',''); });
+    document.getElementById('revNoteCancel').addEventListener('click', closeReason);
+    note.addEventListener('keydown', function(e){
+      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); verdict('bad', note.value.trim()); }
+      if(e.key==='Escape'){ e.preventDefault(); closeReason(); }
+    });
+
+    function undo(){
+      var last = history.pop();
+      if(!last) return;
+      undoBtn.disabled = history.length===0;
+      fetch('/api/console/review/undo',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+        body:JSON.stringify({answerId:last.id})})
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d && d.counts) paintCounts(d.counts); })
+        .catch(function(){});
+      DECK.unshift(last.card);
+      say('Put #'+last.id+' back');
+      render();
+    }
+    undoBtn.addEventListener('click', undo);
+
+    document.addEventListener('keydown', function(e){
+      if(!reason.hidden) return;                       // the reason box owns the keyboard while open
+      var t = e.target.tagName;
+      if(t==='INPUT'||t==='TEXTAREA') return;
+      if(e.metaKey||e.ctrlKey||e.altKey) return;
+      if(e.key==='ArrowLeft'){ e.preventDefault(); openReason(); }
+      else if(e.key==='ArrowRight'){ e.preventDefault(); verdict('good'); }
+      else if(e.key===' '||e.key==='ArrowDown'){ e.preventDefault(); verdict('skip'); }
+      else if(e.key==='z'||e.key==='Z'){ e.preventDefault(); undo(); }
+    });
+
+    render(); refill();
+  })();
+  </script>`);
+}
+
+/** Every question, most recent first. The screen that hides nothing. */
+function questionsPage({ identity, context, feed = { rows: [], total: 0, limit: 50, offset: 0 }, counts = {}, pageNum = 1, search = "", state = "all" }) {
+  const when = ts => ts ? new Date(ts).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "";
+  const money = n => `$${Number(n || 0).toFixed(Number(n || 0) < 0.01 ? 4 : 2)}`;
+  const models = require("./models");
+  const total = Number(feed.total || 0);
+  const pages = Math.max(1, Math.ceil(total / (feed.limit || 50)));
+  const link = (over = {}) => {
+    const q = new URLSearchParams();
+    const merged = { page: pageNum, q: search, state, ...over };
+    if (merged.page && Number(merged.page) !== 1) q.set("page", merged.page);
+    if (merged.q) q.set("q", merged.q);
+    if (merged.state && merged.state !== "all") q.set("state", merged.state);
+    const s = q.toString();
+    return `/console/questions${s ? `?${s}` : ""}`;
+  };
+  const STATES = [
+    ["all", "All"], ["pending", "Not yet judged"], ["reviewed", "Judged"],
+    ["good", "Good"], ["bad", "Bad"], ["reported", "Player-reported"], ["live", "Used live data"],
+  ];
+  const filters = STATES.map(([id, label]) =>
+    `<a class="range-btn${state === id ? " on" : ""}" href="${esc(link({ state: id, page: 1 }))}">${esc(label)}</a>`).join("");
+
+  // What the PLAYER said about it. Staff verdicts live on the thumbs, and the
+  // two are never merged: a staff opinion must not read as a player's.
+  const playerVerdict = r => {
+    if (r.feedback_rating === "down") return `<span class="rev-tag warn">player reported</span>`;
+    if (r.feedback_rating === "up") return `<span class="rev-tag good">player liked</span>`;
+    if (r.review_ts && !r.review_rating) return `<span class="rev-tag">skipped</span>`;
+    return "";
+  };
+  const THUMB_UP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 22V11l5-9a2.5 2.5 0 0 1 2.4 3.2L13 10h5.5a2.5 2.5 0 0 1 2.4 3.1l-1.6 6.5A3 3 0 0 1 16.4 22H7Z"/><path d="M7 11H4v11h3"/></svg>`;
+  const THUMB_DOWN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 2v11l-5 9a2.5 2.5 0 0 1-2.4-3.2L11 14H5.5a2.5 2.5 0 0 1-2.4-3.1l1.6-6.5A3 3 0 0 1 7.6 2H17Z"/><path d="M17 13h3V2h-3"/></svg>`;
+  const thumbs = r => `<span class="q-thumbs" data-id="${r.id}" data-rating="${esc(r.review_rating || "")}">
+    <button type="button" class="q-thumb up${r.review_rating === "good" ? " on" : ""}" data-rate="good"
+      aria-pressed="${r.review_rating === "good" ? "true" : "false"}" title="Good answer">${THUMB_UP}</button>
+    <button type="button" class="q-thumb down${r.review_rating === "bad" ? " on" : ""}" data-rate="bad"
+      aria-pressed="${r.review_rating === "bad" ? "true" : "false"}" title="Bad answer — seeds a correction draft">${THUMB_DOWN}</button>
+  </span>`;
+
+  const rows = feed.rows.map(r => `<details class="q-row">
+    <summary>
+      <span class="q-when">${esc(when(r.ts))}</span>
+      <span class="q-text">${esc(r.question)}</span>
+      <span class="q-who">${esc(r.username || r.user_key || "")}</span>
+      <span class="q-verdict">${playerVerdict(r)}${thumbs(r)}</span>
+    </summary>
+    <div class="q-body">
+      <div class="console-muted q-detail">Answer #${r.id} · ${esc(models.displayFor(r.model) || r.model || "")}${r.used_mcp ? " · live data" : ""}${r.cached ? " · cached" : ""} · ${money(r.estimated_cost)}${r.plan?.id ? ` · plan: ${esc(r.plan.id)}` : ""}${r.review_by ? ` · judged by ${esc(r.review_by)}` : ""}${r.review_note ? ` · “${esc(r.review_note)}”` : ""}${r.feedback_reason ? ` · player said “${esc(r.feedback_reason)}”` : ""}</div>
+      <div class="rev-a" data-md-src>${esc(r.answer || "No answer stored.")}</div>
+      <div class="q-actions"><a class="console-replay" href="/?replay=${encodeURIComponent(r.question)}">Open replay</a>
+        <a class="console-replay" href="/console?user=${encodeURIComponent(r.user_key || "")}&tab=users">See this player</a></div>
+    </div>
+  </details>`).join("") || `<div class="console-question console-muted">No questions match that filter.</div>`;
+
+  const pager = pages > 1 ? `<div class="q-pager">
+    ${pageNum > 1 ? `<a class="console-link" href="${esc(link({ page: pageNum - 1 }))}">Newer</a>` : `<span class="console-link disabled">Newer</span>`}
+    <span class="console-muted">Page ${pageNum} of ${pages.toLocaleString()} · ${total.toLocaleString()} question${total === 1 ? "" : "s"}</span>
+    ${pageNum < pages ? `<a class="console-link" href="${esc(link({ page: pageNum + 1 }))}">Older</a>` : `<span class="console-link disabled">Older</span>`}
+  </div>` : `<div class="q-pager"><span class="console-muted">${total.toLocaleString()} question${total === 1 ? "" : "s"}</span></div>`;
+
+  return shell(`<div class="console-shell"><div class="console-wrap">
+    <div class="console-top"><div><div class="hero-kicker">Admin</div><h1>Questions</h1></div>
+      <a class="console-link" href="/console/review">Review the ${Number(counts.pending || 0).toLocaleString()} unjudged</a></div>
+    ${consoleNav("questions")}
+    <form class="console-toolbar q-toolbar" method="get" action="/console/questions">
+      <input type="search" name="q" value="${esc(search)}" placeholder="Search questions, players or models" aria-label="Search questions">
+      ${state !== "all" ? `<input type="hidden" name="state" value="${esc(state)}">` : ""}
+      <button class="tbtn" type="submit">Search</button>
+      ${search ? `<a class="rev-link" href="${esc(link({ q: "", page: 1 }))}">Clear</a>` : ""}
+    </form>
+    <div class="console-range q-filters" role="group" aria-label="Filter">${filters}</div>
+    <section class="console-card q-list">${rows}</section>
+    ${pager}
+  </div></div>
+  ${sharedScripts()}
+  <script>
+  // Thumbs, straight from the list. Same endpoint the review deck posts to, so
+  // a verdict filed here is the same verdict — and clicking the thumb that is
+  // already lit clears it, which is the only sane undo for a one-click control.
+  document.querySelectorAll('.q-thumbs').forEach(function(group){
+    group.addEventListener('click', function(e){
+      var btn = e.target.closest('[data-rate]');
+      if(!btn) return;
+      // The thumbs live inside <summary>; without this the row also toggles.
+      e.preventDefault(); e.stopPropagation();
+      if(group.dataset.busy) return;
+      var want = btn.dataset.rate;
+      var clearing = group.dataset.rating === want;
+      group.dataset.busy = '1';
+      var url = clearing ? '/api/console/review/undo' : '/api/console/review';
+      var payload = clearing ? { answerId: Number(group.dataset.id) }
+        : { answerId: Number(group.dataset.id), rating: want };
+      fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+        body:JSON.stringify(payload)})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(!d || d.ok === false){ group.classList.add('q-thumbs-failed'); return; }
+          group.dataset.rating = clearing ? '' : want;
+          group.querySelectorAll('[data-rate]').forEach(function(b){
+            var on = !clearing && b.dataset.rate === want;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          });
+        })
+        .catch(function(){ group.classList.add('q-thumbs-failed'); })
+        .then(function(){ delete group.dataset.busy; });
+    });
+  });
+  // Answers render as markdown, same as the review screen and the player's own
+  // page — but only when a row is actually opened, so a 50-row page does not
+  // pay to render 50 answers nobody expanded.
+  document.querySelectorAll('.q-row').forEach(function(row){
+    row.addEventListener('toggle', function(){
+      if(!row.open) return;
+      var body = row.querySelector('[data-md-src]');
+      if(!body || body.dataset.rendered) return;
+      body.dataset.rendered = '1';
+      body.setAttribute('data-md','');
+      if(window.__hydrateShared) try{ window.__hydrateShared(); }catch(e){}
+      // Drop the marker immediately: the hydrator re-renders every [data-md] it
+      // finds, and a second pass over already-rendered HTML would mangle it.
+      body.removeAttribute('data-md');
+    });
+  });
+  </script>`);
+}
+
+module.exports = { app, signedOut, notEntitled, sharedView, reportView, consolePage, reviewPage, questionsPage, changelogPage, legalPage, esc };

@@ -23,14 +23,42 @@ test("supporting still buys the same multiple over the default", () => {
   }
 });
 
-test("visualizations are a supporter feature, not a player one", () => {
-  assert.equal(auth.entitlementFor({}).visualizations, false);
-  assert.equal(auth.entitlementFor({ tierActive: true, tier: "supporter" }).visualizations, true);
-  assert.equal(auth.entitlementFor({ isAdmin: true }).visualizations, true);
-  // A lapsed supporter drops to the player tier, visualizations included.
+test("live data and visualizations are metered for every tier, not gated", () => {
+  // They used to be a supporter flag. Every allowed tier now has some of each,
+  // and supporting buys more rather than unlocking the feature at all.
+  for (const ctx of [{}, { tierActive: true, tier: "supporter" }, { isAdmin: true }]) {
+    const ent = auth.entitlementFor(ctx);
+    assert.equal(ent.visualizations, true, `${ent.label} should be able to get a chart`);
+    assert.ok(ent.viz > 0, `${ent.label} should have a visualization allowance`);
+    assert.ok(ent.mcp > 0, `${ent.label} should have a live-data allowance`);
+  }
+  // A lapsed supporter drops to the player tier — with the player allowance,
+  // not with the feature switched off.
   const lapsed = auth.entitlementFor({ tierActive: false, tier: "supporter-plus-plus" });
   assert.equal(lapsed.reason, "player");
-  assert.equal(lapsed.visualizations, false);
+  assert.equal(lapsed.viz, auth.PLAYER.viz);
+  assert.equal(lapsed.visualizations, true);
+});
+
+test("supporting buys a strictly bigger allowance at every step", () => {
+  const ladder = [auth.PLAYER, auth.TIERS.supporter, auth.TIERS["supporter-plus"], auth.TIERS["supporter-plus-plus"]];
+  for (let i = 1; i < ladder.length; i++) {
+    for (const k of ["questions", "mcp", "viz"]) {
+      assert.ok(ladder[i][k] > ladder[i - 1][k], `${k} must increase from ${ladder[i - 1].label} to ${ladder[i].label}`);
+    }
+  }
+  // Charts are the slowest, least reliable path, so they stay the tightest budget.
+  for (const t of ladder) assert.ok(t.viz <= t.questions, `${t.label} viz allowance must not exceed its questions`);
+});
+
+test("a blocked account gets no allowance of any kind", () => {
+  for (const ctx of [null, { isBanned: true }]) {
+    const ent = auth.entitlementFor(ctx);
+    assert.equal(ent.allowed, false);
+    assert.equal(ent.viz, 0);
+    assert.equal(ent.mcp, 0);
+    assert.equal(ent.visualizations, false);
+  }
 });
 
 test("opening access does not open it to banned accounts or unverified callers", () => {

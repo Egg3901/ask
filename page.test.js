@@ -299,22 +299,29 @@ test("the client bundle names the answering model without leaking a vendor slug"
   assert.ok(!html.includes('<span class="flag"></span>'), "empty tier badge span should be gone");
 });
 
-test("visualizations are locked off for a tier that does not include them", () => {
-  const player = { allowed: true, label: "Player", questions: 5, mcp: 2, visualizations: false };
-  const html = render({ entitlement: player });
+test("the visualization toggle is open to every tier and names the allowance", () => {
+  // It used to be disabled with a "supporter feature" note. Visualizations are
+  // metered now, so the control is live for everyone and says how many they get.
+  const player = { allowed: true, label: "Player", questions: 5, mcp: 2, viz: 2, visualizations: true };
+  const html = render({
+    entitlement: player,
+    usage: { used: 0, limit: 5, remaining: 5, mcpUsed: 0, mcpLimit: 2, mcpRemaining: 2,
+      vizUsed: 0, vizLimit: 2, vizRemaining: 2, resetAt: Date.now() + 86400000 },
+  });
   const panel = html.match(/<div class="sheet" id="settingsPanel"[\s\S]*?<!-- settings:end -->/)?.[0] || "";
 
-  assert.match(panel, /id="visualizations" disabled/);
-  assert.match(panel, /setting-locked/);
-  assert.match(panel, /supporter feature/i);
-  // A stale localStorage "on" from a lapsed tier must not re-enable the toggle.
-  assert.match(html, /var VIZ_ALLOWED=false;/);
-  assert.match(html, /visualizations\.checked=VIZ_ALLOWED&&/);
+  assert.doesNotMatch(panel, /id="visualizations" disabled/);
+  assert.doesNotMatch(panel, /setting-locked/);
+  assert.doesNotMatch(panel, /supporter feature/i);
+  assert.match(panel, /2 a day on your plan/);
+  assert.match(html, /var VIZ_ALLOWED=true;/);
+});
 
-  const staff = render();
-  assert.doesNotMatch(staff, /id="visualizations" disabled/);
-  assert.match(staff, /var VIZ_ALLOWED=true;/);
-  assert.match(staff, /Allow a diagram, chart, or game map/);
+test("running out of charts is explained as a daily allowance, not a locked tier", () => {
+  const html = render();
+  assert.match(html, /charts and maps for today, so this one is answered in prose/);
+  assert.match(html, /allowance resets at midnight UTC/);
+  assert.doesNotMatch(html, /Charts, diagrams, and game maps are a supporter feature/);
 });
 
 test("a withheld chart is explained rather than silently dropped", () => {
@@ -333,8 +340,12 @@ test("the gate quotes the real tier table rather than hardcoded copy", () => {
   assert.doesNotMatch(html, /Available to supporters, moderators and admins/);
   assert.match(html, new RegExp(`Every player</b> ${auth.PLAYER.questions} questions a day`));
   for (const tier of Object.values(auth.TIERS)) {
-    assert.ok(html.includes(`<b>${tier.label}</b> ${tier.questions} a day`), `${tier.label} budget missing or stale`);
+    assert.ok(html.includes(`<b>${tier.label}</b> ${tier.questions} questions a day`), `${tier.label} budget missing or stale`);
+    assert.ok(html.includes(`${tier.viz} with a chart or map`), `${tier.label} chart allowance missing`);
   }
+  // Charts are advertised as an allowance every tier has, not a locked feature.
+  assert.ok(html.includes(`${auth.PLAYER.viz} with a chart or map`));
+  assert.doesNotMatch(html, /charts and maps<\/div>/);
 });
 
 test("the only ways past the gate are a ban or an unconfirmable account", () => {
@@ -370,4 +381,266 @@ test("another game's page never shows the asker's AHD character or corporation",
   assert.ok(!html.includes("Zzcorp"), "corporation name leaked onto another game's page");
   const ahd = render({ game: games.resolve("ahd"), context: persona });
   assert.ok(ahd.includes("Zzada"), "AHD page still shows the persona");
+});
+
+// ── Console: audience and volume ────────────────────────────────────────────
+function activityFixture() {
+  const series = [
+    { day: "2026-08-24", questions: 4, live: 2, cached: 0, askers: 2, up: 1, down: 0, cost: 0.01, dau: 3, wau: 5, newUsers: 1, tokensIn: 8000, tokensOut: 2000, tokens: 10000, tokensCumulative: 1060000 },
+    { day: "2026-08-25", questions: 44, live: 21, cached: 1, askers: 7, up: 2, down: 1, cost: 0.2, dau: 10, wau: 14, newUsers: 6, tokensIn: 70000, tokensOut: 20000, tokens: 90000, tokensCumulative: 1150000 },
+    { day: "2026-08-26", questions: 9, live: 5, cached: 0, askers: 3, up: 0, down: 0, cost: 0.01, dau: 4, wau: 15, newUsers: 0, tokensIn: 40000, tokensOut: 10000, tokens: 50000, tokensCumulative: 1200000 },
+  ];
+  return {
+    windowDays: 7, days: 3, series,
+    totals: { questions: 57, live: 28, cached: 1, cost: 0.22, up: 3, down: 1, newUsers: 7, tokensIn: 118000, tokensOut: 32000, tokens: 150000 },
+    active: { wau: 15, prevWau: 5, dau: 4, windowActive: 15, byProvider: { ahd: 14, discord: 1 }, keys: ["ahd:1"] },
+    questionsToday: 9, perDay: 19,
+    tokens: { perDay: 50000, today: 50000, beforeWindow: 1050000, allTime: 1200000 },
+  };
+}
+
+test("the console leads with active users and questions per day", () => {
+  const html = page.consolePage({
+    users: [{ user_key: "ahd:1", username: "Tester", question_count: 3 }],
+    activity: activityFixture(), days: 30,
+  });
+  assert.match(html, /Active users \(7d\)/);
+  assert.match(html, />15</, "the weekly-active count is shown");
+  assert.match(html, /14 ahd · 1 discord/, "and where those people came from");
+  assert.match(html, /\+200% vs previous 7d/, "with the change against the previous week");
+  assert.match(html, /Questions per day/);
+  assert.match(html, /Questions today/);
+  assert.match(html, /Active today/);
+});
+
+test("each measure gets its own chart rather than a second y-axis", () => {
+  const html = page.consolePage({ users: [], activity: activityFixture() });
+  const charts = html.match(/<svg class="viz"/g) || [];
+  assert.equal(charts.length, 4, "questions, users, tokens/day and the running total are four charts");
+  assert.match(html, /aria-label="Questions: 57 across 3 days, peak 44 on Aug 25\./);
+  assert.match(html, /aria-label="Active that day: 17 across 3 days, peak 10 on Aug 25\./);
+  assert.match(html, /aria-label="Tokens: 150K across 3 days, peak 90K on Aug 25\./);
+  assert.match(html, /aria-label="Running total reaching 1\.2M tokens on Aug 26\./);
+});
+
+test("chart values stay reachable without reading the picture", () => {
+  const html = page.consolePage({ users: [], activity: activityFixture() });
+  assert.match(html, /View the numbers/, "a table view backs every chart");
+  assert.match(html, /<title>Aug 25: 44 questions · Used live game data 21<\/title>/, "and each column names its own value");
+});
+
+test("the console flags which users are still active", () => {
+  const html = page.consolePage({
+    users: [
+      { user_key: "ahd:1", username: "Present", question_count: 3 },
+      { user_key: "ahd:2", username: "Gone", question_count: 1 },
+    ],
+    activity: activityFixture(),
+  });
+  const present = html.match(/Present[\s\S]{0,220}?<\/td>/)[0];
+  const gone = html.match(/Gone[\s\S]{0,220}?<\/td>/)[0];
+  assert.match(present, /badge-active/);
+  assert.doesNotMatch(gone, /badge-active/);
+});
+
+test("the console splits into tabs so one screen is not four dashboards", () => {
+  const html = page.consolePage({ users: [], activity: activityFixture(), tab: "users" });
+  for (const label of ["Overview", "Users", "Quality", "Corrections"]) {
+    assert.match(html, new RegExp(`data-tab="[a-z]+"[^>]*>${label}`), `${label} tab is present`);
+  }
+  assert.match(html, /<div data-panel="users">/, "the requested tab is the open one");
+  assert.match(html, /<div data-panel="overview" hidden>/, "the others render hidden, not absent");
+});
+
+test("an empty range says so instead of drawing an empty grid", () => {
+  const html = page.consolePage({
+    users: [],
+    activity: { windowDays: 7, days: 7, series: [], totals: {}, active: {}, questionsToday: 0, perDay: 0 },
+  });
+  assert.match(html, /Nothing recorded in this range yet/);
+  assert.doesNotMatch(html, /<svg class="viz"/);
+});
+
+test("the console reports tokens per day and the lifetime total", () => {
+  const html = page.consolePage({ users: [], activity: activityFixture(), days: 30 });
+  assert.match(html, /Tokens per day<\/small><b>50K<\/b>/, "a daily rate, compacted to stay readable");
+  assert.match(html, /Tokens all time<\/small><b>1\.2M<\/b>/);
+  assert.match(html, /Tokens \(30d\)<\/small><b>150K<\/b>/);
+  assert.match(html, /118K in · 32K out/, "split by direction, since output is the expensive half");
+  assert.match(html, /Total tokens served/);
+  assert.match(html, /carries forward the 1\.1M tokens served before this range/, "the running total is lifetime, not per-range");
+});
+
+test("the token stack separates prompt from generated without relying on colour", () => {
+  const html = page.consolePage({ users: [], activity: activityFixture() });
+  const legend = html.match(/<div class="viz-legend">(?:(?!<\/div>).)*seg-out(?:(?!<\/div>).)*<\/div>/)[0];
+  assert.match(legend, /Generated \(out\)/);
+  assert.match(legend, /Prompt \(in\)/, "both segments are named in the legend");
+  assert.match(html, /<title>Aug 25: 90K tokens · Prompt \(in\) 70K · Generated \(out\) 20K<\/title>/);
+
+  // The 2px surface gap belongs BETWEEN the segments, not under the stack: the
+  // bottom segment must still sit on the baseline. Both paths open "M x bottom
+  // V top", so the two edges either side of the gap are directly comparable.
+  const col = html.match(/<title>Aug 25: 90K tokens[\s\S]*?<\/g>/)[0];
+  const inSeg = col.match(/d="M[\d.]+ ([\d.]+)V([\d.]+)[^"]*" class="viz-bar seg-in"/);
+  const outSeg = col.match(/d="M[\d.]+ ([\d.]+)V([\d.]+)[^"]*" class="viz-bar seg-out"/);
+  assert.ok(inSeg && outSeg, "both segments are drawn");
+  const [inBottom, inTop] = [Number(inSeg[1]), Number(inSeg[2])];
+  const outBottom = Number(outSeg[1]);
+  assert.equal(inTop - outBottom, 2, "exactly 2px of surface separates the segments");
+  assert.equal(inBottom, 224, "and the stack still rests on the baseline");
+});
+
+// ── Review + questions screens ──────────────────────────────────────────────
+function card(over = {}) {
+  return {
+    id: 7, question: "How is inflation recalculated?", answer: "## Inputs\n\nIt runs in the `inflationRecalc` phase.",
+    user_key: "ahd:1", username: "Tester", role: "player", country: "US", ts: 1787000000000,
+    used_mcp: 1, cached: 0, model: "deepseek-v4-flash", plan: { id: "general" },
+    validation: { issues: ["truncated"] }, evidence: { tools: ["country_fiscal"] },
+    tokens_in: 100, tokens_out: 50, estimated_cost: 0.001, ttft_ms: 2600, ...over,
+  };
+}
+const COUNTS = { total: 229, pending: 194, reviewed: 12, good: 8, bad: 3, skipped: 1, playerJudged: 20, modelJudged: 6, emptyAnswers: 9 };
+
+test("the review deck ships its cards to the client and names what is left", () => {
+  const html = page.reviewPage({ identity: {}, context: { isAdmin: true }, cards: [card()], counts: COUNTS });
+  assert.match(html, /Left to judge<\/small><b>194<\/b>/);
+  assert.match(html, /never seen by us or the sampler/);
+  assert.match(html, /Already covered<\/small><b>26<\/b>/, "20 player-rated plus 6 sampler-graded");
+  assert.match(html, /20 rated by players · 6 by the sampler/);
+  assert.match(html, /var DECK = \[\{/, "the deck is embedded, so judging a card costs no page load");
+  assert.match(html, /"question":"How is inflation recalculated\?"/);
+});
+
+test("the review screen is keyboard-first", () => {
+  const html = page.reviewPage({ identity: {}, context: { isAdmin: true }, cards: [card()], counts: COUNTS });
+  assert.match(html, /e\.key==='ArrowRight'/);
+  assert.match(html, /e\.key==='ArrowLeft'/);
+  assert.match(html, /e\.key===' '\|\|e\.key==='ArrowDown'/);
+  assert.match(html, /e\.key==='z'\|\|e\.key==='Z'/);
+  assert.match(html, /<kbd>←<\/kbd>/);
+});
+
+test("a bad verdict asks why, because it seeds a correction", () => {
+  const html = page.reviewPage({ identity: {}, context: { isAdmin: true }, cards: [card()], counts: COUNTS });
+  assert.match(html, /Why was it bad\?/);
+  assert.match(html, /This seeds a correction draft/);
+  assert.match(html, /data-reason="Wrong facts"/);
+  assert.match(html, /File without a reason/, "but it never blocks on one");
+  assert.match(html, /if\(btn\.dataset\.verdict==='bad'\) openReason\(\);/);
+});
+
+test("the review card renders the answer as the player saw it", () => {
+  const html = page.reviewPage({ identity: {}, context: { isAdmin: true }, cards: [card()], counts: COUNTS });
+  assert.match(html, /<div class="rev-a" data-md><\/div>/, "the body is empty in the HTML");
+  assert.match(html, /body\.textContent = DECK\[0\]\.answer/, "and filled as text, so an answer cannot inject");
+  assert.match(html, /window\.__hydrateShared/);
+  assert.doesNotMatch(html, /## Inputs<\/div>/, "raw markdown never reaches the card body");
+});
+
+test("an empty deck says the queue is clear rather than showing a blank card", () => {
+  const html = page.reviewPage({ identity: {}, context: { isAdmin: true }, cards: [], counts: { ...COUNTS, pending: 0 } });
+  assert.match(html, /Queue clear/);
+  assert.match(html, /var DECK = \[\]/);
+});
+
+test("the questions screen lists newest first and hides nothing", () => {
+  const rows = [
+    { ...card({ id: 9, question: "Newest", ts: 1787000002000 }), review_rating: "good", review_by: "egg" },
+    { ...card({ id: 8, question: "Middle", ts: 1787000001000 }), feedback_rating: "down", feedback_reason: "wrong" },
+    { ...card({ id: 7, question: "Oldest", ts: 1787000000000 }) },
+  ];
+  const html = page.questionsPage({
+    identity: {}, context: { isAdmin: true },
+    feed: { rows, total: 229, limit: 50, offset: 0 }, counts: COUNTS, pageNum: 1,
+  });
+  assert.ok(html.indexOf("Newest") < html.indexOf("Middle"), "order is preserved as given");
+  assert.ok(html.indexOf("Middle") < html.indexOf("Oldest"));
+  assert.match(html, /judged by egg/);
+  assert.match(html, /player said “wrong”/);
+  assert.match(html, /Review the 194 unjudged/);
+  assert.match(html, /Page 1 of 5 · 229 questions/);
+});
+
+test("the questions screen filters by review state without losing the search", () => {
+  const html = page.questionsPage({
+    identity: {}, context: { isAdmin: true }, feed: { rows: [], total: 0, limit: 50, offset: 0 },
+    counts: COUNTS, pageNum: 1, search: "inflation", state: "bad",
+  });
+  assert.match(html, /href="\/console\/questions\?q=inflation&amp;state=good"/, "switching state keeps the query");
+  assert.match(html, /<input type="hidden" name="state" value="bad">/, "and searching keeps the state");
+  assert.match(html, /value="inflation"/);
+  assert.match(html, /No questions match that filter/);
+});
+
+test("every console screen carries the same nav", () => {
+  const review = page.reviewPage({ identity: {}, context: { isAdmin: true }, cards: [], counts: COUNTS });
+  const questions = page.questionsPage({ identity: {}, context: { isAdmin: true }, feed: { rows: [], total: 0, limit: 50, offset: 0 }, counts: COUNTS });
+  for (const html of [review, questions]) {
+    assert.match(html, /href="\/console"[^>]*>Dashboard/);
+    assert.match(html, /href="\/console\/review"[^>]*>Review/);
+    assert.match(html, /href="\/console\/questions"[^>]*>Questions/);
+  }
+  assert.match(review, /href="\/console\/review" aria-current="page"/);
+  assert.match(questions, /href="\/console\/questions" aria-current="page"/);
+});
+
+test("an answer cannot break out of the embedded deck", () => {
+  const html = page.reviewPage({
+    identity: {}, context: { isAdmin: true }, counts: COUNTS,
+    cards: [card({ answer: "</script><script>alert(1)</script>", question: "<img src=x onerror=alert(1)>" })],
+  });
+  const block = html.match(/var DECK = ([\s\S]*?);\n/)[1];
+  assert.doesNotMatch(block, /<\/script>/i, "the closing tag is escaped inside the JSON");
+  assert.match(block, /\\u003c\/script\\u003e/);
+  assert.match(block, /\\u003cimg src=x onerror=alert\(1\)\\u003e/, "and so is the question");
+});
+
+test("a chart the player cannot have is explained BY the model, not just the chrome", () => {
+  const quota = prompt.build({ visualizations: false, visualizationLimit: { reason: "quota", limit: 2, used: 2 } });
+  assert.match(quota, /Do not include Mermaid diagrams/);
+  assert.match(quota, /used all 2 of today's visualizations/);
+  assert.match(quota, /resets at 00:00 UTC/);
+  assert.match(quota, /close with ONE short sentence saying the chart was left out and why/i);
+  assert.match(quota, /a table is fine and is not a visualization/);
+  assert.match(quota, /Never pretend you drew a chart/);
+
+  // No request, no apology: an ordinary prose question must not pick one up.
+  const plain = prompt.build({ visualizations: false });
+  assert.doesNotMatch(plain, /left out and why/);
+  assert.doesNotMatch(plain, /visualizations \(the allowance/);
+});
+
+test("the thumbs on the questions list file the same verdict the review deck does", () => {
+  const rows = [
+    { id: 9, question: "Rated good", answer: "body", ts: 1, user_key: "a:1", username: "u", plan: {}, validation: {}, evidence: {}, review_rating: "good" },
+    { id: 8, question: "Unjudged", answer: "body", ts: 1, user_key: "a:1", username: "u", plan: {}, validation: {}, evidence: {} },
+  ];
+  const html = page.questionsPage({
+    identity: {}, context: { isAdmin: true },
+    feed: { rows, total: 2, limit: 50, offset: 0 }, counts: { pending: 1 }, pageNum: 1,
+  });
+  assert.match(html, /data-rate="good"/);
+  assert.match(html, /data-rate="bad"/);
+  assert.match(html, /<span class="q-thumbs" data-id="9" data-rating="good">/);
+  assert.match(html, /<span class="q-thumbs" data-id="8" data-rating="">/);
+  assert.match(html, /class="q-thumb up on"[^>]*aria-pressed="true"/);
+  assert.match(html, /fetch\(url,\{method:'POST'/);
+  assert.match(html, /'\/api\/console\/review\/undo'/, "clicking a lit thumb clears the verdict");
+  // The thumbs sit inside <summary>; without this every click also opens the row.
+  assert.match(html, /e\.preventDefault\(\); e\.stopPropagation\(\);/);
+});
+
+test("a staff thumb is never rendered as a player verdict", () => {
+  const html = page.questionsPage({
+    identity: {}, context: { isAdmin: true }, counts: {}, pageNum: 1,
+    feed: { total: 1, limit: 50, offset: 0, rows: [
+      { id: 9, question: "Staff said bad, player said nothing", answer: "b", ts: 1, user_key: "a:1",
+        plan: {}, validation: {}, evidence: {}, review_rating: "bad" },
+    ] },
+  });
+  assert.doesNotMatch(html, /player reported/);
+  assert.doesNotMatch(html, /player liked/);
+  assert.match(html, /data-rating="bad"/);
 });

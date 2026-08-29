@@ -28,6 +28,13 @@ async function fetchHealth() {
 function format(h) {
   const lines = [];
   lines.push("**Ask weekly digest** (last 7 days)");
+  const aud = h.audience;
+  if (aud) {
+    const split = Object.entries(aud.byProvider || {}).map(([p, n]) => `${n} ${p}`).join(", ");
+    const move = aud.previousActive ? ` (${aud.active - aud.previousActive >= 0 ? "+" : ""}${aud.active - aud.previousActive} vs previous week)` : "";
+    lines.push(`Active users: **${aud.active}**${move}${split ? ` · ${split}` : ""} · ${aud.activeToday} today · ${aud.newUsers} new`);
+    lines.push(`Questions: ${aud.questionsPerDay}/day`);
+  }
   lines.push(`Answers: ${h.answers.total} (${h.answers.live} live) · verdicts ${h.answers.up} up / ${h.answers.down} down`);
   const a = h.audits || {};
   lines.push(`QA sampler: ${a.total || 0} graded, ${a.not_answered || 0} judged unanswered, ${a.refused || 0} refusals`);

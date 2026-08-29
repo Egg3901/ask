@@ -26,18 +26,24 @@ const COOKIE = "ask_session";
 // supporter budget doubled at the same time, so supporting still buys the same
 // multiple it always did over the default.
 //
-// Visualizations stay a supporter feature. They are the slowest and least
-// reliable path (the deep tier, 30s+ to first token) and every reported answer
-// to date has been a visualization failure, so they are not what a first-time
-// player should meet.
+// Live data and visualizations are available to EVERY signed-in player as of
+// 2026-08-29, metered rather than gated. Visualizations used to be a supporter
+// flag: a player who asked for a chart got prose and a note about a tier they
+// had not bought, which reads as a paywall on the interesting half of the
+// product. A small daily allowance teaches the feature instead, and supporting
+// still buys the same multiple it always did.
+//
+// `viz` is deliberately the tightest budget of the three. Charts take the slow
+// deep-tier path (30s+ to first token) and remain the least reliable output, so
+// the cap doubles as a brake on the failure mode, not just on cost.
 const TIERS = {
-  "supporter-plus-plus": { label: "Supporter++", questions: 40, mcp: 10, visualizations: true },
-  "supporter-plus":      { label: "Supporter+",  questions: 20, mcp: 6,  visualizations: true },
-  "supporter":           { label: "Supporter",   questions: 10, mcp: 4,  visualizations: true },
+  "supporter-plus-plus": { label: "Supporter++", questions: 40, mcp: 10, viz: 20, visualizations: true },
+  "supporter-plus":      { label: "Supporter+",  questions: 20, mcp: 6,  viz: 10, visualizations: true },
+  "supporter":           { label: "Supporter",   questions: 10, mcp: 4,  viz: 5,  visualizations: true },
 };
 // What the Supporter tier used to be, now the floor for any signed-in player.
-const PLAYER = { label: "Player", questions: 5, mcp: 2, visualizations: false };
-const STAFF = { label: "Staff", questions: 200, mcp: 50, visualizations: true };
+const PLAYER = { label: "Player", questions: 5, mcp: 2, viz: 2, visualizations: true };
+const STAFF = { label: "Staff", questions: 200, mcp: 50, viz: 50, visualizations: true };
 
 function parseCookies(req) {
   const out = {};
@@ -151,23 +157,23 @@ async function resolve(req) {
 function entitlementFor(context) {
   // No context means ops-dash could not confirm this is a player account, which
   // is also what an ops-dash outage looks like. Fail closed either way.
-  if (!context) return { allowed: false, reason: "no-context", label: null, questions: 0, mcp: 0, visualizations: false };
-  if (context.isBanned) return { allowed: false, reason: "banned", label: null, questions: 0, mcp: 0, visualizations: false };
+  if (!context) return { allowed: false, reason: "no-context", label: null, questions: 0, mcp: 0, viz: 0, visualizations: false };
+  if (context.isBanned) return { allowed: false, reason: "banned", label: null, questions: 0, mcp: 0, viz: 0, visualizations: false };
   if (ASK_PRIVATE && !(context.isAdmin || context.isModerator)) {
-    return { allowed: false, reason: "private", label: null, questions: 0, mcp: 0, visualizations: false };
+    return { allowed: false, reason: "private", label: null, questions: 0, mcp: 0, viz: 0, visualizations: false };
   }
   if (context.isAdmin || context.isModerator) {
     return { allowed: true, reason: "staff", label: STAFF.label, questions: STAFF.questions, mcp: STAFF.mcp,
-      visualizations: STAFF.visualizations, staff: true };
+      viz: STAFF.viz, visualizations: STAFF.visualizations, staff: true };
   }
   const tier = context.tierActive ? context.tier : null;
   const t = tier && TIERS[tier];
   if (!t) {
     return { allowed: true, reason: "player", label: PLAYER.label, questions: PLAYER.questions, mcp: PLAYER.mcp,
-      visualizations: PLAYER.visualizations };
+      viz: PLAYER.viz, visualizations: PLAYER.visualizations };
   }
   return { allowed: true, reason: "supporter", tier, label: t.label, questions: t.questions, mcp: t.mcp,
-    visualizations: t.visualizations };
+    viz: t.viz, visualizations: t.visualizations };
 }
 
 function invalidate(req) {

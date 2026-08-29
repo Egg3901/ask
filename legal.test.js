@@ -86,3 +86,41 @@ test("copy carries no em or en dashes", () => {
   const src = fs.readFileSync(path.join(__dirname, "legal.js"), "utf8");
   assert.ok(!/[—–]/.test(src), "legal.js contains an em or en dash");
 });
+
+test("document pages scroll, the chat shell stays locked", () => {
+  // ASK_CSS sets body{height:100dvh;overflow:hidden} for the chat layout, and
+  // it is the last style block, so it beats anything a page passes via head.
+  // Every page that is a document rather than the chat has to opt into
+  // body.doc or its content below the fold is unreachable.
+  const prompt = require("./prompt");
+  const bodyTag = (h) => (h.match(/<body[^>]*>/) || [""])[0];
+
+  const documents = {
+    lander: page.signedOut({}),
+    notFound: page.signedOut({ notFound: true }),
+    notEntitled: page.notEntitled({
+      identity: { username: "x" },
+      context: { username: "x" },
+      reason: "banned",
+    }),
+    changelog: page.changelogPage(),
+    privacy: page.legalPage("privacy"),
+    terms: page.legalPage("terms"),
+  };
+  for (const [name, html] of Object.entries(documents)) {
+    assert.match(bodyTag(html), /class="[^"]*\bdoc\b/, `${name} cannot scroll`);
+  }
+
+  const chat = page.app({
+    identity: { provider: "ahd", id: "p", username: "p" },
+    context: { username: "p" },
+    entitlement: { allowed: true, label: "S", questions: 10, mcp: 5, visualizations: true },
+    usage: {
+      used: 0, limit: 10, remaining: 10,
+      mcpUsed: 0, mcpLimit: 5, mcpRemaining: 5, resetAt: Date.now() + 1e6,
+    },
+    conversations: [], model: "m", styles: prompt.STYLES, lengths: prompt.LENGTHS,
+  });
+  assert.doesNotMatch(bodyTag(chat), /\bdoc\b/, "the chat shell must keep its locked layout");
+  assert.match(chat, /body\.doc\{/, "the doc-mode rule is missing from the stylesheet");
+});

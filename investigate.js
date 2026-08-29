@@ -27,6 +27,7 @@
 const llm = require("./llm");
 const retrieve = require("./retrieve");
 const mcp = require("./mcp");
+const history = require("./history");
 
 // Two effort levels. Deep questions get room to actually chase a thread across
 // systems; everything else stays tight so latency stays honest.
@@ -101,11 +102,49 @@ const SEARCH_CODE_DEF = {
   },
 };
 
+// Change history. Separate from search_code because they answer different
+// questions: search_code says what the game does, these say when it started
+// doing it. A player reporting that something broke, dropped or "used to" work
+// differently is asking the second question, and the code alone cannot answer it.
+const HISTORY_TOOL_DEFS = [
+  {
+    type: "function",
+    function: {
+      name: "search_history",
+      description: "Search the game's shipped change history (real commits on the live branch) for changes to a system. Use when the player says something changed, broke, dropped, or used to work differently — the current code cannot tell you WHEN a mechanic started behaving that way. Pass the file path from a code excerpt to see what recently changed in that exact file.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "The system or behaviour in question, in a few words." },
+          path: { type: "string", description: "Optional source path from an excerpt, to list changes to that file only." },
+          days: { type: "integer", description: "How far back to look. Defaults to 45." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "show_change",
+      description: "Read one shipped change in full: its message, the files it touched, and what it actually altered. Call this on a commit from search_history when you need to say what a change did rather than only that it happened.",
+      parameters: {
+        type: "object",
+        properties: {
+          sha: { type: "string", description: "The commit id from search_history." },
+          path: { type: "string", description: "Optional: restrict to one file's changes." },
+        },
+        required: ["sha"],
+      },
+    },
+  },
+];
+
 const SYSTEM = `You are the research scout for a help system answering player questions about A House Divided, a political and economic strategy game. You do NOT answer the question. You gather the evidence a separate writer will answer from.
 
 Work like an investigator:
 - Read the question and the evidence already collected. Decide what is still missing to answer it fully and precisely.
 - Call tools to fill exactly those gaps. Follow leads: if an excerpt references a constant, file, or system you have not seen, search for it. If the question names a corporation, country, or election and live tools are available, look it up.
+- If the player says something changed, broke, dropped, got worse, or used to work differently, search the change history for the files the code excerpts came from, then read the one change that fits. Current code cannot date a change; only the history can.
 - Prefer few, well-aimed calls. Stop as soon as the evidence would let a careful writer answer with real numbers and mechanisms.
 - A search that finds nothing is itself evidence: it means the game likely does not model that thing. Note it, do not keep rephrasing the same hunt more than once.
 - When nothing useful is missing, stop calling tools and reply with exactly two lines for the writer:
@@ -136,10 +175,28 @@ async function liveToolDefs() {
   } catch { return []; }
 }
 
-async function execute(name, args, { useLive, context }) {
+async function execute(name, args, { useLive, context, game }) {
   if (name === "search_code") {
-    const found = await retrieve.search(String(args.query || ""), { topK: 5, maxChars: 9000 });
+    const found = await retrieve.search(String(args.query || ""), { topK: 5, maxChars: 9000, game });
     return found ? found.context : "No matching source found for that query.";
+  }
+  if (name === "search_history") {
+    const paths = args.path ? [String(args.path)] : [];
+    const found = await history.search({
+      game, query: String(args.query || ""), paths,
+      sinceDays: Number(args.days) || history.SINCE_DAYS,
+    });
+    if (!found.length) return "No shipped changes found for that in the window searched.";
+    const dated = await history.withDeployDates(game, found);
+    return await history.lines({ game, commits: dated });
+  }
+  if (name === "show_change") {
+    const c = await history.show({ game, sha: String(args.sha || ""), path: args.path ? String(args.path) : null });
+    if (!c) return "No such shipped change (it may not have reached the live branch).";
+    const stat = c.files.map(f => `${f.path} +${f.added}/-${f.removed}`).join("\n");
+    return [`${c.sha.slice(0, 9)} ${c.date.slice(0, 10)}${c.deployed?.date ? ` (live from ${c.deployed.date.slice(0, 10)})` : ""}: ${c.subject}`,
+      c.body ? `\n${c.body.slice(0, 1200)}` : "", `\nFILES:\n${stat}`,
+      c.diff ? `\nWHAT CHANGED:\n${c.diff}` : ""].filter(Boolean).join("\n");
   }
   if (!useLive || !LIVE_ALLOWLIST.has(name)) return "Tool not available for this question.";
   // The asker may only trace themselves. Their own character is the one in the
@@ -167,9 +224,10 @@ async function execute(name, args, { useLive, context }) {
  * Run the investigation. Returns { text, tools } or null when nothing was
  * gathered. `text` is a prompt-ready evidence block.
  */
-async function run({ question, context = null, useLive = false, deep = false, onAction = null }) {
+async function run({ question, context = null, useLive = false, deep = false, onAction = null, game = null, changeQuestion = false }) {
   const caps = deep ? CAPS.deep : CAPS.standard;
-  const defs = [SEARCH_CODE_DEF, ...(useLive ? await liveToolDefs() : [])];
+  const historyDefs = (await history.available(game)) ? HISTORY_TOOL_DEFS : [];
+  const defs = [SEARCH_CODE_DEF, ...historyDefs, ...(useLive ? await liveToolDefs() : [])];
   const started = Date.now();
 
   const isStaff = context?.isAdmin === true || context?.isModerator === true;
@@ -181,7 +239,13 @@ async function run({ question, context = null, useLive = false, deep = false, on
     : "";
   const messages = [
     { role: "system", content: SYSTEM },
-    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${staffLine}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.` },
+    // A cheap scout model reads a conditional instruction in the system prompt
+    // as optional and never fires the tool. When the caller already knows this
+    // is a change question, say so as an order in the turn it is answering.
+    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${staffLine}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.${
+      changeQuestion && historyDefs.length
+        ? `\n\nThis player is reporting that something CHANGED. The current code cannot tell the writer WHEN it changed, so you MUST call search_history — first for the system in the question, then, if a code excerpt points at the file behind it, again with that path. Open the one change that fits with show_change. Do not stop after search_code alone.`
+        : ""}` },
   ];
 
   const blocks = [];
@@ -206,7 +270,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
       const name = tc.function?.name || "";
       if (onAction) { try { onAction(name, args); } catch {} }
       let result;
-      try { result = await execute(name, args, { useLive, context }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
+      try { result = await execute(name, args, { useLive, context, game }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
       return { tc, name, args, result: cap(result) };
     }));
 

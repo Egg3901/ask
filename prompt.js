@@ -7,6 +7,7 @@
 // gets a prompt that does not describe rules it has no way to obey.
 
 const games = require("./games");
+const history = require("./history");
 
 const STYLES = {
   simplified: {
@@ -125,9 +126,21 @@ const FAIR_PLAY = `FAIR PLAY
 - Analysis of the asker's own character or corporation, defensive advice, and help reporting a suspected exploit are allowed.
 - Keep a refusal brief. Offer a fair-play or defensive alternative when useful.`;
 
-function visualizationRules(enabled, requested = false) {
-  if (!enabled) return `VISUALIZATIONS
-- Do not include Mermaid diagrams, charts, or other visualizations in this answer.`;
+function visualizationRules(enabled, requested = false, limit = null) {
+  if (!enabled) {
+    // The player asked for a chart and cannot have one. Silently returning prose
+    // reads as the model ignoring them, so it has to own the omission — but in
+    // one line, at the end, without turning the answer into a billing notice.
+    const explain = limit && limit.reason ? `
+- The player asked for a visualization and cannot have one right now: ${limit.reason === "quota"
+      ? `they have used all ${limit.limit} of today's visualizations (the allowance resets at 00:00 UTC)`
+      : "their account does not include visualizations"}.
+- Answer the question properly in prose first — a table is fine and is not a visualization.
+- Then close with ONE short sentence saying the chart was left out and why. Do not apologise at length, do not repeat it, and do not open with it.
+- Never pretend you drew a chart, and never describe a chart you did not draw.` : "";
+    return `VISUALIZATIONS
+- Do not include Mermaid diagrams, charts, or other visualizations in this answer.${explain}`;
+  }
   const explicit = requested ? `
 - The user explicitly requested a visualization. Put the visualization before the prose.
 - After the chart, use a one-sentence takeaway and at most three short bullets. This overrides the normal answer-length target.
@@ -185,6 +198,22 @@ function liveDataRules(enabled) {
 - Apply the public/private and fair-play rules before disclosing any corporation-specific or opponent-specific detail.`;
 }
 
+/**
+ * How to answer with the change history.
+ *
+ * Only included when commits were actually gathered. Two failures to prevent,
+ * and they pull in opposite directions: refusing to name a change that plainly
+ * caused what the player saw, and blaming an unrelated commit that merely
+ * happens to be the newest one in the block.
+ */
+const CHANGE_HISTORY = `RECENT CHANGES — the player is asking why something is different, so answer with WHEN it changed, not only what the rule is.
+- Lead with the change: what shipped, what date it went live, and what it does to them. "Corporate dividends were cut to 40% of net income on 26 August" is the answer; the formula is the supporting detail.
+- Attribute a change to a commit only when it went live BEFORE the player saw the effect AND touches that exact mechanic. State the date so they can check it against when they noticed.
+- If nothing in the history explains it, say so plainly and answer from the running world instead: markets move, elections turn, other players act, and most of what a player notices is the world, not a patch. "Nothing shipped that touches this — here's what moves it" is a good answer.
+- Never speculate about a change that is not in the evidence, never describe unreleased or upcoming work, and never say a fix "should be coming".
+- Talk about effects, never about the code: no diffs, no function names, no file-by-file walkthroughs, no commit ids in the prose. A PR number and a date are the right level of citation.
+- If a change looks like it made their situation worse, say that straight. Do not soften a nerf into a "rebalance" or dress a bug up as intended behaviour.`;
+
 function playerContext(ctx) {
   if (!ctx || !ctx.character) return "";
   const c = ctx.character;
@@ -210,7 +239,21 @@ const FORMATTING = `RICH FORMATTING — the answer renders as rich text (tables,
 - INLINE: \`backticks\` for exact identifiers (file paths, constants, field names, tickers, numeric values); **bold** for the term being defined; *italics* sparingly. Link a source as [label](https://…) only with a real URL from the evidence — never invent one.
 - Do NOT force structure onto a one-line answer, and never use ASCII-art tables or diagrams — use a real Markdown table or a Mermaid block.`;
 
-function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, liveData = false, report = false, game = null } = {}) {
+/**
+ * The player's clock, when their browser told us what it is.
+ *
+ * Without this the model has no idea what time it is anywhere, so "today",
+ * "this week" and "recently" in a question have nothing to attach to and it
+ * either guesses or answers about the wrong day.
+ */
+function clockLine(tz, now = Date.now()) {
+  const zone = history.validZone(tz);
+  if (!zone) return "";
+  return `\nTHE PLAYER'S CLOCK: it is ${history.localStamp(new Date(now).toISOString(), zone)} where they are (${zone}).
+Read "today", "last night", "this week" and "recently" in their question against THAT clock, not UTC, and give dates on it too.\n`;
+}
+
+function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, visualizationLimit = null, liveData = false, report = false, game = null, changeHistory = false, tz = null } = {}) {
   const s = STYLES[style] || STYLES.standard;
   const l = LENGTHS[length] || LENGTHS.standard;
   const g = game && game.id ? game : games.fallback();
@@ -231,9 +274,10 @@ ${authorityFor(g)}
 ${rulesFor(g)}
 ${g.multiplayer ? FAIR_PLAY : ""}
 ${g.live ? liveDataRules(liveData) : NO_LIVE_WORLD}
-${visualizationRules(visualizations, visualizationRequested)}
+${changeHistory ? CHANGE_HISTORY : ""}
+${visualizationRules(visualizations, visualizationRequested, visualizationLimit)}
 ${FOLLOWUPS}
-${g.multiplayer ? playerContext(context) : ""}
+${g.multiplayer ? playerContext(context) : ""}${clockLine(tz)}
 EVIDENCE GATHERED FOR THIS QUESTION (a starting point, not the limit of the game — never describe this section to the player):
 ${indexContext}`;
 }

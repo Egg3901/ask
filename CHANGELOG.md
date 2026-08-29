@@ -2,6 +2,34 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.7.0 - 2026-08-29
+
+### Added
+- Charts and maps are open to every player. They used to be a supporter feature, so asking for one got you prose and a note about a tier you had not bought. Everyone now gets a few a day, supporters get more, and the allowance resets at midnight UTC.
+- When you ask for a chart and have none left for the day, the answer says so in a line at the end instead of quietly coming back as prose.
+
+### Changed
+- A chart only counts against your daily allowance if one was actually drawn. Asking for a chart and getting prose back costs you nothing.
+
+## 1.6.2 - 2026-08-29
+
+### Added
+- Ask now works in your timezone. Your browser tells it where you are, and "what changed today", "last night" and "this week" are read against your clock, with change dates shown on it too. If your browser does not report a zone, Ask says how long ago something shipped rather than guessing at your calendar day.
+
+## 1.6.1 - 2026-08-29
+
+### Fixed
+- "What changed today?" no longer answers from a UTC calendar day. Asked late in the evening, Ask was calling the whole day's work "yesterday" and reporting that nothing had shipped. Changes are now dated by how long ago they landed, in your day, not the server's.
+- Change answers no longer lean on a commit that only touched a shared config file. Every gated feature touches those, so a question about war could come back with the week's freight work.
+- An answer that came out as raw tool-call JSON instead of prose is now discarded and retried, and costs you nothing.
+
+## 1.6.0 - 2026-08-28
+
+### Added
+- Ask can answer "why did this change?" Questions about something breaking, dropping, getting nerfed, or working differently than it used to now consult the game's shipped change history: what went live, on which date, and what it does to you. Answers name the PR and the day it reached the live game, so you can line it up against when you noticed.
+- Where a change shipped with a changelog entry, Ask answers in that entry's own words rather than paraphrasing the code.
+- When nothing shipped that explains what you saw, Ask says so plainly and answers from the running world instead — markets move, elections turn, and other players act without anyone touching the code.
+
 ## 1.5.3 - 2026-08-28
 
 ### Fixed

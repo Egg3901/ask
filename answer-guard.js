@@ -16,8 +16,16 @@ function stripVisuals(answer) {
 // "answer". Detect that shape so the caller can fail the generation (no quota,
 // standard retry error) instead of shipping tool-call soup.
 const TOOL_LEAK = /<\/?tool_call\b|<function\s*=|<parameter\s*=|<\|(?:tool_call|tool_calls|python_tag)\|>/i;
+// The same failure in JSON clothing, and the one that actually reached a player:
+// MiniMax answered a follow-up with "Let me re-verify…" and three fenced blocks
+// of {"name":"bash","arguments":{"command":"git -C /home/user/AHD log …"}} — a
+// tool it does not have, on a machine that does not exist. The XML detector saw
+// nothing wrong with it. Requires the name+arguments pair so a legitimate JSON
+// example in an answer is not mistaken for a tool call.
+const TOOL_LEAK_JSON = /\{\s*"(?:name|tool|function|recipient_name)"\s*:\s*"[\w.-]+"\s*,\s*"(?:arguments|parameters|args|tool_input)"\s*:\s*[{[]/i;
 function looksLikeToolLeak(answer) {
-  return TOOL_LEAK.test(String(answer || ""));
+  const text = String(answer || "");
+  return TOOL_LEAK.test(text) || TOOL_LEAK_JSON.test(text);
 }
 
 // Deterministic refusal detector — the inline, no-model-call counterpart to the

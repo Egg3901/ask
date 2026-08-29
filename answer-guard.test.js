@@ -92,3 +92,12 @@ test("a guard-flagged answer is always graded, not left to the sample draw", () 
   }
   assert.equal(audit.AUDIT_ALWAYS.has("some_benign_issue"), false);
 });
+
+test("a fenced JSON tool call is a leak, not an answer", () => {
+  const leak = 'Let me re-verify by checking the current git state.\n\n```json\n{"name": "bash", "arguments": {"command": "git log", "description": "check"}}\n```';
+  assert.equal(guard.looksLikeToolLeak(leak), true);
+  assert.equal(guard.looksLikeToolLeak('<tool_call><function=search_code>'), true);
+  // A real answer that merely shows JSON data must still go out.
+  assert.equal(guard.looksLikeToolLeak('The payload is `{"name": "Tinky Winky Corporation", "ticker": "TWC"}`.'), false);
+  assert.equal(guard.looksLikeToolLeak('Cloture needs three fifths of the votes cast.'), false);
+});

@@ -163,4 +163,14 @@ function ensure(answer, datasets = [], { required = false, question = "" } = {})
   return generated ? `${generated}\n\n${text}`.trim() : text;
 }
 
-module.exports = { requested, chartRequested, recommend, chart, ensure };
+/**
+ * Did a finished answer actually carry a chart or map? This is what the
+ * visualization allowance is charged against — the delivered artifact, not the
+ * intent to produce one.
+ */
+function contains(answer) {
+  const text = String(answer || "");
+  return Boolean(text.match(MAP_BLOCK) || text.match(MERMAID_BLOCK));
+}
+
+module.exports = { requested, chartRequested, recommend, chart, ensure, contains };

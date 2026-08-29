@@ -16,5 +16,11 @@
     "truth": "Per-turn wealth history IS available live: the character_wealth_history lookup returns net worth, cash, savings, stocks, bonds and funds per turn (anchor-converted, comparable across turns) plus the largest net-worth move precomputed. Answer wealth-trend questions with those numbers and chart them; never answer with the rolling-change formula or claim no time series exists.",
     "addedBy": "fable-ops",
     "created": 1787918787759
+  },
+  {
+    "question": "How do I recruit mercenaries to fight for my country?",
+    "truth": "No mercenary, private military company, or foreign-legion mechanic exists anywhere in the game, and there is no Foreign Legion unit type either — do not invent one. The only recruitment paths are the standard national formations defined in src/lib/constants/military.ts (Infantry Division, Armored Division, Mechanized Brigade, Artillery Regiment, Special Forces Group, Air Defense Battalion, naval and air units), raised through the defence office.",
+    "addedBy": "fable-ops",
+    "created": 1787919226210
   }
 ]

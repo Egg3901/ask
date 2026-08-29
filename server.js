@@ -15,6 +15,7 @@ const mcp = require("./mcp");
 const retrieve = require("./retrieve");
 const grounding = require("./grounding");
 const investigate = require("./investigate");
+const history = require("./history");
 const navigation = require("./navigation");
 const corrections = require("./corrections");
 const llm = require("./llm");
@@ -310,9 +311,14 @@ const server = http.createServer(async (req, res) => {
       const selectedKey = url.searchParams.get("user") || "";
       if (selectedKey.startsWith("ahd:")) {
         const selectedContext = await auth.playerContextForUserId(selectedKey.slice(4));
+        // Refresh their profile facts but do NOT log presence: staff reading a
+        // profile is not that player being active, and counting it would let the
+        // console inflate its own active-user numbers.
         if (selectedContext) store.touchUser(selectedKey,
-          { provider: "ahd", id: selectedKey.slice(4), username: selectedContext.username }, selectedContext);
+          { provider: "ahd", id: selectedKey.slice(4), username: selectedContext.username }, selectedContext,
+          { activity: false });
       }
+      const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 30, 7), 365);
       return html(res, 200, page.consolePage({
         identity: session.identity,
             context: session.context,
@@ -322,6 +328,9 @@ const server = http.createServer(async (req, res) => {
             modelStats: store.adminModelStats(),
             correctionRows: corrections.list(),
             health: store.digest(Date.now() - 7 * 864e5),
+            activity: store.activity({ days }),
+            days,
+            tab: url.searchParams.get("tab") || "overview",
           }));
     }
 
@@ -348,6 +357,58 @@ const server = http.createServer(async (req, res) => {
       if (!internal && (!session || session.context?.isAdmin !== true)) return json(res, session ? 403 : 401, { error: "Staff only." });
       const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 90);
       return json(res, 200, store.digest(Date.now() - days * 864e5));
+    }
+
+    // Staff answer review: one card at a time over everything nobody has judged.
+    // The queue itself is built in the store; this only serves it.
+    if (req.method === "GET" && p === "/console/review") {
+      if (!session || session.context?.isAdmin !== true) return html(res, session ? 403 : 401, page.signedOut({ notFound: true }));
+      const oldestFirst = url.searchParams.get("order") === "oldest";
+      return html(res, 200, page.reviewPage({
+        identity: session.identity, context: session.context,
+        cards: store.reviewQueue({ limit: 25, oldestFirst }),
+        counts: store.reviewCounts(),
+        oldestFirst,
+      }));
+    }
+
+    // Next batch, so the card deck refills without a page load.
+    if (req.method === "GET" && p === "/console/review.json") {
+      if (!session || session.context?.isAdmin !== true) return json(res, session ? 403 : 401, { error: "Staff only." });
+      return json(res, 200, {
+        cards: store.reviewQueue({ limit: Number(url.searchParams.get("limit")) || 25, oldestFirst: url.searchParams.get("order") === "oldest" }),
+        counts: store.reviewCounts(),
+      });
+    }
+
+    // Every question, most recent first — the screen that hides nothing, as
+    // opposed to the review queue which hides everything already judged.
+    if (req.method === "GET" && p === "/console/questions") {
+      if (!session || session.context?.isAdmin !== true) return html(res, session ? 403 : 401, page.signedOut({ notFound: true }));
+      const perPage = 50;
+      const pageNum = Math.max(Number(url.searchParams.get("page")) || 1, 1);
+      const search = String(url.searchParams.get("q") || "").slice(0, 100);
+      const state = String(url.searchParams.get("state") || "all");
+      return html(res, 200, page.questionsPage({
+        identity: session.identity, context: session.context,
+        feed: store.recentQuestions({ limit: perPage, offset: (pageNum - 1) * perPage, search, state }),
+        counts: store.reviewCounts(), pageNum, search, state,
+      }));
+    }
+
+    // Day-by-day audience and volume: active users (a login or a question inside
+    // the trailing week) and questions per day. Same auth as health.json — a
+    // staff session, or the internal secret so cron jobs can read it.
+    if (req.method === "GET" && p === "/console/activity.json") {
+      const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+      const supplied = Buffer.from(bearer), expected = Buffer.from(ASK_SECRET);
+      const internal = Boolean(ASK_SECRET) && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+      if (!internal && (!session || session.context?.isAdmin !== true)) return json(res, session ? 403 : 401, { error: "Staff only." });
+      const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 30, 1), 365);
+      const out = store.activity({ days });
+      // The key list is only there to badge rows in the console's own user
+      // table; it has no business travelling in a JSON export.
+      return json(res, 200, { ...out, active: { ...out.active, keys: undefined } });
     }
 
     // The switcher's contents. Public: it names games and their public URLs and
@@ -450,6 +511,35 @@ const server = http.createServer(async (req, res) => {
         }
         return json(res, ok ? 200 : 404, { ok });
       }
+      // A staff verdict on one answer. 'good' | 'bad' | null (a skip, which
+      // still counts as looked-at). A 'bad' seeds a correction draft, exactly
+      // as a player downvote does — the point of reviewing is to teach.
+      if (req.method === "POST" && p === "/api/console/review") {
+        if (session.context?.isAdmin !== true) return json(res, 403, { error: "Staff only." });
+        const b = await readJson(req);
+        const rating = b?.rating === "good" ? "good" : b?.rating === "bad" ? "bad" : null;
+        if (b?.rating != null && rating === null) return json(res, 400, { error: "Rating must be good, bad, or omitted to skip." });
+        const note = String(b?.reason || "");
+        const saved = store.saveReview({
+          answerId: Number(b?.answerId), rating, note,
+          by: session.identity?.username || key,
+        });
+        if (!saved) return json(res, 404, { ok: false, error: "No such answer." });
+        if (rating === "bad" && saved.question) {
+          corrections.draft({ question: saved.question, reason: `staff review${note ? `: ${note}` : ""}`, sourceAnswerId: saved.id })
+            .catch(() => {});
+        }
+        return json(res, 200, { ok: true, counts: store.reviewCounts() });
+      }
+
+      // Undo the last card, so a misfired keystroke is not a permanent verdict.
+      if (req.method === "POST" && p === "/api/console/review/undo") {
+        if (session.context?.isAdmin !== true) return json(res, 403, { error: "Staff only." });
+        const b = await readJson(req);
+        const ok = store.clearReview(Number(b?.answerId));
+        return json(res, ok ? 200 : 404, { ok, counts: store.reviewCounts() });
+      }
+
       if (req.method === "GET" && p === "/api/conflicts" && ent.staff) {
         return json(res, 200, { conflicts: store.conflicts(url.searchParams.get("status") || "open", 100) });
       }
@@ -475,6 +565,11 @@ const server = http.createServer(async (req, res) => {
         // Which game this question is about. The picker decides unless the
         // question names a different game outright (see games.forQuestion).
         const game = games.forQuestion(question, body.game);
+        // The asker's own timezone, as their browser reports it. Validated
+        // against the runtime's zone database and dropped if it is anything
+        // else — this is the difference between "shipped today" and a confident
+        // "yesterday" that is off by a day for everyone west of UTC.
+        const tz = history.validZone(body.tz);
 
         const style = prompt.STYLES[body.style] ? body.style : "standard";
         // A report request is a product mode, not a phrasing: deep tier, live
@@ -482,11 +577,21 @@ const server = http.createServer(async (req, res) => {
         // a standalone shareable page at the end.
         const reportRequested = REPORT_RE.test(question);
         const length = reportRequested ? "deep" : (prompt.LENGTHS[body.length] ? body.length : "standard");
-        // Visualizations are a supporter feature. A player who asks for one still
-        // gets a real prose answer, plus a note saying where the chart went.
-        const vizAllowed = ent.visualizations === true;
+        // Visualizations are metered, not gated: every tier has some, and running
+        // out is a daily allowance rather than a locked feature. A player who asks
+        // for one past their allowance still gets a real prose answer, and the
+        // model is told to say why the chart is missing.
+        const vizQuota = store.usage(key, ent);
+        const vizEntitled = ent.visualizations === true && Number(ent.viz || 0) > 0;
+        const vizAllowed = vizEntitled && vizQuota.vizRemaining >= 1;
         const vizWanted = visualization.requested(question) || body.visualizations === true;
         const vizBlocked = vizWanted && !vizAllowed;
+        // Why it is missing, in the two cases that differ for the player. Only
+        // set when they actually wanted one, so an ordinary question never picks
+        // up an irrelevant apology.
+        const vizLimitReason = !vizWanted ? null
+          : vizAllowed ? null
+          : vizEntitled ? "quota" : "tier";
 
         let plan = askPlan.create(question, session.context);
         if (!vizAllowed && plan.visual !== "none") {
@@ -518,7 +623,11 @@ const server = http.createServer(async (req, res) => {
         // the player actually gets the model they chose.
         // The model picker is gone: every request rides the tier chain, which
         // rotates the verified free pool before the paid backstop.
-        const cacheable = !wantMcp && !isFollowup;
+        // A change answer is never cached. It carries dates and ages measured
+        // against the asker's own clock ("shipped about five hours ago"), and
+        // the history itself moves every time something ships — so replaying it
+        // to the next player is wrong twice over.
+        const cacheable = !wantMcp && !isFollowup && !history.changeish(question);
 
         // Cache is checked BEFORE quota so re-reading an answer is always free.
         // The plan is part of cache identity. A pre-planner answer must never
@@ -534,7 +643,7 @@ const server = http.createServer(async (req, res) => {
           const u = store.usage(key, ent);
           return json(res, 200, {
             convId, answerId, answer: hit.answer, areas: store.safeJson(hit.areas),
-            citations: store.safeJson(hit.citations), cached: true, usedMcp: false, vizBlocked,
+            citations: store.safeJson(hit.citations), cached: true, usedMcp: false, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
             model: router.label(cachedModel),
             modelId: cachedModel,
             modelName: models.displayFor(cachedModel),
@@ -608,7 +717,7 @@ const server = http.createServer(async (req, res) => {
         const ping = setInterval(() => { try { res.write(": keepalive\n\n"); } catch {} }, 5000);
         req.on("close", () => { clientGone = true; activeGenerations.delete(reqId); });
 
-        send("meta", { convId, reqId, cost, followup, followupsLeft, usedMcp: useMcp, model: route.label, vizBlocked,
+        send("meta", { convId, reqId, cost, followup, followupsLeft, usedMcp: useMcp, model: route.label, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
           modelId: route.chain[0], modelName: models.displayFor(route.chain[0]), status: plan.status });
 
         // Actual source text for this question. The old path sent only a file
@@ -638,6 +747,29 @@ const server = http.createServer(async (req, res) => {
           hits = await retrieve.searchMulti(retrievalQuestion, subQueries, { ...retrieveOpts, game });
         } catch { hits = null; }
         if (hits?.files?.length) status(`Matched ${hits.files.length} source${hits.files.length === 1 ? "" : "s"} — reading…`);
+
+        // What recently CHANGED, when the question is about a change.
+        //
+        // Retrieval hands the model the current code, which reads identically
+        // whether a mechanic shipped last year or on Tuesday — so "why did my
+        // stocks fall this week" was structurally unanswerable: the one piece
+        // of evidence that could answer it (the commit that shipped) was in no
+        // index. This runs on the files retrieval just matched, which is what
+        // bridges player vocabulary to commit vocabulary: the player says
+        // "stocks fell", the commit says "bounded equity liquidity facility",
+        // and the equity files are what connect them.
+        let historyBlock = "";
+        const changeQuestion = history.changeish(question) && await history.available(game);
+        if (changeQuestion) {
+          status("Checking what shipped recently…");
+          try {
+            const recent = await history.evidence({ game, question: retrievalQuestion, paths: hits?.files || [], code: hits?.context || "", tz });
+            if (recent) {
+              historyBlock = recent.text;
+              if (onAction) onAction("recent_changes", { q: `${recent.commits.length} shipped changes` });
+            }
+          } catch { historyBlock = ""; }
+        }
 
         // Staff-verified lessons from past wrong answers, matched semantically.
         let matchedCorrections = [];
@@ -687,11 +819,19 @@ const server = http.createServer(async (req, res) => {
         // tools exist to prevent (measured: California unemployment answered
         // "not in this snapshot" while macro_history sat one call away).
         const trendish = /\b(trend|history|over (?:the )?(?:last|past|recent)|chang(?:e|ed|es|ing)|since (?:19|20)\d\d|turn.by.turn|evolv)/i.test(question);
+        // A change question the fast path could not answer gets the scout on any
+        // tier, live or not. It is the only thing that can bridge a player
+        // describing a screen ("my portfolio dropped") to a change living in a
+        // system ("equity liquidity facility") — a path match cannot, and the
+        // deterministic pass returning nothing is exactly that mismatch.
+        // Gated on the block being EMPTY: the scout costs ~25s, and when the
+        // commits are already in hand a flash answer should not pay it.
+        const chaseChange = changeQuestion && historyBlock === "";
         let investigation = null;
-        if (game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish))) {
-          status(useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…");
+        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish))) || chaseChange) {
+          status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
           try {
-            investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction });
+            investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction, game, changeQuestion });
           } catch { investigation = null; }
           if (investigation?.tools?.length) liveEvidence.tools = [...liveEvidence.tools, ...investigation.tools.map(t => `investigate:${t}`)];
         }
@@ -708,9 +848,10 @@ const server = http.createServer(async (req, res) => {
         let firstTokenMs = null;
         try {
           const out = await llm.stream({
-            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, liveData: useMcp, report: reportRequested, game })
+            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, visualizationLimit: vizLimitReason ? { reason: vizLimitReason, limit: Number(ent.viz || 0), used: vizQuota.vizUsed } : null, liveData: useMcp, report: reportRequested, game, changeHistory: historyBlock !== "", tz })
               + (matchedCorrections.length ? `\n\n${corrections.block(matchedCorrections)}` : "")
               + (hits ? `\n\n${hits.context}` : "")
+              + (historyBlock ? `\n\n${historyBlock}` : "")
               + (liveBlock ? `\n\n${liveBlock}` : "")
               + (investigation ? `\n\n${investigation.text}` : "")
               // "Where do I find this" is answered from the real menu map, not guessed.
@@ -789,7 +930,7 @@ const server = http.createServer(async (req, res) => {
         // investigation evidence.
         const evidenceForCheck = [
           matchedCorrections.length ? corrections.block(matchedCorrections) : "",
-          hits?.context, liveBlock, investigation?.text,
+          hits?.context, historyBlock, liveBlock, investigation?.text,
         ].filter(Boolean).join("\n\n");
         // Deep AND pro: deep is where bridging invention was measured, but pro
         // exists for exactly the multi-system questions that invite it, and a
@@ -853,6 +994,11 @@ const server = http.createServer(async (req, res) => {
           plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence),
           ttft_ms: firstTokenMs, total_ms: Date.now() - genStart, fell_through: fellThrough, ts: Date.now(),
         });
+        // Charge a visualization slot only if one actually reached the player.
+        // Enabling visualizations does not mean the model drew anything, and an
+        // allowance that bills for prose is an allowance players learn to distrust.
+        const deliveredViz = visualization.contains(answer);
+        if (deliveredViz) store.markVizUsed(answerId);
 
         // A refusal despite live evidence is a confident failure — seed a
         // staff-review draft now rather than waiting for the sampler to catch
@@ -899,7 +1045,7 @@ const server = http.createServer(async (req, res) => {
 
         send("done", {
           convId, answerId, answer, areas, citations, cached: false, usedMcp: useMcp,
-          cost, followup, followupsLeft, followups, vizBlocked, reportUrl,
+          cost, followup, followupsLeft, followups, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0, reportUrl,
           model: router.label(servedModel),
           modelId: servedModel,
           modelName: models.displayFor(servedModel),
@@ -942,7 +1088,16 @@ try {
     token: "probe", question: "probe", body: "# Probe\n\n| a | b |\n|---|---|\n| 1 | 2 |",
     model: "deepseek-v4-flash", created: Date.now(),
   });
-  const scripts = [...probe.matchAll(/<script>([\s\S]*?)<\/script>/g), ...reportProbe.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  // The review deck is keyboard-driven and entirely client-rendered, so a
+  // broken script there is a blank screen behind a healthy 200 — exactly what
+  // this self-check exists to catch.
+  const reviewProbe = page.reviewPage({
+    identity: { provider: "ahd", id: "0", username: "probe" }, context: { isAdmin: true },
+    cards: [{ id: 1, question: "probe", answer: "probe answer", user_key: "ahd:0", username: "probe", ts: Date.now(), plan: {}, validation: {}, evidence: {} }],
+    counts: { pending: 1, reviewed: 0, good: 0, bad: 0, skipped: 0, playerJudged: 0, modelJudged: 0 },
+  });
+  const scripts = [...probe.matchAll(/<script>([\s\S]*?)<\/script>/g), ...reportProbe.matchAll(/<script>([\s\S]*?)<\/script>/g),
+    ...reviewProbe.matchAll(/<script>([\s\S]*?)<\/script>/g)];
   if (!scripts.length) throw new Error("client script block missing");
   for (const [, source] of scripts) new Function(source);
   console.log("[ask] client scripts OK (" + scripts.length + " blocks)");

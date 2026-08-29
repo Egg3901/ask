@@ -1,84 +1,14 @@
 [
   {
-    "id": "wealth-trend",
-    "question": "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
-    "tier": "flash",
-    "model": "minimax/minimax-m3-free",
-    "seconds": 38,
-    "correctionsInjected": [
-      "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
-      "show me my net worth / wealth / savings / income right now"
-    ],
-    "scoutTools": [
-      "entity_search",
-      "entity_search",
-      "character_wealth_history"
-    ],
-    "liveTargeted": true,
-    "validation": {
-      "issues": [],
-      "refused": false,
-      "narrated": false,
-      "grounding": [],
-      "inventedPaths": [],
-      "missedPaths": [
-        "src/lib/currency/savingsInterest.ts"
-      ]
-    },
-    "answer": "## Egg's wealth trend, turns 405–434\n\nYour per-turn net worth (cash + stocks + bonds + funds, anchor ₳) is plotted below. The dominant signal is your **stock book**, not savings — your savings bucket is empty across the entire window, and all of the movement comes from equities pricing and a steady cash build.\n\n| Turn | Net Worth ₳ | Cash ₳ | Stocks ₳ | Δ from prior |\n|---:|---:|---:|---:|---:|\n| 405 | 14,745,512 | 343,412 | 14,402,100 | — |\n| 410 | 14,369,800 | 373,333 | 13,996,467 | -375,712 |\n| 415 | 14,861,073 | 415,974 | 14,445,100 | +491,273 |\n| 416 | **16,031,379** | 421,204 | 15,610,175 | **+1,170,306** |\n| 419 | 15,190,737 | 441,771 | 14,748,966 | -907,142 |\n| 420 | 15,296,303 | 451,304 | 14,844,999 | +105,566 |\n| 425 | 16,285,265 | 477,068 | 15,808,197 | +988,962 |\n| 430 | 16,749,761 | 491,499 | 16,258,262 | +464,496 |\n| 433 | 16,686,359 | 498,330 | 16,188,029 | -63,402 |\n\n## Where to look\n\n- **Largest single-turn move: turn 415 → 416, +₳1,170,306.** Stocks jumped from 14,445,100 to 15,610,175 (+₳1,165,075) while cash rose only ₳5,231. That is a pure equity repricing, not income or a deposit.\n- **Cash is grinding up regardless** (+₳155k over 28 turns, roughly ₳5.5k/turn), suggesting a steady inflow (salary/dividends/savings interest) hitting your liquid account while equities did the volatile work.\n- **Savings are flat at ₳0 the entire window.** `character_wealth_history` returns `savings: null` for every turn and `getLifetimeInterestEarnedInCurrency` reads 0 — you have not opened a high-yield savings account in your home currency (USD), so the APY path in `src/lib/turn/nppSavingsInterest.ts` is not firing for you.\n\n> A House Divided credits savings interest only when the account is opened in that currency. Your cash is earning 0% right now — moving any idle cash into a USD savings account would start the quarterly compounding shown in `src/lib/currency/savingsInterest.ts`.\n\nThe headline figure for your wealth-over-time plot, including positions, was ₳16,686,359 at turn 433; the current cash-only sheet shows ₳570,420 because the position-inclusive and cash-only series track different things and the second one is not a continuation of the first."
-  },
-  {
-    "id": "ca-unemployment",
-    "question": "How has unemployment in California changed over the last year, and what explains the move?",
-    "tier": "flash",
+    "id": "change-elections",
+    "question": "Did something change with elections recently? My snap election fired at a different time than I expected.",
+    "tier": "pro",
     "model": "deepseek-v4-flash:cloud",
-    "seconds": 33,
-    "correctionsInjected": [],
-    "scoutTools": [
-      "macro_history",
-      "game_overview",
-      "country_fiscal"
-    ],
-    "liveTargeted": true,
-    "validation": {
-      "issues": [],
-      "refused": false,
-      "narrated": false,
-      "grounding": [],
-      "inventedPaths": [],
-      "missedPaths": []
-    },
-    "answer": "California unemployment has fallen sharply over the last year, from **11.73%** (turn 401) to **8.84%** today (turn 452) — a drop of **2.89 percentage points**. But the path was anything but smooth: the state actually bottomed out early in the year, then spiked to a mid-year peak before recovering.\n\n| Period | Turn | Unemployment |\n|---|---|---|\n| Start of year | 401 | 11.73% |\n| Early-year low | 413 | 9.60% |\n| Mid-year peak | 434 | 12.54% |\n| Current | 452 | 8.84% |\n\nThe move is explained by a sharp GDP contraction and its aftermath. Growth was running strong (~8–9% annually) through turn 413, and unemployment was falling accordingly. Then, around turn 414, GDP growth collapsed to **−7.1%** — a severe shock — which pushed unemployment back up over the following ~20 turns to its 12.54% peak. Since that peak, growth has stabilized and turned positive again, and unemployment has declined steadily month after month to the current 8.84%.\n\nThe live data shows the *correlation* clearly (the GDP crash triggered the unemployment spike; the recovery drove the decline), but it doesn't reveal *why* the GDP contracted in that window — that would be a policy decision or external shock visible on the national or state economic screens, not in the unemployment trend itself.\n\n> Key takeaway: Unemployment in California is down nearly 3 points year-over-year, but only after weathering a mid-year recession that briefly pushed it above 12.5%."
-  },
-  {
-    "id": "corp-compare",
-    "question": "Tinky corp vs meyer corp: which is the better buy right now?",
-    "tier": "flash",
-    "model": "minimax/minimax-m3-free",
-    "seconds": 40,
-    "correctionsInjected": [],
-    "scoutTools": [],
-    "liveTargeted": true,
-    "validation": {
-      "issues": [],
-      "refused": false,
-      "narrated": false,
-      "grounding": [],
-      "inventedPaths": [],
-      "missedPaths": []
-    },
-    "answer": "## Head-to-head: Tinky Winky vs Meyer Corp\n\nI'm answering for **Tinky Winky Corporation** (the firm you run) versus a peer that doesn't appear in the extraction sector comparison I have on hand. Let me show what I can prove, and name the one gap that decides the call.\n\n### What's public for Tinky Winky (turn 452)\n\n| Metric | Tinky Winky Corp | Notes |\n|---|---|---|\n| Share price | 3,156,828.95 USD | (≈ 2,646,965.83 anchor) |\n| Market cap | 33.18B USD (27.82B anchor) | computed from price × public float + capital |\n| Liquid capital | 453.52M USD (380.27M anchor) | strong cash position |\n| Public float | 0 | closed — not tradeable on the open market |\n| Credit rating | CCC | speculative |\n| Extraction revenue | 5,330,011,827 anchor (13 stakes) | #1 in the sector |\n| Sector revenue/stake | 410,000,910 anchor | ~4.3× the #2 peer, Hunt Oil |\n\n> **Key takeaway:** Tinky Winky is a closed corporation (`publicFloat: 0`). Even if every public number screams \"buy,\" you cannot buy a share on the exchange because there is no float to buy from.\n\n### Meyer Corp — what I can and cannot see\n\nI don't have Meyer Corp's current share price, market cap, revenue, credit rating, or float in the live snapshot supplied for this turn. The extraction sector benchmark lists 236 comparable firms and Tinky Winky tops it; Meyer is not in that leaderboard fragment, so I can't tell from this evidence whether it sits among the top names, mid-pack, or unlisted.\n\n### The decision you're actually making\n\n- **If you want exposure to Tinky Winky** — you already have it as CEO. You cannot buy more from the market. The relevant question is whether to issue stock and dilute, or keep `publicFloat: 0` and fund growth from the 380M-anchor cash pile.\n- **If you want to compare it as an investment** — Meyer needs its live ticker page. Open its corporation profile and the sector benchmark side by side; the two figures that matter are `sharePrice` ÷ earnings yield vs. credit rating, and `publicFloat` (is it actually buyable?).\n\n> Open Meyer Corp's stock page and the extraction sector leaderboard — those two screens settle price, float, and credit, which is the whole comparison."
-  },
-  {
-    "id": "division-cost",
-    "question": "How much would it cost me to raise 3 armored divisions at tech tier 2, and how long until they are combat ready?",
-    "tier": "flash",
-    "model": "deepseek-v4-flash:cloud",
-    "seconds": 36,
+    "seconds": 102,
     "correctionsInjected": [],
     "scoutTools": [
       "search_code",
-      "search_code",
+      "search_history",
       "search_code"
     ],
     "liveTargeted": false,
@@ -90,6 +20,50 @@
       "inventedPaths": [],
       "missedPaths": []
     },
-    "answer": "An **Armored Division** archetype is 15,000 personnel and 92 combat power, so three of them mean 45,000 manpower and 276 power in total. Each recruitment order costs **1 action** from the Defense Ministry panel.\n\nI can't give you the exact price for tech tier 2 because the recruit panel computes cost from the country's GDP-derived budget — and I don't have the US's current price figure in view. Two hard constraints apply regardless:\n\n- **Budget:** the order must fit inside the current defence appropriation. New orders can't be financed by borrowing — the overdraft covers upkeep only. If the appropriation falls short, the panel tells you how many turns until it's affordable at the current rate.\n- **Manpower:** you need 45,000 available; if the pool is short, recruitment is blocked until it recovers.\n\nAs for combat readiness, I can't see a training/combat-ready duration in the mechanics — the evidence I have shows recruitment as an instant order (price + manpower + 1 action), with no time-to-ready interval. The place that would settle both the price and any readiness wait is the **Defense Ministry → Recruit panel** in the cabinet office, which shows the exact figure for the selected unit type and tier before you authorize.\n\n> The three-division bill is budget and manpower-gated, not time-gated, as far as the current mechanics show."
+    "answer": "Yes — a fix shipped yesterday (27 August) that changed *when* snap elections fire. The game had been scheduling an election whenever a country's system converted (a Stage 4 regime collapse or a voluntary constitutional convention) but never actually running it. Two fixes went live yesterday: the promised post-conversion election now actually fires (e6538a64b), and the step that fires it runs every turn (b678cd3ab). So if your country went through a conversion, a snap now fires on the first post-conversion turn where it previously never would have fired at all — that is the most likely cause of the timing you didn't expect.\n\nTwo related snap changes shipped the same day:\n\n| Change | Effect on timing |\n|---|---|\n| Regime changes can now dissolve any legislature (ef3529cd9) | A snap can fire in countries that don't normally allow them |\n| Imposed snaps keep the LARP calendar canonical (1bbda4601) | An imposed snap doesn't push the next regular election later, while a PM-called snap does |\n\nIf you called the snap yourself, nothing about its timing changed: it starts immediately with a 48-hour window (24h primary + 24h general). The timing shift comes from the post-conversion path, not the PM button. Check your country's event feed — a headline reading \"Dissolved Under a Peace Settlement\" means an imposed snap fired; \"…Dissolves …\" means it was the executive's own call."
+  },
+  {
+    "id": "change-stocks",
+    "question": "Why did my stocks fall this week? Was it a code change?",
+    "tier": "deep",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 44,
+    "correctionsInjected": [
+      "Show how my own savings and wealth changed over recent turns. Visualize the largest change."
+    ],
+    "scoutTools": [
+      "search_history",
+      "search_code",
+      "entity_search"
+    ],
+    "liveTargeted": true,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "## Likely cause: market movement, not a patch\n\nNothing shipped to the live game in the last 45 days touches personal stock holdings or your portfolio's stock-value calculation. The four commits in your recent-change list that mention \"stock\" all do something else:\n\n- [PR #1039](https://github.com/Egg3901/AHDGame/commit/7ff9fc20db4e6f23e1123f88775492bea9d68a18) caps an index-fund capital-book anchor and adds an insolvency materiality floor.\n- [PR #1035](https://github.com/Egg3901/AHDGame/commit/5745adba7598930bb519e9e018a220f58b3c938e) changes how NPPs expand owned plants.\n- [PR #1062](https://github.com/Egg3901/AHDGame/commit/fff8e309e2c11c54292a1366e0eb8da7d248c593) de-duplicates Discord news webhooks.\n- [PR #1059](https://github.com/Egg3901/AHDGame/commit/3e4956a941a2619aff14640942d82667504148a7) adds a Senate confirmation vote UI for the FOMC committee.\n\nNone of those edit the stock-price engine, the personal-portfolio calculator in `src/app/portfolio/PortfolioClient.tsx`, or the breakdown chart in `src/components/charts/PortfolioBreakdownChart.tsx`. So a code change is not the explanation.\n\n## What actually moves your stock line\n\nYour portfolio's stocks series (`stockValue` in the history points) tracks the mark-to-market value of the equities you hold, so the line moves for ordinary market reasons:\n\n- The listed share price of Tinky Winky Corporation or any other stock you own drifted this turn.\n- Other players or NPPs bought or sold, moving the order book.\n- An underlying corporation's fundamentals (sector NPVs, debt, earnings forecast) shifted, which feeds the blended fair-value model that sets the quote.\n\n> A falling \"Stocks\" line on your breakdown chart is the same number the public exchange shows for those tickers, recomputed at turn close — it is not a personal-account glitch.\n\n## How to see exactly what changed\n\nOpen the **Stocks** tab on your portfolio page; it shows the current position count and mark-to-market for each holding. The exchange page for each ticker (linked from there) shows the live quote and recent price history, so you can see whether the move was in the price or in the quantity (a sale, a transfer, or a corporate action)."
+  },
+  {
+    "id": "change-none",
+    "question": "Why did my approval suddenly drop after I passed a popular bill?",
+    "tier": "flash",
+    "model": "minimax/minimax-m3-free",
+    "seconds": 40,
+    "correctionsInjected": [],
+    "scoutTools": [],
+    "liveTargeted": false,
+    "validation": {
+      "issues": [],
+      "refused": false,
+      "narrated": false,
+      "grounding": [],
+      "inventedPaths": [],
+      "missedPaths": []
+    },
+    "answer": "Approvals move from several systems at once, so a drop right after a bill passes is almost never the bill itself — it's something the bill's passage triggered. The most common culprits, in order of likelihood:\n\n## The bill's side effect, not the bill\n\n- **Budget-pass path.** If the bill is the annual Budget, the UK confidence gauge (PR #901, live 2026-08-25) treats passing it as a **+10** confidence event but does **not** stop the per-turn confidence drift from the government's standing approval. If your national approval is below the 50 pivot at the moment of passage, the gauge still erodes and can drag the visible standing-approval metrics down with it.\n- **Nationalization / privatization consequences.** A bill that takes a private firm, or sells one, runs through the political-cost math in `src/lib/nationalization/consequences/compute.ts`. A \"popular\" framing still applies a public-trust nudge scaled by **ideology multiplier** and **concentration multiplier** — past the danger zone of state ownership, that boost **flips negative** (the public sours on a state that owns too much). So a well-liked seizing bill on top of an already-large state sector can read as a loss.\n- **Crisis-aid pledge.** A head-of-state aid commitment creates a `CrisisAidCommitment` (`src/lib/db/types/crisisAid.ts`). When the legislature votes it, the *sender's* approval takes the diplomatic effects, and a **failed** vote writes an `approvalPenaltyExpiresTurn` on the sender. If the bill is the aid package and a coalition partner defected, that's where the drop comes from.\n- **Westminster rework (PR #901, 2026-08-25).** The UK now has an explicit confidence gauge that bottoms out at 0 to trigger dissolution, and a **broken-promise bleed** that continuously drains the gauge when manifesto delivery slips. Passing a bill that *contradicts* a manifesto commitment feeds the meter and bleeds confidence every turn.\n\n## Quick diagnostic\n\n| Signal in the newswire | Likely source |\n|---|---|\n| Drop on same turn as a Budget pass | Confidence gauge drift below 50 pivot |\n| Drop after a nationalization/privatization | `compute.ts` approval nudge × ideology/concentration |\n| Drop after an aid-package vote | `CrisisAidCommitment.senderEffects` on a failed vote |\n| Slow bleed over the next turns after passing | Broken-promise bleed from manifesto delivery |\n\n> The bill's title doesn't tell you its effect class. Open the bill card and check whether it's tagged as a Budget, an economic-action (nationalize/privatize), or a crisis-aid pledge — that tag picks which consequence module ran."
   }
 ]

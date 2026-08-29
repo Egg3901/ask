@@ -114,7 +114,32 @@ CREATE TABLE IF NOT EXISTS answer_audits(
   created INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_audits_created ON answer_audits(created DESC);
 CREATE INDEX IF NOT EXISTS idx_audits_flagged ON answer_audits(answered, created DESC);
+
+-- Presence log, one row per user per UTC day. user_profiles.last_seen only ever
+-- holds the LATEST visit, so it can answer "is this person active now" but never
+-- "how many people were active in March" — the history is overwritten. This
+-- table keeps the day, so weekly-active is measured rather than inferred.
+-- 'visit' is a signed-in page load, 'ask' is a question (web or Discord); the
+-- first source of the day wins, which is all the console distinguishes.
+CREATE TABLE IF NOT EXISTS user_days(
+  user_key TEXT NOT NULL,
+  day TEXT NOT NULL,             -- 'YYYY-MM-DD', UTC, same day boundary as the quota window
+  source TEXT,                   -- 'visit' | 'ask'
+  ts INTEGER NOT NULL,
+  PRIMARY KEY(user_key, day));
+CREATE INDEX IF NOT EXISTS idx_user_days_day ON user_days(day);
 `);
+
+// Backfill the presence log from the history that does survive: every recorded
+// question proves activity on its day, and each profile's first/last seen prove
+// two more. Days between a user's first and last visit are unrecoverable and are
+// deliberately NOT invented — early WAU reads low rather than fabricated.
+db.exec(`INSERT OR IGNORE INTO user_days(user_key,day,source,ts)
+  SELECT user_key, date(ts/1000,'unixepoch'), 'ask', MIN(ts) FROM asks GROUP BY 1,2`);
+db.exec(`INSERT OR IGNORE INTO user_days(user_key,day,source,ts)
+  SELECT user_key, date(first_seen/1000,'unixepoch'), 'visit', first_seen FROM user_profiles WHERE first_seen>0`);
+db.exec(`INSERT OR IGNORE INTO user_days(user_key,day,source,ts)
+  SELECT user_key, date(last_seen/1000,'unixepoch'), 'visit', last_seen FROM user_profiles WHERE last_seen>0`);
 
 // Follow-ups are half price, so the budget is spent in fractions and must be
 // summed rather than counted.
@@ -136,6 +161,21 @@ try { db.exec("ALTER TABLE asks ADD COLUMN total_ms INTEGER"); } catch { /* alre
 // The models that errored before the one that answered, comma-joined. NULL
 // means the first model in the chain served.
 try { db.exec("ALTER TABLE asks ADD COLUMN fell_through TEXT"); } catch { /* already migrated */ }
+// Staff review. Kept separate from feedback_rating on purpose: that column is
+// the PLAYER's verdict and feeds the "rated helpful" figure, so folding staff
+// judgements into it would quietly corrupt the only signal about what players
+// actually think. review_ts is set for every judged answer including skips, so
+// "already looked at" is one NULL check rather than three.
+// Visualizations became a metered allowance rather than a supporter flag
+// (2026-08-29). Charged only when a chart actually reached the player: asking
+// for one and getting prose back because the model declined must not cost the
+// asker a slot they never got the benefit of.
+try { db.exec("ALTER TABLE asks ADD COLUMN used_viz INTEGER DEFAULT 0"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN review_rating TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN review_note TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN review_by TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN review_ts INTEGER"); } catch { /* already migrated */ }
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_asks_review ON asks(review_ts, ts DESC)"); } catch {}
 try { db.exec("ALTER TABLE answer_cache ADD COLUMN model TEXT"); } catch { /* already migrated */ }
 // Every answer predating request routing was produced by the single Flash
 // model, so backfilling is factual rather than inferred.
@@ -158,6 +198,8 @@ const S = {
   convTurnCount: db.prepare("SELECT COUNT(*) c FROM asks WHERE conv_id=? AND user_key=?"),
   convHistory: db.prepare("SELECT question,answer FROM asks WHERE conv_id=? AND user_key=? ORDER BY ts DESC LIMIT ?"),
   countMcpToday: db.prepare("SELECT COUNT(*) c FROM asks WHERE user_key=? AND ts>? AND used_mcp=1"),
+  countVizToday: db.prepare("SELECT COUNT(*) c FROM asks WHERE user_key=? AND ts>? AND used_viz=1"),
+  markViz: db.prepare("UPDATE asks SET used_viz=1 WHERE id=?"),
   upsertConv: db.prepare(`INSERT INTO convs(id,user_key,title,created,updated) VALUES(@id,@user_key,@title,@ts,@ts)
     ON CONFLICT(id) DO UPDATE SET updated=@ts, title=COALESCE(convs.title,@title)`),
   listConvs: db.prepare("SELECT id,title,created,updated FROM convs WHERE user_key=? ORDER BY updated DESC LIMIT 40"),
@@ -315,9 +357,22 @@ function digest(sinceMs) {
   } catch {}
   let conflictsOpen = 0;
   try { conflictsOpen = db.prepare("SELECT COUNT(*) n FROM doc_conflicts WHERE status='open'").get().n; } catch {}
+  // Audience, on the same window as everything else in the rollup, so the
+  // digest can say who is still here alongside how well it served them.
+  const windowDays = Math.max(1, Math.round((Date.now() - since) / DAY_MS));
+  const act = activity({ days: windowDays });
   return {
     since,
     answers,
+    audience: {
+      windowDays: act.windowDays,
+      active: act.active.wau,
+      previousActive: act.active.prevWau,
+      activeToday: act.active.dau,
+      byProvider: act.active.byProvider,
+      newUsers: act.totals.newUsers,
+      questionsPerDay: Number(act.perDay.toFixed(1)),
+    },
     audits: auditSummary(since),
     issues: issueCounts(since),
     retrievalMisses: retrievalMisses(since, 10),
@@ -325,6 +380,253 @@ function digest(sinceMs) {
     corrections: { active: activeCorrections, draftsPending: drafts },
     docConflictsOpen: conflictsOpen,
   };
+}
+
+// ── Activity: who is still here, and how much are they asking ───────────────
+// An ACTIVE user is one who signed in or asked a question inside the trailing
+// window (7 days by default). Both halves matter: Discord users never load a
+// page, and a signed-in player who reads old threads never records an ask.
+const DAY_MS = 86400000;
+const ACTIVE_WINDOW_DAYS = 7;
+
+S.dayCounts = db.prepare(`SELECT date(ts/1000,'unixepoch') day,
+    COUNT(*) questions,
+    COALESCE(SUM(used_mcp),0) live,
+    COALESCE(SUM(cached),0) cached,
+    COUNT(DISTINCT user_key) askers,
+    COALESCE(SUM(CASE WHEN feedback_rating='up' THEN 1 ELSE 0 END),0) up,
+    COALESCE(SUM(CASE WHEN feedback_rating='down' THEN 1 ELSE 0 END),0) down
+  FROM asks WHERE ts>=? GROUP BY day`);
+S.dayModelTokens = db.prepare(`SELECT date(ts/1000,'unixepoch') day, model,
+    COALESCE(SUM(CASE WHEN cached=1 THEN 0 ELSE tokens_in END),0) tin,
+    COALESCE(SUM(CASE WHEN cached=1 THEN 0 ELSE tokens_out END),0) tout
+  FROM asks WHERE ts>=? GROUP BY day, model`);
+S.presenceSince = db.prepare("SELECT user_key, day, source FROM user_days WHERE day>=?");
+// Everything served before the window, so the cumulative curve starts from the
+// real all-time total rather than resetting to zero at the left edge.
+S.tokensBefore = db.prepare(`SELECT COALESCE(SUM(CASE WHEN cached=1 THEN 0 ELSE tokens_in END),0) tin,
+    COALESCE(SUM(CASE WHEN cached=1 THEN 0 ELSE tokens_out END),0) tout
+  FROM asks WHERE ts<?`);
+S.newUsersSince = db.prepare(`SELECT date(first_seen/1000,'unixepoch') day, COUNT(*) n
+  FROM user_profiles WHERE first_seen>=? GROUP BY day`);
+
+/** The user_keys active in the trailing window, as a Set. Drives the console's badges. */
+function activeKeys(windowDays = ACTIVE_WINDOW_DAYS, now = Date.now()) {
+  const from = dayKey(now - (windowDays - 1) * DAY_MS);
+  try { return new Set(S.presenceSince.all(from).map(r => r.user_key)); }
+  catch { return new Set(); }
+}
+
+/**
+ * Day-by-day activity over a window, plus the headline active-user counts.
+ * `dau` is presence on that day; `wau` is the rolling count over that day and
+ * the six before it, which is the "one login or question per week" measure.
+ */
+function activity({ days = 30, now = Date.now(), windowDays = ACTIVE_WINDOW_DAYS } = {}) {
+  const span = Math.min(Math.max(Number(days) || 30, 1), 365);
+  // Days are labelled from the UTC calendar day, so the series must start at a
+  // day boundary or the first bucket is a partial day masquerading as a full one.
+  const todayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
+  const firstDayStart = todayStart - (span - 1) * DAY_MS;
+  const labels = Array.from({ length: span }, (_, i) => dayKey(firstDayStart + i * DAY_MS));
+
+  const byDay = new Map(labels.map(d => [d, {
+    day: d, questions: 0, live: 0, cached: 0, askers: 0, up: 0, down: 0,
+    cost: 0, dau: 0, wau: 0, newUsers: 0,
+    tokensIn: 0, tokensOut: 0, tokens: 0, tokensCumulative: 0,
+  }]));
+
+  try {
+    for (const r of S.dayCounts.all(firstDayStart)) {
+      const d = byDay.get(r.day);
+      if (d) Object.assign(d, { questions: r.questions, live: r.live, cached: r.cached, askers: r.askers, up: r.up, down: r.down });
+    }
+  } catch { /* an empty chart beats a 500 on the admin page */ }
+  try {
+    for (const r of S.dayModelTokens.all(firstDayStart)) {
+      const d = byDay.get(r.day);
+      if (!d) continue;
+      const rate = rateFor(r.model);
+      d.cost += (Number(r.tin) * rate.input + Number(r.tout) * rate.output) / 1_000_000;
+      d.tokensIn += Number(r.tin); d.tokensOut += Number(r.tout);
+      d.tokens = d.tokensIn + d.tokensOut;
+    }
+  } catch {}
+  try {
+    for (const r of S.newUsersSince.all(firstDayStart)) {
+      const d = byDay.get(r.day);
+      if (d) d.newUsers = r.n;
+    }
+  } catch {}
+
+  // Presence has to reach `windowDays - 1` further back than the chart, or the
+  // first buckets would report a rolling count computed from a truncated window.
+  let presence = [];
+  try { presence = S.presenceSince.all(dayKey(firstDayStart - (windowDays - 1) * DAY_MS)); } catch {}
+  const usersOnDay = new Map();
+  for (const r of presence) {
+    if (!usersOnDay.has(r.day)) usersOnDay.set(r.day, new Set());
+    usersOnDay.get(r.day).add(r.user_key);
+  }
+  for (let i = 0; i < span; i++) {
+    const dayStart = firstDayStart + i * DAY_MS;
+    const bucket = byDay.get(labels[i]);
+    bucket.dau = (usersOnDay.get(labels[i]) || new Set()).size;
+    const rolling = new Set();
+    for (let back = 0; back < windowDays; back++) {
+      for (const k of usersOnDay.get(dayKey(dayStart - back * DAY_MS)) || []) rolling.add(k);
+    }
+    bucket.wau = rolling.size;
+  }
+
+  const series = labels.map(d => byDay.get(d));
+  // Running total, carried forward from everything served before the window so
+  // the curve reads as the real lifetime total, not a per-range restart.
+  let before = { tin: 0, tout: 0 };
+  try { before = S.tokensBefore.get(firstDayStart) || before; } catch {}
+  const tokensBefore = Number(before.tin || 0) + Number(before.tout || 0);
+  let running = tokensBefore;
+  for (const d of series) { running += d.tokens; d.tokensCumulative = running; }
+
+  const current = activeKeys(windowDays, now);
+  const previous = new Set();
+  for (let back = windowDays; back < windowDays * 2; back++) {
+    for (const k of usersOnDay.get(dayKey(todayStart - back * DAY_MS)) || []) previous.add(k);
+  }
+  // Only the charted range. `presence` deliberately reaches further back to feed
+  // the rolling window, and counting those rows here would overstate the range.
+  const inRange = new Set();
+  const firstLabel = labels[0], lastLabel = labels[span - 1];
+  for (const r of presence) if (r.day >= firstLabel && r.day <= lastLabel) inRange.add(r.user_key);
+
+  const providerOf = k => String(k || "").split(":")[0] || "unknown";
+  const byProvider = {};
+  for (const k of current) byProvider[providerOf(k)] = (byProvider[providerOf(k)] || 0) + 1;
+
+  const totals = series.reduce((acc, d) => ({
+    questions: acc.questions + d.questions, live: acc.live + d.live, cached: acc.cached + d.cached,
+    cost: acc.cost + d.cost, up: acc.up + d.up, down: acc.down + d.down, newUsers: acc.newUsers + d.newUsers,
+    tokensIn: acc.tokensIn + d.tokensIn, tokensOut: acc.tokensOut + d.tokensOut, tokens: acc.tokens + d.tokens,
+  }), { questions: 0, live: 0, cached: 0, cost: 0, up: 0, down: 0, newUsers: 0, tokensIn: 0, tokensOut: 0, tokens: 0 });
+
+  const today = series[series.length - 1] || { questions: 0, dau: 0 };
+  return {
+    windowDays, days: span, since: firstDayStart, series, totals,
+    active: {
+      wau: current.size,
+      prevWau: previous.size,
+      dau: today.dau,
+      windowActive: inRange.size,        // anyone seen at all inside the charted range
+      byProvider,
+      keys: [...current],
+    },
+    questionsToday: today.questions,
+    perDay: span ? totals.questions / span : 0,
+    tokens: {
+      perDay: span ? totals.tokens / span : 0,
+      today: today.tokens || 0,
+      beforeWindow: tokensBefore,
+      allTime: tokensBefore + totals.tokens,
+    },
+  };
+}
+
+// ── Staff answer review ─────────────────────────────────────────────────────
+// A card-at-a-time queue over answers nobody has judged yet. "Already looked
+// at" means any of three things, and all three are excluded: a staff verdict
+// (review_ts), a player verdict (feedback_rating), or the automated QA sampler
+// having graded it (an answer_audits row). An answer with no body is dropped
+// too — a generation that failed is an incident, not something to rate.
+const REVIEWABLE = `a.review_ts IS NULL
+  AND a.feedback_rating IS NULL
+  AND NOT EXISTS(SELECT 1 FROM answer_audits x WHERE x.answer_id=a.id)
+  AND length(trim(COALESCE(a.answer,''))) >= 40`;
+const REVIEW_COLUMNS = `a.id,a.user_key,a.username,a.conv_id,a.question,a.answer,a.used_mcp,a.cached,a.model,
+  a.plan,a.validation,a.evidence,a.tokens_in,a.tokens_out,a.ttft_ms,a.total_ms,
+  a.feedback_rating,a.feedback_reason,a.feedback_source,
+  a.review_rating,a.review_note,a.review_by,a.review_ts,a.ts,p.role,p.country,p.party`;
+
+S.reviewQueue = db.prepare(`SELECT ${REVIEW_COLUMNS}
+  FROM asks a LEFT JOIN user_profiles p ON p.user_key=a.user_key
+  WHERE ${REVIEWABLE} ORDER BY a.ts DESC LIMIT ?`);
+S.reviewQueueOldest = db.prepare(`SELECT ${REVIEW_COLUMNS}
+  FROM asks a LEFT JOIN user_profiles p ON p.user_key=a.user_key
+  WHERE ${REVIEWABLE} ORDER BY a.ts ASC LIMIT ?`);
+S.reviewCounts = db.prepare(`SELECT
+    (SELECT COUNT(*) FROM asks) total,
+    (SELECT COUNT(*) FROM asks a WHERE ${REVIEWABLE}) pending,
+    (SELECT COUNT(*) FROM asks WHERE review_ts IS NOT NULL) reviewed,
+    (SELECT COUNT(*) FROM asks WHERE review_rating='good') good,
+    (SELECT COUNT(*) FROM asks WHERE review_rating='bad') bad,
+    (SELECT COUNT(*) FROM asks WHERE review_ts IS NOT NULL AND review_rating IS NULL) skipped,
+    (SELECT COUNT(*) FROM asks WHERE feedback_rating IS NOT NULL) playerJudged,
+    (SELECT COUNT(DISTINCT answer_id) FROM answer_audits WHERE answer_id IS NOT NULL) modelJudged,
+    (SELECT COUNT(*) FROM asks WHERE length(trim(COALESCE(answer,'')))<40) emptyAnswers`);
+S.saveReview = db.prepare("UPDATE asks SET review_rating=?,review_note=?,review_by=?,review_ts=? WHERE id=?");
+S.clearReview = db.prepare("UPDATE asks SET review_rating=NULL,review_note=NULL,review_by=NULL,review_ts=NULL WHERE id=?");
+S.reviewRow = db.prepare(`SELECT ${REVIEW_COLUMNS} FROM asks a LEFT JOIN user_profiles p ON p.user_key=a.user_key WHERE a.id=?`);
+
+const hydrate = row => row && ({
+  ...row, plan: safeJson(row.plan), validation: safeJson(row.validation), evidence: safeJson(row.evidence),
+  estimated_cost: estimateCost(row),
+});
+
+/** The next unjudged answers, newest first by default. */
+function reviewQueue({ limit = 25, oldestFirst = false } = {}) {
+  const n = Math.min(Math.max(Number(limit) || 25, 1), 100);
+  try { return (oldestFirst ? S.reviewQueueOldest : S.reviewQueue).all(n).map(hydrate); }
+  catch { return []; }
+}
+
+function reviewCounts() {
+  try { return S.reviewCounts.get(); }
+  catch { return { total: 0, pending: 0, reviewed: 0, good: 0, bad: 0, skipped: 0, playerJudged: 0, modelJudged: 0, emptyAnswers: 0 }; }
+}
+
+/**
+ * Record a staff verdict. `rating` is 'good', 'bad', or null for a skip — a
+ * skip still stamps review_ts so the card does not come back around.
+ */
+function saveReview({ answerId, rating = null, note = "", by = null }) {
+  const id = Number(answerId);
+  if (!Number.isInteger(id)) return null;
+  if (![null, "good", "bad"].includes(rating)) return null;
+  const result = S.saveReview.run(rating, String(note || "").trim().slice(0, 500) || null, by || null, Date.now(), id);
+  return result.changes ? S.reviewRow.get(id) : null;
+}
+
+/** Undo: put the card back in the queue exactly as it was. */
+function clearReview(answerId) {
+  const id = Number(answerId);
+  if (!Number.isInteger(id)) return false;
+  return Boolean(S.clearReview.run(id).changes);
+}
+
+function reviewRow(answerId) { try { return hydrate(S.reviewRow.get(Number(answerId))); } catch { return null; } }
+
+// ── The linear feed ─────────────────────────────────────────────────────────
+// Every question, most recent first. The review queue deliberately hides
+// anything already judged; this is the screen that hides nothing.
+function recentQuestions({ limit = 50, offset = 0, search = "", state = "all" } = {}) {
+  const n = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const off = Math.max(Number(offset) || 0, 0);
+  const where = [];
+  const args = [];
+  if (state === "pending") where.push(REVIEWABLE);
+  else if (state === "reviewed") where.push("a.review_ts IS NOT NULL");
+  else if (state === "good") where.push("a.review_rating='good'");
+  else if (state === "bad") where.push("a.review_rating='bad'");
+  else if (state === "reported") where.push("a.feedback_rating='down'");
+  else if (state === "live") where.push("a.used_mcp=1");
+  const q = String(search || "").trim();
+  if (q) { where.push("(a.question LIKE ? OR a.username LIKE ? OR a.model LIKE ?)"); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  try {
+    const total = db.prepare(`SELECT COUNT(*) n FROM asks a ${clause}`).get(...args).n;
+    const rows = db.prepare(`SELECT ${REVIEW_COLUMNS} FROM asks a LEFT JOIN user_profiles p ON p.user_key=a.user_key
+      ${clause} ORDER BY a.ts DESC LIMIT ? OFFSET ?`).all(...args, n, off).map(hydrate);
+    return { rows, total, limit: n, offset: off };
+  } catch { return { rows: [], total: 0, limit: n, offset: off }; }
 }
 
 // Repeat sightings bump `seen` rather than creating duplicates, so the review
@@ -398,12 +700,24 @@ function usage(key, ent) {
   const since = windowStart();
   const used = S.countToday.get(key, since).c;
   const mcpUsed = S.countMcpToday.get(key, since).c;
+  const vizUsed = S.countVizToday.get(key, since).c;
+  const vizLimit = Number(ent.viz || 0);
   const r = n => Math.round(n * 2) / 2;
   return {
     used: r(used), limit: ent.questions, remaining: r(Math.max(0, ent.questions - used)),
     mcpUsed, mcpLimit: ent.mcp, mcpRemaining: Math.max(0, ent.mcp - mcpUsed),
+    vizUsed, vizLimit, vizRemaining: Math.max(0, vizLimit - vizUsed),
     resetAt: resetAt(), tier: ent.label, maxFollowups: MAX_FOLLOWUPS, followupCost: FOLLOWUP_COST,
   };
+}
+
+/**
+ * Charge a visualization slot, after the fact. Called only when the delivered
+ * answer actually carried a chart or map — the allowance buys a rendered
+ * visualization, not an attempt at one.
+ */
+function markVizUsed(answerId) {
+  try { if (Number.isInteger(Number(answerId))) S.markViz.run(Number(answerId)); } catch {}
 }
 
 function record(row) {
@@ -415,6 +729,9 @@ function record(row) {
   row.fell_through = row.fell_through || null;
   const inserted = S.insertAsk.run(row);
   S.upsertConv.run({ id: row.conv_id, user_key: row.user_key, title: row.question.slice(0, 70), ts: row.ts });
+  // A question counts as activity on its own. Discord users never load a page,
+  // so an ask is the only presence signal they ever produce.
+  markActive(row.user_key, "ask", row.ts);
   return Number(inserted.lastInsertRowid);
 }
 
@@ -485,10 +802,33 @@ function recordDiscordAsk({ discordId, username, question, answer = "", usedMcp 
   });
 }
 
-function touchUser(key, identity, context) {
+/** 'YYYY-MM-DD' in UTC — the same day boundary the quota window resets on. */
+const dayKey = ts => new Date(Number(ts) || Date.now()).toISOString().slice(0, 10);
+
+S.markActive = db.prepare("INSERT OR IGNORE INTO user_days(user_key,day,source,ts) VALUES(?,?,?,?)");
+/**
+ * Record that this user was present today. Idempotent per day, so it can sit on
+ * the hot path of every page load. Never throws into a request.
+ */
+function markActive(key, source = "visit", ts = Date.now()) {
+  if (!key) return;
+  try { S.markActive.run(String(key), dayKey(ts), source, Number(ts)); } catch { /* telemetry must not break the request */ }
+}
+
+// Refreshing a profile without claiming the person was here. Staff opening a
+// player's profile in the console re-reads their AHD context to fill in
+// character/country/party; counting that as a login would let the console
+// manufacture its own active users.
+S.upsertProfileQuiet = db.prepare(`INSERT INTO user_profiles(user_key,username,provider,role,tier,character_name,country,party,corporation_name,corporation_role,is_admin,first_seen,last_seen)
+  VALUES(@user_key,@username,@provider,@role,@tier,@character_name,@country,@party,@corporation_name,@corporation_role,@is_admin,@ts,@ts)
+  ON CONFLICT(user_key) DO UPDATE SET username=excluded.username,provider=excluded.provider,role=excluded.role,tier=excluded.tier,
+    character_name=excluded.character_name,country=excluded.country,party=excluded.party,corporation_name=excluded.corporation_name,
+    corporation_role=excluded.corporation_role,is_admin=excluded.is_admin`);
+
+function touchUser(key, identity, context, { activity = true } = {}) {
   const c = context?.character || {};
   const corp = context?.corporation || {};
-  S.upsertProfile.run({
+  const row = {
     user_key: key,
     username: context?.username || identity?.username || null,
     provider: identity?.provider || null,
@@ -501,7 +841,10 @@ function touchUser(key, identity, context) {
     corporation_role: corp.role || null,
     is_admin: context?.isAdmin === true ? 1 : 0,
     ts: Date.now(),
-  });
+  };
+  if (!activity) return void S.upsertProfileQuiet.run(row);
+  S.upsertProfile.run(row);
+  markActive(key, "visit", row.ts);
 }
 
 const PRICE = {
@@ -615,4 +958,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache };
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+  activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
+  reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };
