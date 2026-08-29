@@ -93,6 +93,25 @@ function changeish(question) {
   return CHANGE_RE.test(q) || MOVEMENT_RE.test(q);
 }
 
+function sinceDaysFor(question) {
+  const q = String(question || "");
+  const hours = q.match(/\b(?:last|past|previous|within)\s+(\d{1,4})\s*hours?\b/i);
+  if (hours) return Math.max(1, Math.min(400, Math.ceil(Number(hours[1]) / 24)));
+  const days = q.match(/\b(?:last|past|previous|within)\s+(\d{1,3})\s*days?\b/i);
+  if (days) return Math.max(1, Math.min(400, Number(days[1])));
+  const weeks = q.match(/\b(?:last|past|previous|within)\s+(?:(\d{1,2})\s+)?weeks?\b/i);
+  if (weeks) return Math.max(7, Math.min(400, Number(weeks[1] || 1) * 7));
+  return SINCE_DAYS;
+}
+
+// An inventory question needs the scout to check for additional systems even
+// after the deterministic history pass finds one plausible commit.
+function broadChangeQuestion(question) {
+  const q = String(question || "");
+  return /\bwhat(?:'s| has)?\s+(?:changed|shipped|been (?:changed|shipped|added|removed))\b/i.test(q)
+    && /\b(?:last|past|previous|within|today|this week|everything|all|thorough|comprehensive)\b/i.test(q);
+}
+
 function run(dir, args) {
   return new Promise(resolve => {
     execFile("git", ["-C", dir, "--no-pager", "--literal-pathspecs", ...args], {
@@ -715,6 +734,6 @@ async function lines({ game = null, commits = [], tz = null } = {}) {
 }
 
 module.exports = {
-  changeish, available, repoFor, search, show, evidence, block, lines, withDeployDates,
+  changeish, sinceDaysFor, broadChangeQuestion, available, repoFor, search, show, evidence, block, lines, withDeployDates,
   parseLog, terms, identifiers, ago, safePath, commitLine, validZone, localStamp, SINCE_DAYS,
 };

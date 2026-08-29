@@ -12,6 +12,17 @@ const { execFileSync } = require("node:child_process");
 
 const history = require("./history");
 
+test("uses explicit player time windows for change searches", () => {
+  assert.equal(history.sinceDaysFor("What changed with Econ in the last 48 hours?"), 2);
+  assert.equal(history.sinceDaysFor("What shipped in the past week?"), 7);
+  assert.equal(history.sinceDaysFor("Did this change recently?"), history.SINCE_DAYS);
+});
+
+test("recognises broad change audits that need a scout after the first match", () => {
+  assert.equal(history.broadChangeQuestion("What changed with Econ mechanics in the last 48 hours?"), true);
+  assert.equal(history.broadChangeQuestion("Did the prime rate change?"), false);
+});
+
 const ENV = { ...process.env, GIT_AUTHOR_NAME: "T", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "T", GIT_COMMITTER_EMAIL: "t@t" };
 const git = (dir, ...args) => execFileSync("git", ["-C", dir, ...args], { env: ENV, encoding: "utf8" });
 

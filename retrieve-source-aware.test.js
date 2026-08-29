@@ -20,6 +20,15 @@ const vector = Float32Array.from([1, 0, 0]);
 insert.run(1, "code", "game", "game123", "src/rule.ts", 0, "cloture vote rule", Buffer.from(vector.buffer), 3);
 insert.run(2, "docs", "docs", "docs123", "design/rule.md", 0, "cloture design", Buffer.from(vector.buffer), 3);
 insert.run(3, "wiki", "game", "game123", "src/lib/seeds/wiki/content/rule.ts", 0, "cloture guide", Buffer.from(vector.buffer), 3);
+insert.run(4, "code", "game", "game123", "src/lib/metricEngine/__fixtures__/gdpGrowthGolden.ts", 0,
+  "export const expectedGdpGrowth = 3.2; export const gdpGrowthScenario = { expectedGdpGrowth };",
+  Buffer.from(vector.buffer), 3);
+insert.run(5, "code", "game", "game123", "src/lib/budget/inflation.ts", 0,
+  "export function calculateInflation() { return demandPull + costPush; }",
+  Buffer.from(vector.buffer), 3);
+insert.run(6, "code", "game", "game123", "src/lib/metricEngine/outputGap.ts", 0,
+  "const rawGap = prevGap + (impulse - GAP_CLOSURE * prevGap) / turnsPerYear; const gdpGrowth = potential + (gap - prevGap) * turnsPerYear;",
+  Buffer.from(vector.buffer), 3);
 for (const kind of ["code", "docs", "wiki"]) db.prepare("INSERT INTO source_revisions VALUES(?,?,?,?,?,?)")
   .run(kind, kind === "docs" ? "docs" : "game", `${kind}123`, "2026-08-23T00:00:00.000Z", 1, 1);
 db.prepare("INSERT INTO meta VALUES('generation','fixture')").run();
@@ -34,7 +43,7 @@ const retrieve = require("./retrieve");
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 test("routes evidence authority by claim type while preserving provenance", async () => {
-  const mechanics = await retrieve.search("How many cloture votes are required?", { topK: 3 });
+  const mechanics = await retrieve.search("How many cloture votes are required?", { topK: 6 });
   assert.equal(mechanics.claimType, "mechanic");
   assert.equal(mechanics.hits[0].source, "code");
   assert.match(mechanics.context, /SOURCE code @ game123/);
@@ -54,4 +63,16 @@ test("reports independently revisioned source health", () => {
   const stats = retrieve.stats();
   assert.equal(stats.generation, "fixture");
   assert.deepEqual(Object.keys(stats.sources), ["code", "docs", "wiki"]);
+});
+
+test("exact indexed search finds camel-case mechanics semantic search can miss", () => {
+  const found = retrieve.searchExact("GDP growth calculation", { limit: 5 });
+  assert.equal(found.files[0], "src/lib/metricEngine/outputGap.ts");
+  assert.match(found.context, /const gdpGrowth = potential/);
+});
+
+test("reads a known indexed source file without filesystem access", () => {
+  const found = retrieve.readIndexedFile("src/lib/budget/inflation.ts");
+  assert.match(found.context, /calculateInflation/);
+  assert.deepEqual(found.files, ["src/lib/budget/inflation.ts"]);
 });

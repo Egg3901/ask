@@ -783,7 +783,10 @@ const server = http.createServer(async (req, res) => {
         if (changeQuestion) {
           status("Checking what shipped recently…");
           try {
-            const recent = await history.evidence({ game, question: retrievalQuestion, paths: hits?.files || [], code: hits?.context || "", tz });
+            const recent = await history.evidence({
+              game, question: retrievalQuestion, paths: hits?.files || [], code: hits?.context || "", tz,
+              sinceDays: history.sinceDaysFor(question),
+            });
             if (recent) {
               historyBlock = recent.text;
               if (onAction) onAction("recent_changes", { q: `${recent.commits.length} shipped changes` });
@@ -846,9 +849,13 @@ const server = http.createServer(async (req, res) => {
         // deterministic pass returning nothing is exactly that mismatch.
         // Gated on the block being EMPTY: the scout costs ~25s, and when the
         // commits are already in hand a flash answer should not pay it.
-        const chaseChange = changeQuestion && historyBlock === "";
+        const chaseChange = changeQuestion && (historyBlock === "" || history.broadChangeQuestion(question));
+        // A live snapshot can answer "what is inflation" but not "what would
+        // lower it fastest". Formula, cause, and counterfactual questions need
+        // the code scout even when the heuristic live pass found a country.
+        const needsMechanicEvidence = investigate.needsMechanicEvidence(question);
         let investigation = null;
-        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish))) || chaseChange) {
+        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction, game, changeQuestion });

@@ -105,3 +105,15 @@ test("the fair-play rules permit in-game investment suggestions", () => {
   assert.match(system, /only public, exchange-visible data/);
   assert.match(system, /planning trades to damage a named player/);
 });
+
+test("routes prescriptive inflation questions through focused fiscal data", () => {
+  for (const q of [
+    "What would lower US inflation fastest?",
+    "How can the UK reduce inflation?",
+    "Which policy would bring inflation down?",
+  ]) {
+    const request = plan.create(q);
+    assert.equal(request.intent, "country_fiscal", q);
+    assert.equal(request.suppressGenericCountryEconomy, true, q);
+  }
+});
