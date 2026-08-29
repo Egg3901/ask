@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci --omit=dev --no-audit --no-fund"]
+
+[phases.build]
+cmds = ["mkdir -p /app/data"]
+
+[start]
+cmd = "node server.js"
