@@ -31,11 +31,28 @@ const GENERIC_MILITARY_MECHANIC = new RegExp(
   String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
   "i",
 );
+const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b/i;
+const GENERIC_CAPITALIZED_WORDS = new Set([
+  "a", "an", "the", "each", "every", "you", "to", "in", "under", "when", "if", "for",
+  "logistics", "command", "commands", "airlift", "wing", "wings", "unit", "units",
+  "formation", "formations", "division", "divisions", "brigade", "brigades", "battalion",
+  "battalions", "regiment", "regiments", "corps", "squadron", "squadrons", "fleet", "fleets",
+  "military", "army", "naval", "air", "carrier", "task", "force", "forces",
+]);
 const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live military rosters, unit or command composition, readiness, deployments, or force strength. I can explain the mechanics or summarize the public war record instead.";
 
-function containsPrivateMilitaryIntelligence(answer) {
+function isGenericMilitaryMechanicSentence(sentence, question) {
+  const text = sentence.trim();
+  if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
+  if (!GENERIC_MECHANICS_QUESTION.test(String(question || ""))) return false;
+  if (/\b(?:your|their|our|its|this|that)\b/i.test(text)) return false;
+  const capitalized = text.match(/\b[A-Z][A-Za-z'-]*\b/g) || [];
+  return capitalized.every((word) => GENERIC_CAPITALIZED_WORDS.has(word.toLowerCase().replace(/'s$/, "")));
+}
+
+function containsPrivateMilitaryIntelligence(answer, question = "") {
   return String(answer || "").split(/(?<=[.!?])\s+|\n+/).some((sentence) => {
-    if (GENERIC_MILITARY_MECHANIC.test(sentence.trim())) return false;
+    if (isGenericMilitaryMechanicSentence(sentence, question)) return false;
     return FORCE_INVENTORY.test(sentence) || FORCE_POSSESSION.test(sentence)
       || FORCE_QUANTITY.test(sentence) || FORCE_ABSENCE.test(sentence) || FORCE_OPERATION.test(sentence);
   });
@@ -47,7 +64,7 @@ function asksForPrivateMilitaryIntelligence(question) {
 
 function protectPublicAnswer(answer, question = "") {
   const text = String(answer || "").trim();
-  if (!asksForPrivateMilitaryIntelligence(question) && !containsPrivateMilitaryIntelligence(text)) return text;
+  if (!asksForPrivateMilitaryIntelligence(question) && !containsPrivateMilitaryIntelligence(text, question)) return text;
   return PRIVATE_MILITARY_REFUSAL;
 }
 

@@ -32,6 +32,11 @@ test("public answers preserve generic quantified military mechanics", () => {
   assert.equal(guard.protectPublicAnswer(mechanics, "How are divisions composed?"), mechanics);
   const commandMechanic = "A Logistics Command adds regional supply throughput.";
   assert.equal(guard.protectPublicAnswer(commandMechanic, "What does a Logistics Command do?"), commandMechanic);
+  const requirement = "You need to have a Logistics Command assigned to support regional supply.";
+  assert.equal(guard.protectPublicAnswer(requirement, "What does a Logistics Command do?"), requirement);
+
+  const namedLeak = "East has no Logistics Command assigned to the region.";
+  assert.notEqual(guard.protectPublicAnswer(namedLeak, "How does regional supply work?"), namedLeak);
 });
 
 test("the final answer guard replaces military intelligence and records the issue", () => {
