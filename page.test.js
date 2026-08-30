@@ -133,6 +133,12 @@ test("the prompt allows public market analysis and protects private corporation 
   assert.match(text, /If public status or visibility is not established/);
 });
 
+test("the prompt permits generic military mechanics without live force claims", () => {
+  const text = require("./prompt").build({});
+  assert.match(text, /General military mechanics are allowed/);
+  assert.match(text, /What does a Logistics Command do/);
+});
+
 test("live mode prefers fresh safe game data when it can ground the answer", () => {
   const text = prompt.build({ liveData: true });
 
