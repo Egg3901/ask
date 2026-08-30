@@ -22,14 +22,25 @@ test("bridges German Question air-superiority wording to the war subsystem", () 
 test("bridges general air-superiority mechanics wording to the same subsystem", () => {
   const question = "Which air missions build air superiority, where do they count, and how quickly does control build or decay?";
   const out = aliases.expand(question);
+  assert.ok(out.includes("CHANNEL_RATES airSuperiority"));
+  assert.ok(out.includes("src/lib/navair/config.ts EMBARGO"));
+  assert.ok(out.includes("src/lib/navair/turn.ts stationOf"));
   assert.ok(out.some(query => /CAP PATROL/i.test(query)));
   assert.ok(out.some(query => /stationOf/i.test(query)));
   assert.match(aliases.guidance(question), /regional naval-air channel/i);
   assert.match(aliases.answerIssue(question, "The value builds and decays in each region."), /CAP and PATROL/i);
   assert.equal(aliases.answerIssue(
     question,
-    "CAP and PATROL wings stationed in the contested region build the channel, which also decays each turn.",
+    "CAP and PATROL wings stationed in the contested region build the channel by 12 per turn, while it decays by 15 per turn.",
   ), "");
+  assert.match(aliases.answerIssue(
+    question,
+    "CAP and PATROL wings stationed in or near the contested region build and decay the channel at 12 and 15 per turn.",
+  ), /not merely in or near/i);
+  assert.match(aliases.answerIssue(
+    question,
+    "CAP and PATROL wings stationed in the contested region build and decay the channel each turn.",
+  ), /build by 12 and decay by 15/i);
 });
 
 test("does not add unrelated aliases", () => {
