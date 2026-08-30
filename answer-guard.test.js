@@ -65,6 +65,14 @@ test("ticket 1234 air-superiority typo still preserves a mechanics answer", () =
   );
 });
 
+test("ticket 1234 battle-role save explanation is not treated as roster leakage", () => {
+  const answer = "Only the Defense Secretary can save a regiment's battle role. Other officials see a read-only view.";
+  assert.equal(guard.protectPublicAnswer(
+    answer,
+    "this regiment keeps changing its battle post, i keep setting it back but it doesnt save",
+  ), answer);
+});
+
 test("a mechanics question does not make named live formations publishable", () => {
   const answer = "Station Northland's three fighter wings in the contested region.";
   assert.notEqual(

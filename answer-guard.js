@@ -32,7 +32,7 @@ const GENERIC_MILITARY_MECHANIC = new RegExp(
   String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
   "i",
 );
-const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
+const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput|save|saved|persist|revert|reset|change)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
 const GENERIC_MECHANIC_INSTRUCTION = /^(?:open|go|set|move|assign|choose|use|put|keep|select|station|send|fly|order)\b/i;
 const LIVE_INSTRUCTION_TARGET = /\b(?:[A-Z][A-Za-z'-]+|[A-Z]{2,3})['’]s\b|\b(?:current|currently|live|existing|available|deployed|stationed)\b/i;
 const CAPITALIZED_WORD = /^[A-Z][A-Za-z'-]*/;

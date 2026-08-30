@@ -25,6 +25,19 @@ test("normalizes the air-superiority spelling from ticket 1234", () => {
   assert.match(aliases.guidance(question), /regional naval-air channel/i);
 });
 
+test("explains ticket 1234 battle-post changes as an authorization and save issue", () => {
+  const question = "this regiment keeps changing its battle post, i keep setting it back but it doesnt save";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /page\.tsx.*defenseMember.*canWrite/i.test(query)));
+  assert.ok(out.some(query => /formations.*defense minister/i.test(query)));
+  assert.match(aliases.guidance(question), /read-only Combat Command view/i);
+  assert.match(aliases.answerIssue(question, "Try selecting Frontline again."), /defense officeholder/i);
+  assert.equal(aliases.answerIssue(
+    question,
+    "Only the country's Defense Secretary or an admin can save battle-role orders. Other officials have a read-only Combat Command view and cannot save those controls. The star marks the recommended role; the saved role is a separate explicit order.",
+  ), "");
+});
+
 test("bridges player wording for a state-corporation spin-off to the canonical mechanic", () => {
   const out = aliases.expand("They can also spin off state corps right?");
   assert.ok(out.some(query => /privatiz/i.test(query)));

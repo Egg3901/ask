@@ -6,7 +6,8 @@
 function normalizePlayerWording(question) {
   return String(question || "")
     .replace(/\bincra+ase\b/gi, "increase")
-    .replace(/\bair\s+s[a-z]*(?:prior|prio|rior|ority|oryt)[a-z]*\b/gi, "air superiority");
+    .replace(/\bair\s+s[a-z]*(?:prior|prio|rior|ority|oryt)[a-z]*\b/gi, "air superiority")
+    .replace(/\bbattle\s+post\b/gi, "battle role");
 }
 
 function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
@@ -36,6 +37,23 @@ const RULES = [
       if (!/blockade/i.test(text) || !/standing order|posture|mission/i.test(text) || !/station|approach|region/i.test(text)) return "The answer must explain that naval formations must be stationed on a target trade approach with the Blockade standing order.";
       if (!/20\s*%|20 percent/i.test(text) || !/interdiction|front supply|enemy supply/i.test(text) || !/separate|not (?:a |the )?(?:trade )?blockade/i.test(text)) return "The answer must distinguish the panel's 20 percent front-supply interdiction from the separate economic blockade mechanic.";
       if (!/next turn|following turn/i.test(text)) return "The answer must state that new standing orders take effect on the next turn.";
+      return "";
+    },
+  },
+  {
+    match: /\bbattle role\b[\s\S]{0,120}\b(?:save|saving|saved|change|changing|revert|reverting|reset|keep|keeps|stick|stays?)\b|\b(?:save|saving|saved|change|changing|revert|reverting|reset|keep|keeps|stick|stays?)\b[\s\S]{0,120}\bbattle role\b/i,
+    queries: [
+      "src/app/world/conflicts/combat/page.tsx defenseMember canWrite Combat Command",
+      "src/app/world/conflicts/combat/useCombatState.ts canWrite SET_ROLE useDebouncedSave",
+      "src/app/world/conflicts/combat/components/UnitDossier.tsx Battle role read-only",
+      "src/app/api/country/[code]/executive/cabinet/[positionId]/formations/route.ts positions defense minister",
+    ],
+    guidance: "Treat a battle role that appears to change and then reverts as an authorization and persistence question, not as combat AI silently rewriting the role. Verify whether the viewer holds the country's defense office. Only that officeholder or an admin may save unit posture and battle-role orders; other officials have a read-only Combat Command view. Explain that the star marks the unit's recommended role, while an explicitly saved role is stored separately. The UI must not present a non-officeholder's local selection as saved.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/defen[cs]e (?:minister|secretary|officeholder)|secretary of defen[cs]e/i.test(text)) return "The answer must say that only the country's defense officeholder or an admin can save battle-role orders.";
+      if (!/read-only|cannot save|can(?:not|'t) edit|not authorized/i.test(text)) return "The answer must explain that other officials can inspect Combat Command but cannot save its order controls.";
+      if (!/recommend/i.test(text) || !/star|★/.test(text)) return "The answer must distinguish the starred recommended role from an explicitly saved role.";
       return "";
     },
   },
