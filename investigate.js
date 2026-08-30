@@ -56,7 +56,7 @@ const RESULT_CAP = 5000;
 // internal balance tooling and is not a player answer either.
 const LIVE_ALLOWLIST = new Set([
   "game_overview", "countries", "entity_search", "parties", "top_players",
-  "elections", "fx_quote", "extraction_market", "trace_corp", "trace_sector",
+  "elections", "fx_quote", "trace_corp", "trace_sector",
   "trace_election", "trace_race", "trace_approval", "trace_character",
   // Public aggregates and rankings. Their absence is why Ask told players that
   // rankings, counts and distributions "are not available in the source" while
