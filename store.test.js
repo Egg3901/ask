@@ -58,6 +58,23 @@ test("accepts a report from a valid shared conversation but not another token", 
   assert.equal(sharedTurn.feedback_source, "shared");
 });
 
+test("a private moderator turn durably revokes sharing", () => {
+  recordAnswer({ conv_id: "conv-private", question: "Public setup" });
+  const token = store.share("conv-private", "ahd:user-1");
+  assert.ok(token);
+  recordAnswer({
+    conv_id: "conv-private",
+    question: "Private moderator investigation",
+    private: true,
+  });
+  assert.equal(store.shared(token), null);
+  assert.equal(store.isPrivate("conv-private", "ahd:user-1"), true);
+  assert.equal(store.share("conv-private", "ahd:user-1"), null);
+  // Privacy follows the conversation even if authorization changes later.
+  recordAnswer({ conv_id: "conv-private", question: "Later public question", private: false });
+  assert.equal(store.isPrivate("conv-private", "ahd:user-1"), true);
+});
+
 test("clusters reported answers into a replayable regression queue", () => {
   const answerId = recordAnswer({ question: "Can two people hold a House seat?" });
   assert.equal(store.feedback({ answerId, userKey: "ahd:user-1", rating: "down", reason: "Wrong chart and live metric" }), true);

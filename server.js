@@ -426,6 +426,7 @@ const server = http.createServer(async (req, res) => {
       if (!session) return json(res, 401, { error: "Please sign in.", signedOut: true });
       const ent = session.entitlement;
       const key = store.userKey(session.identity);
+      const moderatorAccess = session.context?.isAdmin === true || session.context?.isModerator === true;
 
       if (req.method === "GET" && p === "/api/me") {
         return json(res, 200, {
@@ -490,6 +491,7 @@ const server = http.createServer(async (req, res) => {
         const b = await readJson(req);
         const id = String(b?.id || "");
         if (b?.revoke) { store.unshare(id, key); return json(res, 200, { ok: true, url: null }); }
+        if (moderatorAccess || store.isPrivate(id, key)) return json(res, 403, { error: "Private moderator conversations cannot be shared." });
         const tok = store.share(id, key);
         return json(res, 200, tok ? { ok: true, url: `${SELF_ORIGIN}/s/${tok}` } : { ok: false });
       }
@@ -608,10 +610,13 @@ const server = http.createServer(async (req, res) => {
         const visualizationRequested = vizAllowed && visualization.requested(question);
         const visualizations = vizAllowed && (visualizationRequested || (body.visualizations === true && plan.visual !== "none"));
         const convId = /^[A-Za-z0-9_-]{6,40}$/.test(body.convId || "") ? body.convId : crypto.randomUUID().slice(0, 18);
+        // A previously public conversation must become private before any
+        // moderator-only turn can be appended to it.
+        if (moderatorAccess) store.markPrivate(convId, key);
         // Refuse explicit fog-of-war requests before opening the token stream.
         // A post-generation guard can correct the final answer, but it cannot
         // retract sensitive text that was already delivered as SSE deltas.
-        if (answerGuard.asksForPrivateMilitaryIntelligence(question)) {
+        if (!moderatorAccess && answerGuard.asksForPrivateMilitaryIntelligence(question)) {
           return json(res, 200, {
             convId,
             answer: answerGuard.protectPublicAnswer("", question),
@@ -634,7 +639,8 @@ const server = http.createServer(async (req, res) => {
         // Conflating them meant that once live mode defaulted on, every question
         // would hit the live gate and a spent live allowance would 429 questions
         // that never wanted live data in the first place.
-        const liveRequired = game.live && (plan.live === "required" || mcp.requiresLive(question) || reportRequested);
+        const moderatorPrivateQuestion = moderatorAccess && answerGuard.asksForPrivateMilitaryIntelligence(question);
+        const liveRequired = game.live && (plan.live === "required" || mcp.requiresLive(question) || reportRequested || moderatorPrivateQuestion);
         const liveWanted = game.live && (liveRequired || body.useMcp === true);
         const wantMcp = liveWanted;
 
@@ -659,7 +665,7 @@ const server = http.createServer(async (req, res) => {
         // against the asker's own clock ("shipped about five hours ago"), and
         // the history itself moves every time something ships — so replaying it
         // to the next player is wrong twice over.
-        const cacheable = !wantMcp && !isFollowup && !history.changeish(question);
+        const cacheable = !moderatorAccess && !wantMcp && !isFollowup && !history.changeish(question);
 
         // Cache is checked BEFORE quota so re-reading an answer is always free.
         // The plan is part of cache identity. A pre-planner answer must never
@@ -781,6 +787,7 @@ const server = http.createServer(async (req, res) => {
             tokens_in: 0, tokens_out: 0, model: "ask-clarification",
             plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: "{}",
             ttft_ms: 0, total_ms: 0, fell_through: null, ts: Date.now(),
+            private: moderatorAccess,
           });
           send("done", {
             convId, answerId, answer: clarificationAnswer, areas: [], citations: [], cached: false,
@@ -913,7 +920,7 @@ const server = http.createServer(async (req, res) => {
         const needsMechanicEvidence = investigate.needsMechanicEvidence(question);
         const needsCapabilityInventory = investigate.needsCapabilityInventory(question);
         let investigation = null;
-        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory)) || chaseChange) {
+        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory || moderatorPrivateQuestion)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction, game, changeQuestion });
@@ -933,7 +940,7 @@ const server = http.createServer(async (req, res) => {
         let firstTokenMs = null;
         try {
           const out = await llm.stream({
-            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, visualizationLimit: vizLimitReason ? { reason: vizLimitReason, limit: Number(ent.viz || 0), used: vizQuota.vizUsed } : null, liveData: useMcp, report: reportRequested, game, changeHistory: historyBlock !== "", tz })
+            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, visualizationLimit: vizLimitReason ? { reason: vizLimitReason, limit: Number(ent.viz || 0), used: vizQuota.vizUsed } : null, liveData: useMcp, report: reportRequested, game, changeHistory: historyBlock !== "", tz, privateAccess: moderatorAccess })
               + (matchedCorrections.length ? `\n\n${corrections.block(matchedCorrections)}` : "")
               + (hits ? `\n\n${hits.context}` : "")
               + (historyBlock ? `\n\n${historyBlock}` : "")
@@ -1001,6 +1008,7 @@ const server = http.createServer(async (req, res) => {
         const guarded = answerGuard.enforce({
           answer: cited.text, datasets: liveVisualizations, plan,
           visualizationsEnabled: visualizations, question,
+          privacyGuardEnabled: !moderatorAccess,
         });
         let answer = visualization.ensure(guarded.answer, liveVisualizations, { required: guarded.required, question });
         // Deep answers are where models invent connective tissue between systems
@@ -1089,6 +1097,7 @@ const server = http.createServer(async (req, res) => {
           tokens_in: Number(llmUsage.prompt_tokens || 0), tokens_out: Number(llmUsage.completion_tokens || 0), model: servedModel,
           plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence),
           ttft_ms: firstTokenMs, total_ms: Date.now() - genStart, fell_through: fellThrough, ts: Date.now(),
+          private: moderatorAccess,
         });
         // Charge a visualization slot only if one actually reached the player.
         // Enabling visualizations does not mean the model drew anything, and an
@@ -1127,7 +1136,7 @@ const server = http.createServer(async (req, res) => {
         // A report gets its own page. Title comes from the model's own H1, with
         // the question as fallback if it ignored the format.
         let reportUrl = null;
-        if (reportRequested) {
+        if (reportRequested && !moderatorAccess) {
           try {
             const token = crypto.randomUUID().replace(/-/g, "").slice(0, 20);
             const title = (answer.match(/^#\s+(.+)$/m)?.[1] || question).replace(/[*`]/g, "").trim().slice(0, 160);

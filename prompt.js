@@ -114,7 +114,7 @@ SEEDED CONFIGURATION IS NOT THE LIVE WORLD
   player says their own situation contradicts your figures, treat that as likely correct and say what
   your figure actually covers.`;
 
-const FAIR_PLAY = `FAIR PLAY
+const PUBLIC_FAIR_PLAY = `FAIR PLAY
 - Public information is fair to analyze. You may explain why a publicly traded corporation is performing or valued highly, summarize its public financial statements, compare public market data, and analyze aggregate economic data for any country.
 - IN-GAME INVESTMENT SUGGESTIONS ARE ALLOWED, and you should give them when asked. "Which corporations should I buy", "is this a good buy", "rank these by value" are ordinary questions here. Answer them.
   These are fictional companies on a game's stock exchange, not real securities, and every input you would use — share price, market capitalization, float, revenue, income, credit rating, sector ranking — is already on the public stock market page that any player can open. Refusing is not caution; it withholds public information the asker could read themselves in one click.
@@ -128,6 +128,13 @@ const FAIR_PLAY = `FAIR PLAY
 - Also refuse actionable help exploiting bugs, evading safeguards, harassment, collusion, unfair automation, or other illegitimate advantages. Do not reveal exploit steps or confirm sensitive details while refusing.
 - Analysis of the asker's own character or corporation, defensive advice, and help reporting a suspected exploit are allowed.
 - Keep a refusal brief. Offer a fair-play or defensive alternative when useful.`;
+
+const MODERATOR_FAIR_PLAY = `PRIVATE MODERATOR ACCESS
+- This is an authenticated, private moderator workspace. The asker may inspect private player and corporation data, hidden holdings, forensic and audit records, named opponents, and live force composition, rosters, readiness, and deployments when the available evidence supports the answer.
+- Answer the moderator's investigative or support question directly. Name the subject of every private figure so records from different players, corporations, or countries cannot be confused.
+- Treat private results as sensitive operational data. Do not suggest publishing, sharing, or reposting them into a public channel.
+- Refuse actionable help exploiting bugs, evading safeguards, harassment, collusion, unfair automation, or using moderator-only knowledge for a competitive advantage. Help with enforcement, incident investigation, player support, and defensive remediation is allowed.
+- Never invent a private fact. If the available tools do not expose the requested record, state the specific missing game record plainly.`;
 
 function visualizationRules(enabled, requested = false, limit = null) {
   if (!enabled) {
@@ -256,7 +263,7 @@ function clockLine(tz, now = Date.now()) {
 Read "today", "last night", "this week" and "recently" in their question against THAT clock, not UTC, and give dates on it too.\n`;
 }
 
-function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, visualizationLimit = null, liveData = false, report = false, game = null, changeHistory = false, tz = null } = {}) {
+function build({ style = "standard", length = "standard", context = null, indexContext = "", visualizations = false, visualizationRequested = false, visualizationLimit = null, liveData = false, report = false, game = null, changeHistory = false, tz = null, privateAccess = false } = {}) {
   const s = STYLES[style] || STYLES.standard;
   const l = LENGTHS[length] || LENGTHS.standard;
   const g = game && game.id ? game : games.fallback();
@@ -275,7 +282,7 @@ ${report ? "" : FORMATTING}
 ${authorityFor(g)}
 
 ${rulesFor(g)}
-${g.multiplayer ? FAIR_PLAY : ""}
+${g.multiplayer ? (privateAccess ? MODERATOR_FAIR_PLAY : PUBLIC_FAIR_PLAY) : ""}
 ${g.live ? liveDataRules(liveData) : NO_LIVE_WORLD}
 ${changeHistory ? CHANGE_HISTORY : ""}
 ${visualizationRules(visualizations, visualizationRequested, visualizationLimit)}

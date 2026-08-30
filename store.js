@@ -184,6 +184,10 @@ db.exec("UPDATE answer_cache SET model='deepseek-v4-flash' WHERE model IS NULL")
 // Sharing is opt-in per conversation: a random token, revocable, never the
 // conversation id itself (ids appear in the owner's own URLs).
 try { db.exec("ALTER TABLE convs ADD COLUMN share_token TEXT"); } catch { /* already migrated */ }
+// Once a conversation has carried moderator-only data it stays private even if
+// the owner later loses that role. This is durable classification, not a UI
+// check, and cannot be reversed by asking a public question later.
+try { db.exec("ALTER TABLE convs ADD COLUMN private INTEGER DEFAULT 0"); } catch { /* already migrated */ }
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_convs_share ON convs(share_token)"); } catch {}
 // Preserve the history that existed before profile snapshots were introduced.
 // Rich character context fills in the next time each person signs in.
@@ -200,9 +204,11 @@ const S = {
   countMcpToday: db.prepare("SELECT COUNT(*) c FROM asks WHERE user_key=? AND ts>? AND used_mcp=1"),
   countVizToday: db.prepare("SELECT COUNT(*) c FROM asks WHERE user_key=? AND ts>? AND used_viz=1"),
   markViz: db.prepare("UPDATE asks SET used_viz=1 WHERE id=?"),
-  upsertConv: db.prepare(`INSERT INTO convs(id,user_key,title,created,updated) VALUES(@id,@user_key,@title,@ts,@ts)
-    ON CONFLICT(id) DO UPDATE SET updated=@ts, title=COALESCE(convs.title,@title)`),
-  listConvs: db.prepare("SELECT id,title,created,updated FROM convs WHERE user_key=? ORDER BY updated DESC LIMIT 40"),
+  upsertConv: db.prepare(`INSERT INTO convs(id,user_key,title,created,updated,private) VALUES(@id,@user_key,@title,@ts,@ts,@private)
+    ON CONFLICT(id) DO UPDATE SET updated=@ts, title=COALESCE(convs.title,@title),
+      private=MAX(convs.private,excluded.private),
+      share_token=CASE WHEN convs.private=1 OR excluded.private=1 THEN NULL ELSE convs.share_token END`),
+  listConvs: db.prepare("SELECT id,title,created,updated,private FROM convs WHERE user_key=? ORDER BY updated DESC LIMIT 40"),
   convTurns: db.prepare("SELECT id,question,answer,areas,citations,used_mcp,cached,model,plan,validation,evidence,feedback_rating,feedback_reason,feedback_ts,feedback_source,ts FROM asks WHERE conv_id=? AND user_key=? ORDER BY ts ASC LIMIT 100"),
   deleteConv: db.prepare("DELETE FROM convs WHERE id=? AND user_key=?"),
   deleteConvAsks: db.prepare("DELETE FROM asks WHERE conv_id=? AND user_key=?"),
@@ -728,7 +734,7 @@ function record(row) {
   row.total_ms = row.total_ms ?? null;
   row.fell_through = row.fell_through || null;
   const inserted = S.insertAsk.run(row);
-  S.upsertConv.run({ id: row.conv_id, user_key: row.user_key, title: row.question.slice(0, 70), ts: row.ts });
+  S.upsertConv.run({ id: row.conv_id, user_key: row.user_key, title: row.question.slice(0, 70), ts: row.ts, private: row.private ? 1 : 0 });
   // A question counts as activity on its own. Discord users never load a page,
   // so an ask is the only presence signal they ever produce.
   markActive(row.user_key, "ask", row.ts);
@@ -927,19 +933,22 @@ function removeConv(convId, key) { S.deleteConvAsks.run(convId, key); S.deleteCo
 
 const crypto = require("node:crypto");
 S.setShare = db.prepare("UPDATE convs SET share_token=? WHERE id=? AND user_key=?");
-S.getShare = db.prepare("SELECT share_token FROM convs WHERE id=? AND user_key=?");
+S.getShare = db.prepare("SELECT share_token,private FROM convs WHERE id=? AND user_key=?");
 S.byShare  = db.prepare("SELECT id, user_key, title, updated FROM convs WHERE share_token=?");
+S.markPrivate = db.prepare("UPDATE convs SET private=1,share_token=NULL WHERE id=? AND user_key=?");
 
 /** Create (or return) a share token. Idempotent so re-clicking Share is safe. */
 function share(convId, key) {
   const cur = S.getShare.get(convId, key);
-  if (!cur) return null;
+  if (!cur || cur.private) return null;
   if (cur.share_token) return cur.share_token;
   const tok = crypto.randomBytes(9).toString("base64url");
   S.setShare.run(tok, convId, key);
   return tok;
 }
 function unshare(convId, key) { S.setShare.run(null, convId, key); }
+function markPrivate(convId, key) { S.markPrivate.run(convId, key); }
+function isPrivate(convId, key) { return S.getShare.get(convId, key)?.private === 1; }
 
 /** Read-only view of a shared conversation, for anyone holding the link. */
 function shared(token) {
@@ -958,6 +967,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
   reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };
