@@ -87,6 +87,16 @@ test("the investigator scales its caps with question depth", () => {
   assert.match(source, /SEARCHED AND NOT FOUND/);
 });
 
+test("cached public answers cross the privacy guard before they are served", () => {
+  const server = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
+  const cacheRead = server.indexOf("store.S.getCache.get(ckey)");
+  const privacyCheck = server.indexOf("answerGuard.protectPublicAnswer(hit.answer, question)", cacheRead);
+  const eviction = server.indexOf("store.S.evictCache.run(ckey)", privacyCheck);
+  const cacheReturn = server.indexOf("if (hit && Date.now() - hit.ts < CACHE_TTL_MS)", cacheRead);
+  assert.ok(cacheRead >= 0 && privacyCheck > cacheRead, "cached text must be checked");
+  assert.ok(eviction > privacyCheck && cacheReturn > eviction, "unsafe cache entries must be evicted before return");
+});
+
 test("report detection catches generation asks and skips the support flow", () => {
   const server = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
   const re = new RegExp(server.match(/const REPORT_RE = \/(.+)\/i;/)[1], "i");
