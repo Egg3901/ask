@@ -665,7 +665,17 @@ const server = http.createServer(async (req, res) => {
         // The plan is part of cache identity. A pre-planner answer must never
         // bypass a newer evidence or visualization guard for the same wording.
         const ckey = `game:${game.id}|plan:${plan.id}|${style}|${length}|viz:${visualizations ? 1 : 0}|${norm(question)}`;
-        const hit = cacheable ? store.S.getCache.get(ckey) : null;
+        let hit = cacheable ? store.S.getCache.get(ckey) : null;
+        if (hit) {
+          const cachedAnswer = String(hit.answer || "").trim();
+          const protectedAnswer = answerGuard.protectPublicAnswer(hit.answer, question);
+          if (protectedAnswer !== cachedAnswer) {
+            store.S.evictCache.run(ckey);
+            hit = null;
+          } else {
+            hit.answer = protectedAnswer;
+          }
+        }
         if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
           const cachedModel = hit.model || router.MODELS.flash;
           const answerId = store.record({ user_key: key, username: session.identity.username || null, conv_id: convId,
