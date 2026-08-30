@@ -139,6 +139,15 @@ test("the prompt permits generic military mechanics without live force claims", 
   assert.match(text, /What does a Logistics Command do/);
 });
 
+test("the moderator prompt permits private investigations without weakening abuse safeguards", () => {
+  const text = prompt.build({ privateAccess: true });
+  assert.match(text, /PRIVATE MODERATOR ACCESS/);
+  assert.match(text, /private player and corporation data/i);
+  assert.match(text, /live force composition, rosters, readiness, and deployments/i);
+  assert.doesNotMatch(text, /never confirm the presence or absence of a specific military asset/i);
+  assert.match(text, /Refuse actionable help exploiting bugs/i);
+});
+
 test("live mode prefers fresh safe game data when it can ground the answer", () => {
   const text = prompt.build({ liveData: true });
 

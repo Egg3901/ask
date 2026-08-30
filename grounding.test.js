@@ -43,6 +43,17 @@ test("the investigator live allowlist excludes private diagnostics and moderatio
   assert.ok(investigate.LIVE_ALLOWLIST.has("trace_corp"));
 });
 
+test("moderator investigations can reach private diagnostics without exposing them publicly", () => {
+  for (const privateTool of [
+    "military_roster",
+    "trace_account", "alt_ring_audit", "alt_rank", "audit_query",
+    "trace_actions", "trace_ledger", "trace_bonds", "extraction_market",
+  ]) {
+    assert.ok(investigate.MODERATOR_LIVE_ALLOWLIST.has(privateTool), `${privateTool} must be reachable to moderators`);
+    assert.ok(!investigate.LIVE_ALLOWLIST.has(privateTool), `${privateTool} must remain unavailable publicly`);
+  }
+});
+
 test("the investigator can reach the public aggregate and map tools", () => {
   // Their absence is why Ask told players that rankings, counts, distributions
   // and candidate maps "are not available in the source" while the tools to
@@ -95,6 +106,21 @@ test("cached public answers cross the privacy guard before they are served", () 
   const cacheReturn = server.indexOf("if (hit && Date.now() - hit.ts < CACHE_TTL_MS)", cacheRead);
   assert.ok(cacheRead >= 0 && privacyCheck > cacheRead, "cached text must be checked");
   assert.ok(eviction > privacyCheck && cacheReturn > eviction, "unsafe cache entries must be evicted before return");
+});
+
+test("moderator private answers bypass public delivery surfaces", () => {
+  const server = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
+  assert.match(server, /const moderatorAccess = session\.context\?\.isAdmin === true \|\| session\.context\?\.isModerator === true/);
+  assert.match(server, /if \(!moderatorAccess && answerGuard\.asksForPrivateMilitaryIntelligence\(question\)\)/);
+  assert.match(server, /const cacheable = !moderatorAccess &&/);
+  assert.match(server, /privateAccess: moderatorAccess/);
+  assert.match(server, /privacyGuardEnabled: !moderatorAccess/);
+  assert.match(server, /if \(reportRequested && !moderatorAccess\)/);
+  assert.match(server, /if \(moderatorAccess\) store\.markPrivate\(convId, key\)/);
+  assert.match(server, /moderatorAccess \|\| store\.isPrivate\(id, key\)/);
+  assert.match(server, /Private moderator conversations cannot be shared/);
+  assert.match(server, /const moderatorPrivateQuestion = moderatorAccess && answerGuard\.asksForPrivateMilitaryIntelligence\(question\)/);
+  assert.match(server, /\|\| moderatorPrivateQuestion\)\) \|\| chaseChange/);
 });
 
 test("report detection catches generation asks and skips the support flow", () => {

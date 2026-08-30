@@ -141,6 +141,7 @@ const LIVE_LABELS = {
   top_players: "Top players",
   macro_history: "Economic history",
   wars: "Wars and fronts",
+  military_roster: "Private military roster",
   entity_search: "Entity lookup",
   corporation_rankings: "Corporation rankings",
   extraction_market: "Extraction market",

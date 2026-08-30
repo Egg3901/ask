@@ -85,6 +85,18 @@ const LIVE_ALLOWLIST = new Set([
   "character_wealth_history",
 ]);
 
+// Authenticated moderators and admins may use read-only diagnostic surfaces
+// for support and enforcement. The public set remains unchanged and is still
+// the default everywhere, including Discord Ask.
+const MODERATOR_LIVE_ALLOWLIST = new Set([
+  ...LIVE_ALLOWLIST,
+  "military_roster",
+  "extraction_market", "trace_account", "trace_bonds", "trace_ledger",
+  "trace_actions", "alt_rank", "alt_ring_audit", "audit_query",
+]);
+
+const allowedLiveTools = privateAccess => privateAccess ? MODERATOR_LIVE_ALLOWLIST : LIVE_ALLOWLIST;
+
 // Tools that read one character's private standing. Non-staff askers are pinned
 // to their own character on every one of these, never just the first.
 const SELF_ONLY_TOOLS = new Set(["trace_character", "character_balance_sheet", "character_wealth_history"]);
@@ -201,10 +213,11 @@ function needsCapabilityInventory(question) {
     .test(String(question || ""));
 }
 
-async function capabilityCatalog() {
+async function capabilityCatalog(privateAccess = false) {
   const tools = await mcp.listTools("gamestate");
+  const allowed = allowedLiveTools(privateAccess);
   const publicTools = Array.isArray(tools)
-    ? tools.filter(tool => LIVE_ALLOWLIST.has(tool.name)).map(tool => ({
+    ? tools.filter(tool => allowed.has(tool.name)).map(tool => ({
       name: tool.name,
       description: String(tool.description || "").replace(/\s+/g, " ").trim().slice(0, 300),
     }))
@@ -215,8 +228,10 @@ async function capabilityCatalog() {
       "literal symbol and path search plus reading complete indexed source files",
       "deployed Git change history with commit details",
     ],
-    livePublicTools: publicTools,
-    privacy: "Character-scoped tools are pinned to the signed-in player. Other players' private holdings and hidden information are unavailable.",
+    [privateAccess ? "liveModeratorTools" : "livePublicTools"]: publicTools,
+    privacy: privateAccess
+      ? "This authenticated moderator session may inspect read-only private and forensic records for support and enforcement."
+      : "Character-scoped tools are pinned to the signed-in player. Other players' private holdings and hidden information are unavailable.",
   }, null, 2);
 }
 
@@ -225,12 +240,13 @@ function cap(text, limit = RESULT_CAP) {
   return s.length > limit ? s.slice(0, limit) + "\n[truncated]" : s;
 }
 
-async function liveToolDefs() {
+async function liveToolDefs(privateAccess = false) {
   try {
     const tools = await mcp.listTools("gamestate");
     if (!tools) return [];
+    const allowed = allowedLiveTools(privateAccess);
     return tools
-      .filter(t => LIVE_ALLOWLIST.has(t.name))
+      .filter(t => allowed.has(t.name))
       .map(t => ({
         type: "function",
         function: {
@@ -242,8 +258,8 @@ async function liveToolDefs() {
   } catch { return []; }
 }
 
-async function execute(name, args, { useLive, context, game, historyDays }) {
-  if (name === "list_capabilities") return capabilityCatalog();
+async function execute(name, args, { useLive, context, game, historyDays, privateAccess = false }) {
+  if (name === "list_capabilities") return capabilityCatalog(privateAccess);
   if (name === "search_code") {
     const found = await retrieve.search(String(args.query || ""), { topK: 5, maxChars: 9000, game });
     return found ? found.context : "No matching source found for that query.";
@@ -274,7 +290,7 @@ async function execute(name, args, { useLive, context, game, historyDays }) {
       c.body ? `\n${c.body.slice(0, 1200)}` : "", `\nFILES:\n${stat}`,
       c.diff ? `\nWHAT CHANGED:\n${c.diff}` : ""].filter(Boolean).join("\n");
   }
-  if (!useLive || !LIVE_ALLOWLIST.has(name)) return "Tool not available for this question.";
+  if (!useLive || !allowedLiveTools(privateAccess).has(name)) return "Tool not available for this question.";
   // The asker may only trace themselves. Their own character is the one in the
   // session; any other target is rewritten to it rather than refused, so the
   // model still gets the self-lookup it usually actually wanted.
@@ -302,12 +318,12 @@ async function execute(name, args, { useLive, context, game, historyDays }) {
  */
 async function run({ question, context = null, useLive = false, deep = false, onAction = null, game = null, changeQuestion = false }) {
   const caps = deep ? CAPS.deep : CAPS.standard;
+  const isStaff = context?.isAdmin === true || context?.isModerator === true;
   const historyDefs = (await history.available(game)) ? HISTORY_TOOL_DEFS : [];
-  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs() : [])];
+  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs(isStaff) : [])];
   const historyDays = history.sinceDaysFor(question);
   const started = Date.now();
 
-  const isStaff = context?.isAdmin === true || context?.isModerator === true;
   const playerLine = context?.character?.name
     ? `\n(The asker plays ${context.character.name}${context.character.country ? ` in ${context.character.country}` : ""}${context.corporation?.name ? `, runs ${context.corporation.name}` : ""}.)`
     : "";
@@ -315,7 +331,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
     ? `\n(The asker is STAFF: you MAY trace any named player or corporation they ask about, not only their own.)`
     : "";
   const messages = [
-    { role: "system", content: SYSTEM },
+    { role: "system", content: SYSTEM + (isStaff ? `\n\nPRIVATE MODERATOR ACCESS: This authenticated moderator may inspect private player, corporation, forensic, audit, and hidden records for support or enforcement. Use the available private tools when the question calls for them. The public-data-only restriction above does not apply to this session.` : "") },
     // A cheap scout model reads a conditional instruction in the system prompt
     // as optional and never fires the tool. When the caller already knows this
     // is a change question, say so as an order in the turn it is answering.
@@ -347,7 +363,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
       const name = tc.function?.name || "";
       if (onAction) { try { onAction(name, args); } catch {} }
       let result;
-      try { result = await execute(name, args, { useLive, context, game, historyDays }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
+      try { result = await execute(name, args, { useLive, context, game, historyDays, privateAccess: isStaff }); } catch (e) { result = `Tool failed: ${String(e.message || e).slice(0, 120)}`; }
       return { tc, name, args, result: cap(result) };
     }));
 
@@ -392,5 +408,5 @@ async function run({ question, context = null, useLive = false, deep = false, on
 
 module.exports = {
   run, needsMechanicEvidence, needsCapabilityInventory, capabilityCatalog,
-  LIVE_ALLOWLIST, SELF_ONLY_TOOLS,
+  LIVE_ALLOWLIST, MODERATOR_LIVE_ALLOWLIST, SELF_ONLY_TOOLS,
 };

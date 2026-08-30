@@ -51,6 +51,18 @@ test("the final answer guard replaces military intelligence and records the issu
   assert.ok(result.issues.includes("private_military_intelligence_removed"));
 });
 
+test("the final answer guard preserves private intelligence for moderator access", () => {
+  const answer = "Northland maintains two carrier groups near the coast.";
+  const result = guard.enforce({
+    answer,
+    question: "What is happening near the coast?",
+    plan: { display: { kind: "prose" }, visual: "optional" },
+    privacyGuardEnabled: false,
+  });
+  assert.equal(result.answer, answer);
+  assert.ok(!result.issues.includes("private_military_intelligence_removed"));
+});
+
 test("flags a refusal when live evidence was available", () => {
   assert.equal(guard.detectRefusal("I cannot determine your net worth from what I have.", true), true);
   assert.equal(guard.detectRefusal("I do not have access to that.", true), true);

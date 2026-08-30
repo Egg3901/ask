@@ -196,13 +196,15 @@ function matchingDataset(datasets, metric) {
 // Prevent a model from presenting a plausible-looking but unsupported chart.
 // Canonical maps and chart data are produced by the live adapters, never copied
 // from a model response.
-function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "" }) {
+function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyGuardEnabled = true }) {
   let text = String(answer || "").trim();
   const issues = [];
-  const protectedAnswer = protectPublicAnswer(text, question);
-  if (protectedAnswer !== text) {
-    text = protectedAnswer;
-    issues.push("private_military_intelligence_removed");
+  if (privacyGuardEnabled) {
+    const protectedAnswer = protectPublicAnswer(text, question);
+    if (protectedAnswer !== text) {
+      text = protectedAnswer;
+      issues.push("private_military_intelligence_removed");
+    }
   }
   const expected = plan?.display || { kind: "prose" };
   const map = expected.kind === "map" ? matchingMap(datasets, expected.metric) : null;
