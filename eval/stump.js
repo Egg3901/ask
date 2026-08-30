@@ -24,6 +24,7 @@ const askPlan = require("../ask-plan");
 const games = require("../games");
 const navigation = require("../navigation");
 const history = require("../history");
+const clarification = require("../clarification");
 
 // A believable non-staff player context, so self-pinned tools exercise the
 // real privacy path instead of a staff bypass.
@@ -58,12 +59,38 @@ const CASES = [
 async function runCase(c) {
   const started = Date.now();
   const game = games.resolve("ahd");
-  const plan = askPlan.create(c.q, CONTEXT);
-  const route = router.choose({ question: c.q, length: "standard", style: "standard", useMcp: c.live, isFollowup: false, visualizations: false, report: false });
+  const context = { ...CONTEXT, ...(c.context || {}) };
+  const chatHistory = Array.isArray(c.history) ? c.history : [];
+  const isFollowup = chatHistory.length > 0;
+  const plan = askPlan.create(c.q, context);
+  const route = router.choose({
+    question: c.q, length: "standard", style: "standard", useMcp: c.live,
+    isFollowup, visualizations: c.visualizations === true, report: false,
+  });
 
-  const subQueries = route.tier === "flash" ? [] : await grounding.decompose(c.q).catch(() => []);
-  const hits = await retrieve.searchMulti(c.q, subQueries, { game }).catch(() => null);
-  const matched = await corrections.match(c.q).catch(() => []);
+  const clarificationAnswer = clarification.answer(c.q, isFollowup);
+  if (clarificationAnswer) {
+    return {
+      id: c.id, question: c.q, retrievalQuestion: c.q, tier: "deterministic",
+      model: "ask-clarification", seconds: 0, correctionsInjected: [], scoutTools: [],
+      liveTargeted: false,
+      validation: { issues: [], refused: false, narrated: false, grounding: [], inventedPaths: [], missedPaths: [] },
+      answer: clarificationAnswer,
+    };
+  }
+
+  let retrievalQuestion = c.q;
+  if (isFollowup) {
+    retrievalQuestion = await grounding.condense(chatHistory, c.q).catch(() => null) || c.q;
+  }
+
+  const subQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion).catch(() => []);
+  let hits = await retrieve.searchMulti(retrievalQuestion, subQueries, { game }).catch(() => null);
+  if (investigate.needsMechanicEvidence(retrievalQuestion)) {
+    const exact = retrieve.searchExact(retrievalQuestion, { limit: 8, maxChars: 14000, game });
+    hits = retrieve.mergeEvidence(hits, exact);
+  }
+  const matched = await corrections.match(retrievalQuestion).catch(() => []);
 
   // Change questions: the deterministic git-history pass, then the scout only
   // when it found nothing — same gating as the server.
@@ -71,7 +98,7 @@ async function runCase(c) {
   const changeQuestion = history.changeish(c.q) && await history.available(game);
   if (changeQuestion) {
     const recent = await history.evidence({
-      game, question: c.q, paths: hits?.files || [], code: hits?.context || "",
+      game, question: retrievalQuestion, paths: hits?.files || [], code: hits?.context || "",
       sinceDays: history.sinceDaysFor(c.q),
     }).catch(() => null);
     historyBlock = recent ? recent.text : "";
@@ -80,7 +107,7 @@ async function runCase(c) {
   let liveBlock = "", liveTargeted = false;
   if (c.live) {
     try {
-      const intel = await mcp.liveIntelligence(c.q, CONTEXT, null, plan, null);
+      const intel = await mcp.liveIntelligence(c.q, context, null, plan, null);
       liveBlock = intel.text || "";
       liveTargeted = intel.targeted === true;
     } catch {}
@@ -92,12 +119,13 @@ async function runCase(c) {
   const trendish = /\b(trend|history|over (?:the )?(?:last|past|recent)|chang(?:e|ed|es|ing)|since (?:19|20)\d\d|turn.by.turn|evolv)/i.test(c.q);
   const chaseChange = changeQuestion && (historyBlock === "" || history.broadChangeQuestion(c.q));
   const needsMechanicEvidence = investigate.needsMechanicEvidence(c.q);
-  if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish) || chaseChange || needsMechanicEvidence) {
-    investigation = await investigate.run({ question: c.q, context: CONTEXT, useLive: c.live, deep: false, game, changeQuestion }).catch(() => null);
+  const needsCapabilityInventory = investigate.needsCapabilityInventory(c.q);
+  if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish) || chaseChange || needsMechanicEvidence || needsCapabilityInventory) {
+    investigation = await investigate.run({ question: c.q, context, useLive: c.live, deep: false, game, changeQuestion }).catch(() => null);
   }
   const navBlock = navigation.block(c.q);
 
-  const system = prompt.build({ style: "standard", length: "standard", context: CONTEXT, indexContext: "", visualizations: false, visualizationRequested: false, liveData: c.live, report: false, game, changeHistory: historyBlock !== "" })
+  const system = prompt.build({ style: "standard", length: "standard", context, indexContext: "", visualizations: c.visualizations === true, visualizationRequested: c.visualizations === true, liveData: c.live, report: false, game, changeHistory: historyBlock !== "" })
     + (matched.length ? `\n\n${corrections.block(matched)}` : "")
     + (hits ? `\n\n${hits.context}` : "")
     + (historyBlock ? `\n\n${historyBlock}` : "")
@@ -105,7 +133,7 @@ async function runCase(c) {
     + (investigation ? `\n\n${investigation.text}` : "")
     + (navBlock ? `\n\n${navBlock}` : "");
 
-  const out = await llm.stream({ system, history: [], question: c.q, deep: false, tier: route.tier, chain: route.chain, effort: route.effort, onDelta: () => {} });
+  const out = await llm.stream({ system, history: chatHistory, question: c.q, deep: false, tier: route.tier, chain: route.chain, effort: route.effort, onDelta: () => {} });
   const raw = out.text || "";
   const { text: answer } = prompt.extractFollowups(raw);
 
@@ -117,7 +145,7 @@ async function runCase(c) {
   const narrated = answerGuard.detectBundleNarration(answer);
 
   return {
-    id: c.id, question: c.q, tier: route.tier, model: out.model, seconds: Math.round((Date.now() - started) / 1000),
+    id: c.id, question: c.q, retrievalQuestion, tier: route.tier, model: out.model, seconds: Math.round((Date.now() - started) / 1000),
     correctionsInjected: matched.map(m => m.question),
     scoutTools: investigation?.tools || [],
     liveTargeted,
@@ -126,9 +154,13 @@ async function runCase(c) {
   };
 }
 
-(async () => {
+async function main() {
+  const casesArg = (process.argv.find(a => a.startsWith("--cases=")) || "").slice(8);
+  const sourceCases = casesArg ? JSON.parse(fs.readFileSync(path.resolve(casesArg), "utf8")) : CASES;
   const only = (process.argv.find(a => a.startsWith("--only=")) || "").slice(7).split(",").filter(Boolean).map(Number);
-  const cases = only.length ? CASES.filter((_, i) => only.includes(i + 1)) : CASES;
+  const ids = new Set((process.argv.find(a => a.startsWith("--ids=")) || "").slice(6).split(",").filter(Boolean));
+  const cases = ids.size ? sourceCases.filter(c => ids.has(String(c.id)))
+    : only.length ? sourceCases.filter((_, i) => only.includes(i + 1)) : sourceCases;
   const results = [];
   for (const c of cases) {
     process.stderr.write(`[stump] ${c.id}…\n`);
@@ -145,4 +177,8 @@ async function runCase(c) {
   }
   console.log(`wrote ${results.length} results`);
   process.exit(0);
-})();
+}
+
+if (require.main === module) main();
+
+module.exports = { CASES, runCase };

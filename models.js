@@ -181,6 +181,11 @@ const FREE_POOL = (process.env.ASK_FREE_POOL ||
 // The paid model every chain ends on.
 const PAID_BACKSTOP = "deepseek-v4-flash";
 
+function ensureBackstop(chain) {
+  const unique = [...new Set((chain || []).filter(Boolean).filter(id => id !== PAID_BACKSTOP))];
+  return [...unique, PAID_BACKSTOP];
+}
+
 /** lead -> full chain: lead, then the rest of the free pool, then paid. */
 function chainFrom(lead) {
   return [lead, ...FREE_POOL.filter(m => m !== lead), PAID_BACKSTOP];
@@ -192,9 +197,9 @@ const CHAINS = {
   // cloud and pro with GLM 5.3 Flash. What is hardcoded here stays restricted to
   // bench-SCORED models, so that losing the env config degrades to a chain that
   // is known to answer rather than to whichever free tag was fashionable.
-  flash: (process.env.ASK_CHAIN_FLASH || "deepseek-v4-flash,nvidia/nemotron-3-ultra-550b-a55b:free").split(",").map(s => s.trim()).filter(Boolean),
-  pro: (process.env.ASK_CHAIN_PRO || "nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean),
-  deep: (process.env.ASK_CHAIN_DEEP || "stealth/ox-alpha,nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean),
+  flash: ensureBackstop((process.env.ASK_CHAIN_FLASH || "deepseek-v4-flash,nvidia/nemotron-3-ultra-550b-a55b:free").split(",").map(s => s.trim()).filter(Boolean)),
+  pro: ensureBackstop((process.env.ASK_CHAIN_PRO || "nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean)),
+  deep: ensureBackstop((process.env.ASK_CHAIN_DEEP || "stealth/ox-alpha,nvidia/nemotron-3-ultra-550b-a55b:free,deepseek-v4-flash").split(",").map(s => s.trim()).filter(Boolean)),
 };
 
 // What to ask each tier for. Models publish different reasoning vocabularies and
@@ -299,4 +304,4 @@ function tierMap() {
   return out;
 }
 
-module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, FREE_POOL, PAID_BACKSTOP, chainFrom, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };
+module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, FREE_POOL, PAID_BACKSTOP, ensureBackstop, chainFrom, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };

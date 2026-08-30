@@ -26,6 +26,9 @@ const navigation = require("../navigation.js");
 const investigate = require("../investigate.js");
 const mcp = require("../mcp.js");
 const retrieve = require("../retrieve.js");
+const router = require("../router.js");
+const grounding = require("../grounding.js");
+const generalCapabilities = require("./general-capabilities.js");
 
 const CORPUS = process.env.ASK_EVAL_CORPUS
   || "/root/misc/ask-remediation/review/golden_corpus.json";
@@ -95,15 +98,38 @@ const CHECKS = {
     return ["wars", "macro_history", "character_wealth_history"].every(name => names.has(name));
   },
 
-  // Mixed bag with no single mechanism; only the replay harness can judge these.
+  output_reliability: q => router.choose({
+    question: q.question, length: "standard", style: "standard", useMcp: q.wanted_live,
+    isFollowup: false, visualizations: false, report: false,
+  }).chain.length >= 2,
+
+  context_reference: () => typeof grounding.condense === "function",
+
+  evaluation_integrity: q => generalCapabilities.isInvalidFixture(q),
+
+  mechanic_evidence: q => investigate.needsMechanicEvidence(q.question)
+    && typeof retrieve.searchExact === "function"
+    && typeof retrieve.readIndexedFile === "function",
+
+  capability_inventory: q => investigate.needsCapabilityInventory(q.question)
+    && typeof investigate.capabilityCatalog === "function",
+
+  war_mechanics: async q => {
+    const tools = await mcp.listTools("gamestate");
+    return Array.isArray(tools) && tools.some(tool => tool.name === "wars")
+      && typeof retrieve.searchExact === "function";
+  },
+
+  // A newly discovered row must be classified before the audit can certify it.
   general: () => null,
 };
 
 const byCap = new Map();
 for (const row of corpus) {
-  if (!row.capability) continue;
-  if (!byCap.has(row.capability)) byCap.set(row.capability, []);
-  byCap.get(row.capability).push(row);
+  const capability = generalCapabilities.capabilityFor(row);
+  if (!capability) continue;
+  if (!byCap.has(capability)) byCap.set(capability, []);
+  byCap.get(capability).push(row);
 }
 
 let failed = 0, unproven = 0, covered = 0;

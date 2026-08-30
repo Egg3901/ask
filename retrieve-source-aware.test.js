@@ -29,6 +29,12 @@ insert.run(5, "code", "game", "game123", "src/lib/budget/inflation.ts", 0,
 insert.run(6, "code", "game", "game123", "src/lib/metricEngine/outputGap.ts", 0,
   "const rawGap = prevGap + (impulse - GAP_CLOSURE * prevGap) / turnsPerYear; const gdpGrowth = potential + (gap - prevGap) * turnsPerYear;",
   Buffer.from(vector.buffer), 3);
+insert.run(7, "code", "game", "game123", "src/lib/constants/techTree/costs.ts", 0,
+  "const cashCost = Math.round(dailyGrossRevenueLocal * 0.15); // charged in the corporation localCurrency",
+  Buffer.from(vector.buffer), 3);
+insert.run(8, "code", "game", "game123", "src/lib/turn/corporation/sectorCalculations.ts", 0,
+  "const bindingInput = ratios.lowest; const inputAvailabilityPct = bindingInput.ratio * 100;",
+  Buffer.from(vector.buffer), 3);
 for (const kind of ["code", "docs", "wiki"]) db.prepare("INSERT INTO source_revisions VALUES(?,?,?,?,?,?)")
   .run(kind, kind === "docs" ? "docs" : "game", `${kind}123`, "2026-08-23T00:00:00.000Z", 1, 1);
 db.prepare("INSERT INTO meta VALUES('generation','fixture')").run();
@@ -43,7 +49,7 @@ const retrieve = require("./retrieve");
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 test("routes evidence authority by claim type while preserving provenance", async () => {
-  const mechanics = await retrieve.search("How many cloture votes are required?", { topK: 6 });
+  const mechanics = await retrieve.search("How many cloture votes are required?", { topK: 8 });
   assert.equal(mechanics.claimType, "mechanic");
   assert.equal(mechanics.hits[0].source, "code");
   assert.match(mechanics.context, /SOURCE code @ game123/);
@@ -75,4 +81,24 @@ test("reads a known indexed source file without filesystem access", () => {
   const found = retrieve.readIndexedFile("src/lib/budget/inflation.ts");
   assert.match(found.context, /calculateInflation/);
   assert.deepEqual(found.files, ["src/lib/budget/inflation.ts"]);
+});
+
+test("expands game abbreviations when exact-searching technology prices", () => {
+  const found = retrieve.searchExact("Where do tech LC prices come from?", { limit: 5 });
+  assert.equal(found.files[0], "src/lib/constants/techTree/costs.ts");
+  assert.match(found.context, /dailyGrossRevenueLocal \* 0\.15/);
+});
+
+test("merges exact mechanic evidence into semantic evidence for the writer", async () => {
+  const semantic = await retrieve.search("cloture rule", { topK: 1 });
+  const exact = retrieve.searchExact("tech LC prices", { limit: 2 });
+  const merged = retrieve.mergeEvidence(semantic, exact);
+  assert.match(merged.context, /cloture vote rule/);
+  assert.match(merged.context, /techTree\/costs\.ts/);
+});
+
+test("expands player wording for corporation input constraints", () => {
+  const found = retrieve.searchExact("How do I solve input limits for my corp?", { limit: 5 });
+  assert.equal(found.files[0], "src/lib/turn/corporation/sectorCalculations.ts");
+  assert.match(found.context, /inputAvailabilityPct/);
 });

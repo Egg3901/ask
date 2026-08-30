@@ -20,6 +20,14 @@ test("every tier offers a fallback beyond its first choice", () => {
   }
 });
 
+test("production overrides cannot replace the paid last-resort model", () => {
+  const models = require("./models");
+  assert.deepEqual(
+    models.ensureBackstop(["deepseek-v4-flash:cloud", "minimax/minimax-m3-free"]),
+    ["deepseek-v4-flash:cloud", "minimax/minimax-m3-free", "deepseek-v4-flash"],
+  );
+});
+
 test("a chain never ends on a model that failed every bench request", () => {
   const models = require("./models");
   for (const tier of router.TIERS) {

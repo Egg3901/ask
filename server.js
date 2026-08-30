@@ -28,6 +28,7 @@ const answerGuard = require("./answer-guard");
 const answerAudit = require("./answer-audit");
 const ogImage = require("./og-image");
 const games = require("./games");
+const clarification = require("./clarification");
 
 // Where the docs build writes its output. Ask reads only the per-game logo from
 // it, so a missing docs build degrades to a 404 mark, never a broken page.
@@ -740,6 +741,34 @@ const server = http.createServer(async (req, res) => {
         send("meta", { convId, reqId, cost, followup, followupsLeft, usedMcp: useMcp, model: route.label, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
           modelId: route.chain[0], modelName: models.displayFor(route.chain[0]), status: plan.status });
 
+        // A first-turn pronoun has no antecedent to retrieve. Letting semantic
+        // search guess one produced a confident answer about an unrelated
+        // privatization vote. Clarification is deterministic, free, and saved
+        // in the thread so the player's next turn has real context.
+        const clarificationAnswer = clarification.answer(question, isFollowup);
+        if (clarificationAnswer) {
+          clearInterval(ping);
+          send("delta", clarificationAnswer);
+          const validation = { plan: plan.id, issues: [], grounding: [], inventedPaths: [], missedPaths: [] };
+          const answerId = store.record({
+            user_key: key, username: session.identity.username || null, conv_id: convId,
+            question, answer: clarificationAnswer, areas: "[]", citations: "[]",
+            used_mcp: 0, cached: 0, cost: 0, followup,
+            tokens_in: 0, tokens_out: 0, model: "ask-clarification",
+            plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: "{}",
+            ttft_ms: 0, total_ms: 0, fell_through: null, ts: Date.now(),
+          });
+          send("done", {
+            convId, answerId, answer: clarificationAnswer, areas: [], citations: [], cached: false,
+            usedMcp: false, cost: 0, followup, followupsLeft, followups: [], vizBlocked,
+            vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
+            reportUrl: null, liveSources: [], model: "Ask", modelId: "ask-clarification",
+            modelName: "Ask", conflicts: [], usage: store.usage(key, ent), liveHint: null, validation,
+          });
+          try { res.end(); } catch {}
+          return;
+        }
+
         // Actual source text for this question. The old path sent only a file
         // listing, which is why answers said "I wasn't given the contents".
         let hits = null;
@@ -765,6 +794,10 @@ const server = http.createServer(async (req, res) => {
           // searchMulti with no sub-queries is a plain search.
           const subQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion);
           hits = await retrieve.searchMulti(retrievalQuestion, subQueries, { ...retrieveOpts, game });
+          if (investigate.needsMechanicEvidence(retrievalQuestion)) {
+            const exact = retrieve.searchExact(retrievalQuestion, { limit: 8, maxChars: 14000, game });
+            hits = retrieve.mergeEvidence(hits, exact);
+          }
         } catch { hits = null; }
         if (hits?.files?.length) status(`Matched ${hits.files.length} source${hits.files.length === 1 ? "" : "s"} — reading…`);
 
@@ -854,8 +887,9 @@ const server = http.createServer(async (req, res) => {
         // lower it fastest". Formula, cause, and counterfactual questions need
         // the code scout even when the heuristic live pass found a country.
         const needsMechanicEvidence = investigate.needsMechanicEvidence(question);
+        const needsCapabilityInventory = investigate.needsCapabilityInventory(question);
         let investigation = null;
-        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence)) || chaseChange) {
+        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction, game, changeQuestion });

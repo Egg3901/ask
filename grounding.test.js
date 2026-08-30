@@ -7,6 +7,21 @@ test("causal and formula questions require a mechanic evidence pass", () => {
   assert.equal(investigate.needsMechanicEvidence("What would lower US inflation fastest?"), true);
   assert.equal(investigate.needsMechanicEvidence("How is GDP growth calculated each turn?"), true);
   assert.equal(investigate.needsMechanicEvidence("What is the US inflation rate?"), false);
+  assert.equal(investigate.needsMechanicEvidence("How do I solve input limits for my corp?"), true);
+  assert.equal(investigate.needsMechanicEvidence("Where do tech LC prices come from?"), true);
+});
+
+test("preserves named stats when condensing a vague follow-up", () => {
+  const history = [
+    { role: "user", content: "How do I increase Readiness, Logistics, Mandate, and Intelligence?" },
+    { role: "assistant", content: "Those are national capacity scores." },
+  ];
+  const terms = grounding.namedContextTerms(history, "How can I increase the scores?");
+  assert.deepEqual(terms, ["Readiness", "Logistics", "Mandate", "Intelligence"]);
+  assert.equal(
+    grounding.restoreContextTerms(null, history, "How can I increase the scores?"),
+    "How can I increase the scores?: Readiness, Logistics, Mandate, Intelligence",
+  );
 });
 
 test("no ungrounded claims means no note at all", () => {

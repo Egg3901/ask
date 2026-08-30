@@ -1,0 +1,73 @@
+[
+  {
+    "id": 13,
+    "q": "How do we tell that the electoral changes we made work? East changed their voting age to 16 and registration to +50. Question from DDR player.",
+    "live": true,
+    "criteria": "Directly explain how to verify that the voting-age and registration changes took effect. Do not refuse or claim an observed live effect without evidence."
+  },
+  {
+    "id": 14,
+    "q": "How do we tell that the electoral changes we made work? East changed their voting age to 16 and registration to +50. Question from DDR player.",
+    "live": true,
+    "criteria": "Directly explain how to verify that the voting-age and registration changes took effect. Do not refuse or claim an observed live effect without evidence."
+  },
+  {
+    "id": 22,
+    "q": "Is the last part of this true?",
+    "live": false,
+    "criteria": "Because no antecedent exists, ask the player to paste or identify the last part. Do not invent context or unrelated live facts."
+  },
+  {
+    "id": 36,
+    "q": "what is the most interesting visualization you can show me from the game?",
+    "live": true,
+    "visualizations": true,
+    "criteria": "Show one relevant visualization using real supplied game data and briefly explain why it is interesting. Do not invent counts or substitute an unsupported dataset."
+  },
+  {
+    "id": 48,
+    "q": "Why did this happen?",
+    "live": false,
+    "quarantine": "Synthetic store-test row with no antecedent and placeholder answer."
+  },
+  {
+    "id": 89,
+    "q": "How do I solve input limits for my corp",
+    "live": true,
+    "criteria": "Answer about corporation production inputs, shortages, throughput, or capacity using the player's corporation and source mechanics. Do not answer about political influence attempts."
+  },
+  {
+    "id": 92,
+    "q": "Where to tech LC prices come from",
+    "live": false,
+    "criteria": "Either resolve LC from grounded game evidence and explain its technology prices, or ask one concise clarification. Do not confidently substitute unrelated commodity prices or invent source paths."
+  },
+  {
+    "id": 102,
+    "q": "list everything your api can give me",
+    "live": false,
+    "criteria": "Provide a current, organized inventory grounded in Ask's actual source, history, and public live-tool catalog. Do not refuse for lack of an API reference."
+  },
+  {
+    "id": 156,
+    "q": "How can I increase the scores?",
+    "live": false,
+    "history": [
+      {
+        "role": "user",
+        "content": "What is Available national capacity and how do I increase the four stats: Readiness, Logistics, Mandate, and Intelligence?"
+      },
+      {
+        "role": "assistant",
+        "content": "Available national capacity is the uncommitted portion of Readiness, Logistics, Mandate, and Intelligence. You asked how each score can be raised."
+      }
+    ],
+    "criteria": "Use the antecedent and answer about Readiness, Logistics, Mandate, and Intelligence. Clearly distinguish confirmed levers from anything the evidence does not establish."
+  },
+  {
+    "id": 177,
+    "q": "For regime change in DDR, can US players join the losing country as part of a new governing coalition after the war, or can the same side simply rerun and regain power?",
+    "live": true,
+    "criteria": "Directly answer the post-war coalition and rerun question using the wars tool and exact regime or coalition mechanics. Clearly label any genuinely unimplemented consequence."
+  }
+]
