@@ -32,12 +32,18 @@ const GENERIC_MILITARY_MECHANIC = new RegExp(
   "i",
 );
 const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b/i;
-const GENERIC_CAPITALIZED_WORDS = new Set([
-  "a", "an", "the", "each", "every", "you", "to", "in", "under", "when", "if", "for",
-  "logistics", "command", "commands", "airlift", "wing", "wings", "unit", "units",
-  "formation", "formations", "division", "divisions", "brigade", "brigades", "battalion",
-  "battalions", "regiment", "regiments", "corps", "squadron", "squadrons", "fleet", "fleets",
-  "military", "army", "naval", "air", "carrier", "task", "force", "forces",
+const CAPITALIZED_WORD = /^[A-Z][A-Za-z'-]*/;
+const CAPITALIZED_LOCATION = /\b(?:from|in|near|for|within|of)\s+([A-Z][A-Za-z'-]+)\b/g;
+const CAPITALIZED_ANYWHERE = /\b[A-Z][A-Za-z'-]*\b/g;
+const GENERIC_HYPOTHETICAL = /^(?:if|when|unless|without|to)\b|\b(?:must|needs? to|has to|can|may|should)\b/i;
+const GENERIC_NAME_WORDS = new Set([
+  "a", "an", "the", "each", "every", "you", "to", "in", "under", "when", "if", "for", "without",
+  "logistics", "airlift", "command", "commands", "unit", "units", "formation", "formations",
+  "division", "divisions", "brigade", "brigades", "battalion", "battalions", "regiment", "regiments",
+  "corps", "squadron", "squadrons", "wing", "wings", "fleet", "fleets", "carrier", "task", "naval",
+  "air", "troop", "troops", "personnel", "equipment", "readiness", "deployment", "deployments", "force",
+  "forces", "army", "military", "tank", "tanks", "aircraft", "ship", "ships", "submarine", "submarines",
+  "missile", "missiles", "nuclear", "house", "divided",
 ]);
 const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live military rosters, unit or command composition, readiness, deployments, or force strength. I can explain the mechanics or summarize the public war record instead.";
 
@@ -45,9 +51,14 @@ function isGenericMilitaryMechanicSentence(sentence, question) {
   const text = sentence.trim();
   if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
   if (!GENERIC_MECHANICS_QUESTION.test(String(question || ""))) return false;
-  if (/\b(?:your|their|our|its|this|that)\b/i.test(text)) return false;
-  const capitalized = text.match(/\b[A-Z][A-Za-z'-]*\b/g) || [];
-  return capitalized.every((word) => GENERIC_CAPITALIZED_WORDS.has(word.toLowerCase().replace(/'s$/, "")));
+  const hasUnknownName = [...text.matchAll(CAPITALIZED_ANYWHERE)]
+    .some((match) => !GENERIC_NAME_WORDS.has(match[0].toLowerCase().replace(/'s$/, "")));
+  if (GENERIC_HYPOTHETICAL.test(text) && !hasUnknownName) return true;
+  if (/\b(?:your|their|our|its|this|that)\s+(?:country|nation|force|forces|army|military)\b/i.test(text)) return false;
+  const subject = text.match(CAPITALIZED_WORD)?.[0]?.toLowerCase().replace(/'s$/, "");
+  if (subject && !GENERIC_NAME_WORDS.has(subject)) return false;
+  return ![...text.matchAll(CAPITALIZED_LOCATION)]
+    .some((match) => !GENERIC_NAME_WORDS.has(match[1].toLowerCase().replace(/'s$/, "")));
 }
 
 function containsPrivateMilitaryIntelligence(answer, question = "") {
