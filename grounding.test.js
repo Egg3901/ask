@@ -36,8 +36,8 @@ test("the note names every claim and drops trailing periods", () => {
   assert.ok(!n.includes(".."));
 });
 
-test("the investigator live allowlist excludes forensic and moderation tools", () => {
-  for (const banned of ["trace_account", "alt_ring_audit", "alt_rank", "audit_query", "trace_actions", "trace_ledger", "trace_bonds", "election_sim_results"]) {
+test("the investigator live allowlist excludes private diagnostics and moderation tools", () => {
+  for (const banned of ["trace_account", "alt_ring_audit", "alt_rank", "audit_query", "trace_actions", "trace_ledger", "trace_bonds", "election_sim_results", "extraction_market"]) {
     assert.ok(!investigate.LIVE_ALLOWLIST.has(banned), `${banned} must not be reachable`);
   }
   assert.ok(investigate.LIVE_ALLOWLIST.has("trace_corp"));
