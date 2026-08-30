@@ -21,6 +21,27 @@ const RULES = [
     },
   },
   {
+    // Match the mechanic itself, not one incident's wording. Players ask this
+    // as "which missions", "how do I build it", or "why is it decaying".
+    match: /\bair superiority\b[\s\S]{0,140}\b(?:build|decay|mission|station|count|increase|improve|higher)\b|\b(?:build|decay|mission|station|count|increase|improve|higher)\b[\s\S]{0,140}\bair superiority\b/i,
+    exclude: /\bgerman question\b/i,
+    queries: [
+      "air superiority navair channels CAP PATROL build decay",
+      "war theater regional air superiority build decay",
+      "stationOf air conflict theater region",
+      "authorizeBattleAction navair mission stationSetByPlayer",
+    ],
+    guidance: "Resolve air-superiority mechanics through the regional naval-air channel. Verify which missions count, where formations must be stationed, who may issue the standing orders, and the current channel build and decay rates. Do not infer mechanics from an old comment or from the diplomatic crisis system.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/\bCAP\b/i.test(text) || !/\bPATROL\b/i.test(text)) return "The answer must name both air missions that count toward the contest: CAP and PATROL.";
+      if (!/station|region/i.test(text) || /\badjacent\b/i.test(text)) return "The answer must explain that the wings need to be stationed in the contested region, not merely an adjacent one.";
+      if (/two turns? of rebuild/i.test(text)) return "The answer repeats a comment about rejected tuning instead of the current build and decay behavior.";
+      if (!/build/i.test(text) || !/decay/i.test(text)) return "The answer must explain channel build and decay.";
+      return "";
+    },
+  },
+  {
     match: /\bgerman question\b[\s\S]{0,100}\bair superiority\b|\bair superiority\b[\s\S]{0,100}\bgerman question\b/i,
     queries: [
       "German conflict war air superiority navair channels NATO",
@@ -43,18 +64,18 @@ const RULES = [
 
 function expand(question) {
   const text = String(question || "");
-  return [...new Set(RULES.filter(rule => rule.match.test(text)).flatMap(rule => rule.queries))];
+  return [...new Set(RULES.filter(rule => rule.match.test(text) && !rule.exclude?.test(text)).flatMap(rule => rule.queries))];
 }
 
 function guidance(question) {
   const text = String(question || "");
-  return RULES.filter(rule => rule.match.test(text)).map(rule => rule.guidance).filter(Boolean).join("\n");
+  return RULES.filter(rule => rule.match.test(text) && !rule.exclude?.test(text)).map(rule => rule.guidance).filter(Boolean).join("\n");
 }
 
 function answerIssue(question, answer) {
   const text = String(question || "");
   for (const rule of RULES) {
-    if (!rule.match.test(text) || typeof rule.answerIssue !== "function") continue;
+    if (!rule.match.test(text) || rule.exclude?.test(text) || typeof rule.answerIssue !== "function") continue;
     const issue = rule.answerIssue(answer);
     if (issue) return issue;
   }

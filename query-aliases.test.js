@@ -19,6 +19,19 @@ test("bridges German Question air-superiority wording to the war subsystem", () 
   assert.ok(out.some(query => /authorizeBattleAction/i.test(query)));
 });
 
+test("bridges general air-superiority mechanics wording to the same subsystem", () => {
+  const question = "Which air missions build air superiority, where do they count, and how quickly does control build or decay?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /CAP PATROL/i.test(query)));
+  assert.ok(out.some(query => /stationOf/i.test(query)));
+  assert.match(aliases.guidance(question), /regional naval-air channel/i);
+  assert.match(aliases.answerIssue(question, "The value builds and decays in each region."), /CAP and PATROL/i);
+  assert.equal(aliases.answerIssue(
+    question,
+    "CAP and PATROL wings stationed in the contested region build the channel, which also decays each turn.",
+  ), "");
+});
+
 test("does not add unrelated aliases", () => {
   assert.deepEqual(aliases.expand("How does a bill become law?"), []);
   assert.equal(aliases.guidance("How does a bill become law?"), "");
