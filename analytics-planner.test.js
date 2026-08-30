@@ -54,3 +54,18 @@ test("chooses a ranked bar when the user asks to rank geographic aggregates", ()
 test("declines a request that has no catalog-supported metric", () => {
   assert.equal(planner.plan("Map annual rainfall", catalog, { country: "US" }), null);
 });
+
+test("uses the catalog default for an open-ended visualization showcase", () => {
+  const result = planner.plan(
+    "What is the most interesting visualization you can show me from the game?",
+    catalog,
+    { country: "US" },
+  );
+
+  assert.equal(result.dataset, "player_geography");
+  assert.equal(result.metric, "civic_participation");
+  assert.equal(result.presentation, "map");
+  assert.equal(result.args.scope, "country");
+  assert.equal(result.args.country, "US");
+  assert.match(result.rationale, /catalog showcase/);
+});

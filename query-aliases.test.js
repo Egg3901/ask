@@ -11,6 +11,38 @@ test("bridges player wording for a state-corporation spin-off to the canonical m
   assert.ok(out.some(query => /SOE director|Gosplan/i.test(query)));
 });
 
+test("bridges a post-war regime-change question across conversion, relocation, elections, and quotas", () => {
+  const question = "After regime change, can US players join the coalition or can the same DDR party rerun?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /applyPeaceTerm.*FORCED_ELECTION_DELAY_TURNS/i.test(query)));
+  assert.ok(out.some(query => /cross-country election entry/i.test(query)));
+  assert.ok(out.some(query => /performRelocation.*independent/i.test(query)));
+  assert.ok(out.some(query => /BLOC_LIST_QUOTAS.*governmentType/i.test(query)));
+  assert.match(aliases.guidance(question), /separate implemented steps/i);
+});
+
+test("requires a regime-change answer to connect treaty choices, relocation, and the runtime quota gate", () => {
+  const question = "For regime change in DDR, can US players join afterward or can the SED rerun?";
+  assert.match(aliases.answerIssue(question, "The SED can rerun after the war."), /relocation mechanic/i);
+  assert.equal(aliases.answerIssue(
+    question,
+    "The treaty can select a parliamentary republic, presidential republic, or one-party state. US characters cannot file cross-country and must relocate first; relocation makes them independent. A forced democratic conversion starts a fresh snap election after 12 turns; the former ruling party receives a five-seat reservation but a 20 percent vote-share penalty. DDR's 55 percent bloc-list quota is active only under one-party government, so democratic elections use ordinary competitive allocation.",
+  ), "");
+});
+
+test("bridges electoral-law verification to enactment, population, and registration drift", () => {
+  const question = "How can DDR tell whether voting age 16 and registration access +50 worked?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /votingAgeEligibleByCountry/i.test(query)));
+  assert.ok(out.some(query => /votingEligiblePopulation/i.test(query)));
+  assert.ok(out.some(query => /registrationDriftMultiplier/i.test(query)));
+  assert.match(aliases.guidance(question), /three boundaries/i);
+  assert.equal(aliases.answerIssue(
+    question,
+    "First confirm the bill status is enacted and its electoral-law provision contains voting age 16 and registration access +50. After the next turn, the country-scoped votingEligiblePopulation is the eligible population check. Registration +50 makes upward registration drift 1.5x and decay 0.5x, visible in registration or ledger rows. DDR's fixed bloc-list seat shares are not a valid test.",
+  ), "");
+});
+
 test("bridges German Question air-superiority wording to the war subsystem", () => {
   const out = aliases.expand("In the German Question, how do I make NATO air superiority higher?");
   assert.ok(out.some(query => /conflict|war/i.test(query)));

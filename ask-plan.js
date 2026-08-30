@@ -19,6 +19,7 @@ const PLAYER_WEALTH = /\b(?:net[\s-]?worth|player wealth|wealth (?:distribution|
 const FISCAL = /\b(?:budget|deficit|surplus|fiscal|debt[\s-]?to[\s-]?gdp|national debt|credit rating|government spending|govt spending|tax revenue|(?:pushing|driving|fueling|behind|causing|lower|lowering|reduce|reducing|cut|curb|bring down|slow) (?:[a-z]{2,}\s+){0,3}inflation|inflation (?:fastest|faster|down|lower))\b/i;
 const ESTIMATION = /\b(?:how much would|how much does it cost|what would it cost|how expensive|how long until|how long would|how many turns|what would happen if|what happens if|what would .{0,40} do to)\b/i;
 const VISUAL = /\b(?:visuali[sz](?:e|ation)|chart|graph|diagram|plot|map|heatmap|choropleth)\b/i;
+const SHOWCASE_VISUAL = /(?=[\s\S]*\b(?:visuali[sz](?:e|ation)|chart|graph|plot|map)\b)(?=[\s\S]*\b(?:interesting|surprising|insightful|showcase|anything|something)\b)/i;
 
 function create(question, context = {}) {
   const text = String(question || "").trim();
@@ -36,6 +37,12 @@ function create(question, context = {}) {
     display: { kind: "map", metric: "candidate_roster", canonical: true },
     visual: "required", suppressGenericCountryEconomy: true,
     status: "Checking public election filings…", context,
+  };
+  if (SHOWCASE_VISUAL.test(text)) return {
+    id: "live-showcase", intent: "live_showcase", live: "required",
+    display: { kind: "map", metric: null, canonical: true },
+    visual: "required", suppressGenericCountryEconomy: true,
+    status: "Finding an interesting live pattern…", context,
   };
   if (map) return {
     id: "live-map", intent: "geographic_comparison", live: "required",

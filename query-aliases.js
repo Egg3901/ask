@@ -15,6 +15,48 @@ function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
 
 const RULES = [
   {
+    match: /\bregime change\b[\s\S]{0,180}\b(?:coalition|join|player|rerun|run again|regain|election|government)\b|\b(?:coalition|join|player|rerun|run again|regain|election|government)\b[\s\S]{0,180}\bregime change\b/i,
+    queries: [
+      "src/lib/military/applyPeaceTerm.ts FORCED_ELECTION_DELAY_TURNS regime_change",
+      "src/lib/onePartyState/systemConversion.ts FORCED_LEGACY_RESERVATION FORCED_VOTE_SHARE_PENALTY",
+      "src/lib/turn/postConversionElections.ts regime-change snap election",
+      "src/app/api/elections/[id]/enter/route.ts Block cross-country election entry",
+      "src/app/api/character/relocate/route.ts enabledForPlayers country change cooldown",
+      "src/lib/character/performRelocation.ts countryChanged independent leave party",
+      "src/lib/constants/blocList.ts blocListQuotaForGovernment BLOC_LIST_QUOTAS governmentType",
+    ],
+    guidance: "Answer post-war participation as separate implemented steps. Distinguish the treaty's selectable target systems from the country's internal-collapse default. Verify when a democratic conversion's snap election begins, what advantage or penalty the former ruling party carries, whether a foreign character may file without relocating, and what relocation does to party membership. Then inspect whether any country-specific seat-allocation rule is active under the new runtime government type.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/cross-country|relocat/i.test(text)) return "The answer must explain that foreign characters cannot file directly and must use the relocation mechanic first.";
+      if (!/independent/i.test(text)) return "The answer must explain that a cross-country relocation clears the old party and makes the character independent.";
+      if (!/parliamentary republic/i.test(text) || !/presidential/i.test(text) || !/one-party|one party/i.test(text)) return "The answer must distinguish the treaty's three selectable systems from DDR's internal-collapse default.";
+      if (!/12\s+turn/i.test(text) || !/snap|fresh election/i.test(text)) return "The answer must state that a forced democratic regime change schedules the post-conversion snap election after 12 turns.";
+      if (!/(?:five|5)[ -]seat/i.test(text) || !/(?:20\s*%|20 percent|0\.2)/i.test(text)) return "The answer must state the former ruling party's first-election five-seat reservation and 20 percent vote-share penalty.";
+      if (!/55\s*%|55 percent/i.test(text) || !/one-party|one party/i.test(text) || !/ordinary|competitive|disabled|no longer/i.test(text)) return "The answer must explain that DDR's 55 percent bloc-list quota is active only under one-party government and no longer controls a democratic post-conversion election.";
+      return "";
+    },
+  },
+  {
+    match: /(?=[\s\S]*\b(?:voting age|franchise|registration access|electoral (?:law|change))\b)(?=[\s\S]*\b(?:verify|tell|check|work|worked|working|effect|took effect)\b)/i,
+    queries: [
+      "src/lib/elections/electoralLaws.ts votingAgeEligibleByCountry registrationAccessBiasByCountry",
+      "src/lib/demographics/phase.ts votingAgeFor votingEligiblePopulation",
+      "src/lib/constants/votingAge.ts resolveVotingAgeEligible countryId",
+      "src/lib/turn/partyOrg/regDriftDecay.ts registrationDriftMultiplier registrationDecayMultiplier orgRegLedger",
+      "electoral law enacted bill provisions status registration influence UI",
+    ],
+    guidance: "Explain verification at three boundaries: the bill must be enacted with the expected electoral-law provision; the enacting country's stored voting-age and registration-access values must match; then the following turn must show the derived effects. For registration access +50, name the exact 1.5x upward Org-to-Reg drift and 0.5x decay rates and point to registration changes or ledger rows. For voting age, point to votingEligiblePopulation derived from the country's cohort vector. Do not claim a live value changed unless live evidence contains the before and after values. In a bloc-list chamber, fixed party seat shares are not a valid test of these laws.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/enacted|passed|bill status/i.test(text) || !/provision/i.test(text)) return "The answer must first verify that the electoral-law provision was enacted, not merely proposed.";
+      if (!/votingEligiblePopulation|eligible population/i.test(text)) return "The answer must identify the country-scoped eligible-population readout as the voting-age effect.";
+      if (!/1\.5\s*(?:x|times)|one and a half/i.test(text) || !/0\.5\s*(?:x|times)|half/i.test(text)) return "The answer must give registration +50's exact effects: 1.5x registration drift and 0.5x decay.";
+      if (!/fixed|bloc-list|bloc list/i.test(text) || !/seat/i.test(text)) return "The answer must warn that DDR's fixed party seat shares are not a test of voting-age or registration changes.";
+      return "";
+    },
+  },
+  {
     match: /\b(?:spin[\s-]?off|sell off|float)\b[\s\S]{0,60}\b(?:state|national|public)\s+(?:corp|corporation|enterprise)|\b(?:state|national)\s+(?:corp|corporation|enterprise)\b[\s\S]{0,60}\b(?:spin[\s-]?off|sell off|float)\b/i,
     queries: [
       "privatize national corporation treasury authority IPO auction",

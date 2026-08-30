@@ -8,6 +8,7 @@ const STOP = new Set([
   "a", "an", "and", "as", "at", "by", "for", "from", "in", "into", "is",
   "me", "of", "on", "or", "show", "the", "to", "with",
 ]);
+const OPEN_ENDED_VISUAL = /(?=[\s\S]*\b(?:visuali[sz](?:e|ation)|chart|graph|plot|map)\b)(?=[\s\S]*\b(?:interesting|surprising|insightful|showcase|anything|something)\b)/i;
 
 function words(value) {
   return String(value || "")
@@ -75,7 +76,25 @@ function plan(question, catalog, context = {}) {
     }
   }
   candidates.sort((a, b) => b.score - a.score);
-  const chosen = candidates[0];
+  let chosen = candidates[0];
+  let showcase = false;
+  // An open-ended visualization has no metric words to match. Let catalog
+  // order declare the default showcase, while supporting explicit showcase
+  // markers when the catalog grows. The selected values still come from the
+  // live analytics query, never from the answer model.
+  if (!chosen && OPEN_ENDED_VISUAL.test(String(question || ""))) {
+    for (const dataset of catalog?.datasets || []) {
+      const metric = (dataset.metrics || []).find(item => item.showcase === true)
+        || (dataset.showcaseMetric
+          ? (dataset.metrics || []).find(item => item.id === dataset.showcaseMetric)
+          : null)
+        || dataset.metrics?.[0];
+      if (!metric || !choosePresentation(question, dataset)) continue;
+      chosen = { dataset, metric, score: 0 };
+      showcase = true;
+      break;
+    }
+  }
   if (!chosen) return null;
 
   const presentation = choosePresentation(question, chosen.dataset);
@@ -111,7 +130,9 @@ function plan(question, catalog, context = {}) {
     presentation,
     args,
     score: chosen.score,
-    rationale: `catalog metric ${chosen.metric.id}; ${presentation} is supported by ${chosen.dataset.id}`,
+    rationale: showcase
+      ? `catalog showcase ${chosen.dataset.id}.${chosen.metric.id}; ${presentation} is its supported default`
+      : `catalog metric ${chosen.metric.id}; ${presentation} is supported by ${chosen.dataset.id}`,
   };
 }
 
