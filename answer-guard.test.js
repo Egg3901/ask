@@ -42,6 +42,16 @@ test("public answers preserve generic quantified military mechanics", () => {
   assert.equal(guard.protectPublicAnswer(requirement, "What does a Logistics Command do?"), requirement);
   const hypothetical = "If your country has no Logistics Command, regional supply throughput falls.";
   assert.equal(guard.protectPublicAnswer(hypothetical, "What does a Logistics Command do?"), hypothetical);
+  const missionMechanic = "A country's air-superiority figure is built by formations stationed in the region on CAP or PATROL. It builds by 12 and decays by 15 per turn.";
+  assert.equal(guard.protectPublicAnswer(
+    missionMechanic,
+    "Which air missions build air superiority, where do they count, and how quickly does it build or decay?",
+  ), missionMechanic);
+  const workedExample = "With hostile weight at 0, one wing on CAP builds the channel by 12 per turn.";
+  assert.equal(guard.protectPublicAnswer(
+    workedExample,
+    "Which air missions build air superiority, where do they count, and how quickly does it build or decay?",
+  ), workedExample);
 
   const namedLeak = "East has no Logistics Command assigned to the region.";
   assert.notEqual(guard.protectPublicAnswer(namedLeak, "How does regional supply work?"), namedLeak);

@@ -31,13 +31,13 @@ const GENERIC_MILITARY_MECHANIC = new RegExp(
   String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
   "i",
 );
-const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b/i;
+const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
 const CAPITALIZED_WORD = /^[A-Z][A-Za-z'-]*/;
 const CAPITALIZED_LOCATION = /\b(?:from|in|near|for|within|of)\s+([A-Z][A-Za-z'-]+)\b/g;
 const CAPITALIZED_ANYWHERE = /\b[A-Z][A-Za-z'-]*\b/g;
-const GENERIC_HYPOTHETICAL = /^(?:if|when|unless|without|to)\b|\b(?:must|needs? to|has to|can|may|should)\b/i;
+const GENERIC_HYPOTHETICAL = /^(?:if|when|unless|without|with|to)\b|\b(?:must|needs? to|has to|can|may|should)\b/i;
 const GENERIC_NAME_WORDS = new Set([
-  "a", "an", "the", "each", "every", "you", "to", "in", "under", "when", "if", "for", "without",
+  "a", "an", "the", "each", "every", "you", "to", "in", "under", "when", "if", "for", "with", "without",
   "logistics", "airlift", "command", "commands", "unit", "units", "formation", "formations",
   "division", "divisions", "brigade", "brigades", "battalion", "battalions", "regiment", "regiments",
   "corps", "squadron", "squadrons", "wing", "wings", "fleet", "fleets", "carrier", "task", "naval",
@@ -52,7 +52,8 @@ function isGenericMilitaryMechanicSentence(sentence, question) {
   if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
   if (!GENERIC_MECHANICS_QUESTION.test(String(question || ""))) return false;
   const hasUnknownName = [...text.matchAll(CAPITALIZED_ANYWHERE)]
-    .some((match) => !GENERIC_NAME_WORDS.has(match[0].toLowerCase().replace(/'s$/, "")));
+    .some((match) => !/^[A-Z0-9_]{2,}$/.test(match[0])
+      && !GENERIC_NAME_WORDS.has(match[0].toLowerCase().replace(/'s$/, "")));
   if (GENERIC_HYPOTHETICAL.test(text) && !hasUnknownName) return true;
   if (/\b(?:your|their|our|its|this|that)\s+(?:country|nation|force|forces|army|military)\b/i.test(text)) return false;
   const subject = text.match(CAPITALIZED_WORD)?.[0]?.toLowerCase().replace(/'s$/, "");
