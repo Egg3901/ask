@@ -129,6 +129,15 @@ const INDEX_BROWSE_DEFS = [
   },
 ];
 
+const CAPABILITY_DEF = {
+  type: "function",
+  function: {
+    name: "list_capabilities",
+    description: "List everything Ask can currently retrieve: source evidence, change history, and the public read-only live game tools. Use when asked what Ask, its API, or its tools can provide.",
+    parameters: { type: "object", properties: {} },
+  },
+};
+
 // Change history. Separate from search_code because they answer different
 // questions: search_code says what the game does, these say when it started
 // doing it. A player reporting that something broke, dropped or "used to" work
@@ -172,6 +181,7 @@ Work like an investigator:
 - Read the question and the evidence already collected. Decide what is still missing to answer it fully and precisely.
 - Call tools to fill exactly those gaps. Follow leads: if an excerpt references a constant, file, or system you have not seen, search for it. If the question names a corporation, country, or election and live tools are available, look it up.
 - If semantic search misses a formula or named mechanic, call grep_code with its exact words or likely camelCase symbol, then read_file on the matching path. Do not report a mechanic absent until both search styles miss it.
+- If the player asks what Ask, its API, or its tools can provide, call list_capabilities. Do not infer the inventory from examples or source filenames.
 - If the player says something changed, broke, dropped, got worse, or used to work differently, search the change history for the files the code excerpts came from, then read the one change that fits. Current code cannot date a change; only the history can.
 - Prefer few, well-aimed calls. Stop as soon as the evidence would let a careful writer answer with real numbers and mechanisms.
 - A search that finds nothing is itself evidence: it means the game likely does not model that thing. Note it, do not keep rephrasing the same hunt more than once.
@@ -182,8 +192,32 @@ UNKNOWN: <what you searched for and could not find, or "nothing" if the evidence
 Never call a tool for data about other players' private holdings or hidden information. Public data only.`;
 
 function needsMechanicEvidence(question) {
-  return /\b(?:calculat(?:e|ed|ion)|formula|affect(?:s|ed|ing)?|impact|cause|causing|driv(?:e|es|ing)|lower|reduce|cut|curb|raise|increase|decrease|fastest|how does|what happens if)\b/i
+  return /\b(?:calculat(?:e|ed|ion)|formula|affect(?:s|ed|ing)?|impact|cause|causing|driv(?:e|es|ing)|lower|reduce|cut|curb|raise|increase|decrease|fastest|limits?|how does|what happens if|comes? from|source of|determines?)\b/i
     .test(String(question || ""));
+}
+
+function needsCapabilityInventory(question) {
+  return /\b(?:list|show|what|which|everything|all)\b[\s\S]{0,45}\b(?:your|ask(?:'s)?)\s*(?:api|tools?|capabilit(?:y|ies)|data)\b|\b(?:list|show)\b[\s\S]{0,35}\b(?:api|tools?)\b|\bwhat can (?:you|ask) (?:access|retrieve|show|answer)\b/i
+    .test(String(question || ""));
+}
+
+async function capabilityCatalog() {
+  const tools = await mcp.listTools("gamestate");
+  const publicTools = Array.isArray(tools)
+    ? tools.filter(tool => LIVE_ALLOWLIST.has(tool.name)).map(tool => ({
+      name: tool.name,
+      description: String(tool.description || "").replace(/\s+/g, " ").trim().slice(0, 300),
+    }))
+    : [];
+  return JSON.stringify({
+    evidence: [
+      "semantic search across executable code, engineering docs, and the player wiki",
+      "literal symbol and path search plus reading complete indexed source files",
+      "deployed Git change history with commit details",
+    ],
+    livePublicTools: publicTools,
+    privacy: "Character-scoped tools are pinned to the signed-in player. Other players' private holdings and hidden information are unavailable.",
+  }, null, 2);
 }
 
 function cap(text, limit = RESULT_CAP) {
@@ -209,6 +243,7 @@ async function liveToolDefs() {
 }
 
 async function execute(name, args, { useLive, context, game, historyDays }) {
+  if (name === "list_capabilities") return capabilityCatalog();
   if (name === "search_code") {
     const found = await retrieve.search(String(args.query || ""), { topK: 5, maxChars: 9000, game });
     return found ? found.context : "No matching source found for that query.";
@@ -268,7 +303,7 @@ async function execute(name, args, { useLive, context, game, historyDays }) {
 async function run({ question, context = null, useLive = false, deep = false, onAction = null, game = null, changeQuestion = false }) {
   const caps = deep ? CAPS.deep : CAPS.standard;
   const historyDefs = (await history.available(game)) ? HISTORY_TOOL_DEFS : [];
-  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, ...historyDefs, ...(useLive ? await liveToolDefs() : [])];
+  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs() : [])];
   const historyDays = history.sinceDaysFor(question);
   const started = Date.now();
 
@@ -355,4 +390,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
   };
 }
 
-module.exports = { run, needsMechanicEvidence, LIVE_ALLOWLIST, SELF_ONLY_TOOLS };
+module.exports = {
+  run, needsMechanicEvidence, needsCapabilityInventory, capabilityCatalog,
+  LIVE_ALLOWLIST, SELF_ONLY_TOOLS,
+};

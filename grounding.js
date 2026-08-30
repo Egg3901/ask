@@ -57,6 +57,25 @@ const CONDENSE_SYSTEM = `You rewrite a follow-up question into one standalone se
 
 The follow-up only makes sense inside the conversation ("what about the UK?", "and if I lose?"). Combine it with the conversation so the query names the actual systems, entities, and mechanics being asked about. Reply with ONLY the query text, under 30 words.`;
 
+const CONTEXT_TERM_STOP = new Set(["What", "How", "Where", "When", "Why", "Which", "Available", "The", "This", "That"]);
+
+function namedContextTerms(historyTurns, question) {
+  if (!/\b(?:scores?|stats?|these|those|them|it|that|this|increase|raise|lower)\b/i.test(String(question || ""))) return [];
+  const priorUser = [...(historyTurns || [])].reverse().find(turn => turn?.role === "user");
+  if (!priorUser) return [];
+  const words = String(priorUser.content || priorUser.question || "").match(/\b[A-Z][a-zA-Z]{3,}\b/g) || [];
+  return [...new Set(words.filter(word => !CONTEXT_TERM_STOP.has(word)))].slice(0, 8);
+}
+
+function restoreContextTerms(query, historyTurns, question) {
+  const base = String(query || "").trim();
+  const standalone = base.length >= 8 && base.length <= 300 ? base : String(question || "").trim();
+  if (!standalone) return null;
+  const missing = namedContextTerms(historyTurns, question)
+    .filter(term => !standalone.toLowerCase().includes(term.toLowerCase()));
+  return missing.length ? `${standalone}: ${missing.join(", ")}`.slice(0, 300) : standalone;
+}
+
 /**
  * Standalone retrieval query for a follow-up turn. "What about the UK?" embeds
  * uselessly on its own; fused with the thread it retrieves what the player
@@ -74,7 +93,7 @@ async function condense(historyTurns, question) {
     maxTokens: 80, timeoutMs: 6000,
   });
   const q = String(raw || "").trim().replace(/^["']|["']$/g, "");
-  return q.length >= 8 && q.length <= 300 ? q : null;
+  return restoreContextTerms(q, historyTurns, question);
 }
 
 // Mechanical grounding: a file path named in the answer that was never in the
@@ -143,4 +162,4 @@ function note(claims) {
   return `\n\n> **Grounding check:** the game code I read does not confirm: ${claims.map(c => c.trim().replace(/\.$/, "")).join("; ")}. Treat those parts as general reasoning, not confirmed game rules.`;
 }
 
-module.exports = { decompose, check, note, condense, inventedPaths, pathNote, classifyPaths, missedPathNote };
+module.exports = { decompose, check, note, condense, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };

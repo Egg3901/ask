@@ -276,6 +276,22 @@ function exactTerms(question) {
     const camel = a + b[0].toUpperCase() + b.slice(1).toLowerCase();
     terms.set(camel, Math.max(terms.get(camel) || 0, 4));
   }
+  const upper = new Set(words.filter(word => /^[A-Z]{2,6}$/.test(word)));
+  if (upper.has("LC")) {
+    terms.set("localCurrency", 4);
+    terms.set("currency", Math.max(terms.get("currency") || 0, 2));
+  }
+  if (/\btech(?:nology)?\b/i.test(raw) && /\b(?:price|prices|cost|costs)\b/i.test(raw)) {
+    terms.set("techTree", 4);
+    terms.set("cashCost", 4);
+    terms.set("techNodeCashCost", 5);
+  }
+  if (/\binput\b/i.test(raw) && /\b(?:limit|limits|shortage|shortages|constraint|constraints)\b/i.test(raw)) {
+    terms.set("bindingInput", 5);
+    terms.set("inputAvailabilityPct", 5);
+    terms.set("inputCost", 4);
+    terms.set("getEffectiveStrategyRates", 4);
+  }
   return [...terms]
     .filter(([term]) => /^[A-Za-z0-9_.\/-]{2,80}$/.test(term))
     .slice(0, 20)
@@ -387,6 +403,17 @@ function readIndexedFile(filePath, { maxChars = 18000, game = null } = {}) {
     `SELECT path,ord,text,${projection} FROM chunks WHERE source_kind='code' AND path=? ORDER BY ord LIMIT 40`,
   ).all(key);
   return exactContext(rows, maxChars, st);
+}
+
+function mergeEvidence(primary, exact) {
+  if (!primary) return exact;
+  if (!exact) return primary;
+  return {
+    ...primary,
+    context: `${primary.context}\n\n${exact.context}`,
+    files: [...new Set([...(primary.files || []), ...(exact.files || [])])],
+    count: Number(primary.count || 0) + Number(exact.count || 0),
+  };
 }
 
 // Source authority applied to ranking, not just to the prompt.
@@ -523,4 +550,4 @@ function stats(game = null) {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
-module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, stats, embedQuery, hasPath };
+module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, hasPath };
