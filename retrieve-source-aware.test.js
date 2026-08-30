@@ -35,6 +35,15 @@ insert.run(7, "code", "game", "game123", "src/lib/constants/techTree/costs.ts", 
 insert.run(8, "code", "game", "game123", "src/lib/turn/corporation/sectorCalculations.ts", 0,
   "const bindingInput = ratios.lowest; const inputAvailabilityPct = bindingInput.ratio * 100;",
   Buffer.from(vector.buffer), 3);
+insert.run(9, "code", "game", "game123", "src/lib/navair/config.ts", 0,
+  "export const DAMAGE = { light: 1 };",
+  Buffer.from(Float32Array.from([0, 1, 0]).buffer), 3);
+insert.run(10, "code", "game", "game123", "src/lib/navair/config.ts", 1,
+  "export const BASING = { port: 1 };",
+  Buffer.from(Float32Array.from([0, 1, 0]).buffer), 3);
+insert.run(11, "code", "game", "game123", "src/lib/navair/config.ts", 2,
+  "export const EMBARGO = { buildPerTurn: 12, decayPerTurn: 15 };",
+  Buffer.from(Float32Array.from([0, 1, 0]).buffer), 3);
 for (const kind of ["code", "docs", "wiki"]) db.prepare("INSERT INTO source_revisions VALUES(?,?,?,?,?,?)")
   .run(kind, kind === "docs" ? "docs" : "game", `${kind}123`, "2026-08-23T00:00:00.000Z", 1, 1);
 db.prepare("INSERT INTO meta VALUES('generation','fixture')").run();
@@ -101,4 +110,11 @@ test("expands player wording for corporation input constraints", () => {
   const found = retrieve.searchExact("How do I solve input limits for my corp?", { limit: 5 });
   assert.equal(found.files[0], "src/lib/turn/corporation/sectorCalculations.ts");
   assert.match(found.context, /inputAvailabilityPct/);
+});
+
+test("an explicit long-file path returns the chunk containing the named symbol", () => {
+  const found = retrieve.searchExact("src/lib/navair/config.ts EMBARGO", { limit: 5, maxChars: 8000 });
+  assert.equal(found.files[0], "src/lib/navair/config.ts");
+  assert.match(found.context, /buildPerTurn: 12/);
+  assert.match(found.context, /decayPerTurn: 15/);
 });

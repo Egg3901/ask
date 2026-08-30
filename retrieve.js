@@ -230,7 +230,7 @@ const STOP = new Set(("the a an and or but if is are was were be been do does di
 function termsIn(question) {
   const q = String(question || "");
   const ids = new Set();
-  for (const m of q.matchAll(/\b[A-Z][A-Z0-9]{2,}(?:_[A-Z0-9]+)+\b/g)) ids.add(m[0]);        // CONST_NAME
+  for (const m of q.matchAll(/\b[A-Z][A-Z0-9]{2,}(?:_[A-Z0-9]+)*\b/g)) ids.add(m[0]);        // CONST or CONST_NAME
   for (const m of q.matchAll(/\b[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]{2,}\b/g)) ids.add(m[0]);   // camelCase
   for (const m of q.matchAll(/\b[\w/.-]+\.(?:ts|tsx|js|jsx|json)\b/g)) ids.add(m[0]);        // file.ts
   const words = (q.toLowerCase().match(/\b[a-z][a-z-]{4,}\b/g) || [])
@@ -356,7 +356,8 @@ function searchExact(question, { limit = 8, maxChars = 18000, game = null } = {}
     ? "c.source_kind source,c.repository,c.revision"
     : "'code' source,'' repository,'' revision";
   const byKey = new Map();
-  for (const { term, weight } of exactTerms(question)) {
+  const terms = exactTerms(question);
+  for (const { term, weight } of terms) {
     try {
       const pathProjection = st.sourceAware
         ? "source_kind source,repository,revision"
@@ -366,7 +367,18 @@ function searchExact(question, { limit = 8, maxChars = 18000, game = null } = {}
          WHERE source_kind='code' AND lower(path) LIKE ? ORDER BY path,ord LIMIT ?`,
       ).all(`%${term.toLowerCase()}%`, Math.max(20, Math.min(80, limit * 5)));
       for (const row of pathRows) {
-        const score = weight * 10 + 6 + exactQuality(row, term);
+        // An explicit file path can match every chunk in a long file. Prefer
+        // the chunk that also contains the named symbol or phrase, otherwise
+        // the first two chunks win by insertion order and the exact definition
+        // later in the file never reaches the model.
+        const body = String(row.text || "").toLowerCase();
+        const contentTerms = /[/.]/.test(term)
+          ? terms.filter(({ term: candidate, weight: candidateWeight }) =>
+            candidateWeight > 1 && candidate.toLowerCase() !== term.toLowerCase() && body.includes(candidate.toLowerCase()),
+          )
+          : [];
+        const definitionMatches = contentTerms.filter(({ term: candidate }) => exactQuality(row, candidate) >= 20).length;
+        const score = weight * 10 + 6 + exactQuality(row, term) + contentTerms.length * 10 + definitionMatches * 30;
         addExactCandidate(byKey, row, term, score);
       }
     } catch { /* path search is an enhancement */ }
