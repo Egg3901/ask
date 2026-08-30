@@ -608,6 +608,20 @@ const server = http.createServer(async (req, res) => {
         const visualizationRequested = vizAllowed && visualization.requested(question);
         const visualizations = vizAllowed && (visualizationRequested || (body.visualizations === true && plan.visual !== "none"));
         const convId = /^[A-Za-z0-9_-]{6,40}$/.test(body.convId || "") ? body.convId : crypto.randomUUID().slice(0, 18);
+        // Refuse explicit fog-of-war requests before opening the token stream.
+        // A post-generation guard can correct the final answer, but it cannot
+        // retract sensitive text that was already delivered as SSE deltas.
+        if (answerGuard.asksForPrivateMilitaryIntelligence(question)) {
+          return json(res, 200, {
+            convId,
+            answer: answerGuard.protectPublicAnswer("", question),
+            areas: [], citations: [], cached: false, usedMcp: false, cost: 0,
+            followup: 0, followupsLeft: 0, followups: [], vizBlocked: false,
+            reportUrl: null, liveSources: [], model: "Ask", modelId: "ask-privacy",
+            modelName: "Ask", conflicts: [], usage: store.usage(key, ent),
+            liveHint: null,
+          });
+        }
         // Live game state exists only for A House Divided: it is the one game
         // with a running shared world. For the others there is nothing to query,
         // so the request never becomes a live one and never spends live quota.

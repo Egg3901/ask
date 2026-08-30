@@ -5,6 +5,52 @@ const visualization = require("./visualization");
 const BLOCK = /```(?:mermaid|mmd|ahd-map)\s*\n[\s\S]*?```\s*/gi;
 const MAP_BLOCK = /```ahd-map\s*\n([\s\S]*?)```/i;
 
+const MILITARY_INVENTORY = String.raw`(?:logistics? commands?|airlift wings?|commands?|units?|formations?|divisions?|brigades?|battalions?|regiments?|corps|squadrons?|wings?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|personnel|equipment|readiness|deployments?|force strength|army strength|military strength|tanks?|aircraft|ships?|submarines?|missiles?|nuclear weapons?)`;
+const FORCE_POSSESSION = new RegExp(
+  String.raw`\b(?:has|have|had|lacks?|without|no|zero|fields?|fielded|deploys?|deployed|stations?|stationed|includes?|contains?)\b[^.!?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,60}\b(?:on (?:its|their|the) roster|in (?:its|their|the) forces?|available|deployed|stationed)\b`,
+  "i",
+);
+const FORCE_INVENTORY = /\b(?:live (?:military )?roster|current (?:military )?roster|force composition|order of battle|current deployments?|live readiness|live force strength)\b/i;
+const FORCE_QUANTITY = new RegExp(
+  String.raw`\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozens?|\d+(?:\.\d+)?%?)\b[^.!?\n]{0,35}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,35}\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozens?|\d+(?:\.\d+)?%?)\b`,
+  "i",
+);
+const FORCE_ABSENCE = new RegExp(
+  String.raw`\b(?:lacks?|missing|without|no|zero)\b[^.!?\n]{0,70}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,45}\b(?:absent|missing|unavailable)\b`,
+  "i",
+);
+const FORCE_OPERATION = new RegExp(
+  String.raw`\b(?:operates?|maintains?|fields?|deploys?|stations?|consists? of)\b[^.!?\n]{0,70}\b${MILITARY_INVENTORY}\b`,
+  "i",
+);
+const PRIVATE_MILITARY_QUESTION = new RegExp(
+  String.raw`\bhow many\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b(?:which|what)\b[^?\n]{0,45}\b${MILITARY_INVENTORY}\b[^?\n]{0,45}\b(?:does|do)\b[^?\n]{0,45}\b(?:have|field|deploy|station|operate|maintain|lack)\b|\bwhat is\b[^?\n]{0,75}\b(?:readiness|force strength|army strength|military strength|force composition|order of battle)\b|\b(?:does|do|is|are)\b[^?\n]{0,90}\b(?:have|field|deploy|station|operate|maintain|lack|missing|readiness)\b|\b(?:current|live|roster|force composition|order of battle)\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b`,
+  "i",
+);
+const GENERIC_MILITARY_MECHANIC = new RegExp(
+  String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
+  "i",
+);
+const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live military rosters, unit or command composition, readiness, deployments, or force strength. I can explain the mechanics or summarize the public war record instead.";
+
+function containsPrivateMilitaryIntelligence(answer) {
+  return String(answer || "").split(/(?<=[.!?])\s+|\n+/).some((sentence) => {
+    if (GENERIC_MILITARY_MECHANIC.test(sentence.trim())) return false;
+    return FORCE_INVENTORY.test(sentence) || FORCE_POSSESSION.test(sentence)
+      || FORCE_QUANTITY.test(sentence) || FORCE_ABSENCE.test(sentence) || FORCE_OPERATION.test(sentence);
+  });
+}
+
+function asksForPrivateMilitaryIntelligence(question) {
+  return PRIVATE_MILITARY_QUESTION.test(String(question || ""));
+}
+
+function protectPublicAnswer(answer, question = "") {
+  const text = String(answer || "").trim();
+  if (!asksForPrivateMilitaryIntelligence(question) && !containsPrivateMilitaryIntelligence(text)) return text;
+  return PRIVATE_MILITARY_REFUSAL;
+}
+
 function stripVisuals(answer) {
   return String(answer || "").replace(BLOCK, "").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -123,8 +169,13 @@ function matchingDataset(datasets, metric) {
 // Canonical maps and chart data are produced by the live adapters, never copied
 // from a model response.
 function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "" }) {
-  const text = String(answer || "").trim();
+  let text = String(answer || "").trim();
   const issues = [];
+  const protectedAnswer = protectPublicAnswer(text, question);
+  if (protectedAnswer !== text) {
+    text = protectedAnswer;
+    issues.push("private_military_intelligence_removed");
+  }
   const expected = plan?.display || { kind: "prose" };
   const map = expected.kind === "map" ? matchingMap(datasets, expected.metric) : null;
 
@@ -185,4 +236,9 @@ function inspect(answer, plan) {
   return [];
 }
 
-module.exports = { enforce, inspect, stripVisuals, looksLikeToolLeak, detectRefusal, detectBundleNarration, looksTruncated, datasetMatchesQuestion };
+module.exports = {
+  enforce, inspect, stripVisuals, looksLikeToolLeak, detectRefusal,
+  detectBundleNarration, looksTruncated, datasetMatchesQuestion,
+  containsPrivateMilitaryIntelligence, asksForPrivateMilitaryIntelligence,
+  protectPublicAnswer,
+};
