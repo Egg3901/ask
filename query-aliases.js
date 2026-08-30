@@ -3,6 +3,12 @@
 // Player vocabulary and code vocabulary are not always the same. These are
 // domain aliases, not answer facts: they widen retrieval so the model sees the
 // canonical subsystem before it decides that a feature does not exist.
+function normalizePlayerWording(question) {
+  return String(question || "")
+    .replace(/\bincra+ase\b/gi, "increase")
+    .replace(/\bair\s+s[a-z]*(?:prior|prio|rior|ority|oryt)[a-z]*\b/gi, "air superiority");
+}
+
 function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
   const text = String(answer || "");
   if (!/\bCAP\b/i.test(text) || !/\bPATROL\b/i.test(text)) return "The answer must name both air missions that count toward the contest: CAP and PATROL.";
@@ -14,6 +20,25 @@ function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
 }
 
 const RULES = [
+  {
+    match: /\bblockad(?:e|ing|ed)\b/i,
+    queries: [
+      "src/lib/navair/blockade.ts blockadeClosureFor tradeApproaches blockadeAffinityMultiplier",
+      "src/lib/navair/frontSupport.ts INTERDICTION fromSeaControl carrierPresent",
+      "src/lib/navair/config.ts NAVAL_MISSIONS BLOCKADE SEA_CONTROL",
+      "src/app/country/[code]/navair/page.tsx Naval and air command defense officeholder",
+      "src/app/country/[code]/navair/NavairCommandClient.tsx standing orders next turn",
+    ],
+    guidance: "Treat sea control, front interdiction, and economic blockade as separate mechanics. Explain that the conflict panel's 20 percent enemy supply cut is the front-interdiction value from total adjacent sea control when a carrier can reach inland; it is not the country's trade-blockade percentage. A trade blockade requires the defense officeholder to open Naval and air command, station naval formations on a target trade approach, and give them the Blockade standing order, which applies on the next turn. Partial closure raises trade friction; literal closure requires blockade pressure at least nine times that approach's port defence. Never infer or reveal the side's live fleet composition.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/naval and air command|\/country\/[a-z]{2,3}\/navair/i.test(text) || !/defen[cs]e/i.test(text)) return "The answer must say that the defense officeholder issues the order from Naval and air command.";
+      if (!/blockade/i.test(text) || !/standing order|posture|mission/i.test(text) || !/station|approach|region/i.test(text)) return "The answer must explain that naval formations must be stationed on a target trade approach with the Blockade standing order.";
+      if (!/20\s*%|20 percent/i.test(text) || !/interdiction|front supply|enemy supply/i.test(text) || !/separate|not (?:a |the )?(?:trade )?blockade/i.test(text)) return "The answer must distinguish the panel's 20 percent front-supply interdiction from the separate economic blockade mechanic.";
+      if (!/next turn|following turn/i.test(text)) return "The answer must state that new standing orders take effect on the next turn.";
+      return "";
+    },
+  },
   {
     match: /\bregime change\b[\s\S]{0,180}\b(?:coalition|join|player|rerun|run again|regain|election|government)\b|\b(?:coalition|join|player|rerun|run again|regain|election|government)\b[\s\S]{0,180}\bregime change\b/i,
     queries: [
@@ -110,17 +135,17 @@ const RULES = [
 ];
 
 function expand(question) {
-  const text = String(question || "");
+  const text = normalizePlayerWording(question);
   return [...new Set(RULES.filter(rule => rule.match.test(text) && !rule.exclude?.test(text)).flatMap(rule => rule.queries))];
 }
 
 function guidance(question) {
-  const text = String(question || "");
+  const text = normalizePlayerWording(question);
   return RULES.filter(rule => rule.match.test(text) && !rule.exclude?.test(text)).map(rule => rule.guidance).filter(Boolean).join("\n");
 }
 
 function answerIssue(question, answer) {
-  const text = String(question || "");
+  const text = normalizePlayerWording(question);
   for (const rule of RULES) {
     if (!rule.match.test(text) || rule.exclude?.test(text) || typeof rule.answerIssue !== "function") continue;
     const issue = rule.answerIssue(answer);
@@ -129,4 +154,4 @@ function answerIssue(question, answer) {
   return "";
 }
 
-module.exports = { expand, guidance, answerIssue };
+module.exports = { expand, guidance, answerIssue, normalizePlayerWording };

@@ -57,6 +57,34 @@ test("public answers preserve generic quantified military mechanics", () => {
   assert.notEqual(guard.protectPublicAnswer(namedLeak, "How does regional supply work?"), namedLeak);
 });
 
+test("ticket 1234 air-superiority typo still preserves a mechanics answer", () => {
+  const answer = "Station CAP and PATROL wings in the contested region. Air superiority builds by 12 per turn toward your contest share and decays by 15 when you lose that share.";
+  assert.equal(
+    guard.protectPublicAnswer(answer, "and how do we incraase air sueprioryty"),
+    answer,
+  );
+});
+
+test("a mechanics question does not make named live formations publishable", () => {
+  const answer = "Station Northland's three fighter wings in the contested region.";
+  assert.notEqual(
+    guard.protectPublicAnswer(answer, "How do we increase air superiority?"),
+    answer,
+  );
+});
+
+test("a follow-up uses its condensed mechanics context for the privacy guard", () => {
+  const answer = "The defense officeholder can open the Commands tab and select Open naval and air command.";
+  const result = guard.enforce({
+    answer,
+    question: "where can we find that tab",
+    privacyQuestion: "Where does the defense officeholder find Naval and air command to set a blockade?",
+    plan: { display: { kind: "prose" }, visual: "none" },
+  });
+  assert.equal(result.answer, answer);
+  assert.ok(!result.issues.includes("private_military_intelligence_removed"));
+});
+
 test("the final answer guard replaces military intelligence and records the issue", () => {
   const result = guard.enforce({
     answer: "Northland maintains two carrier groups near the coast.",

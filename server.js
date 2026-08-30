@@ -1046,7 +1046,7 @@ const server = http.createServer(async (req, res) => {
         const evidenceForCheck = [
           matchedCorrections.length ? corrections.block(matchedCorrections) : "",
           hits?.context, historyBlock, liveBlock, investigation?.text,
-          queryAliases.guidance(question),
+          queryAliases.guidance(retrievalQuestion),
         ].filter(Boolean).join("\n\n");
         let answerRepaired = false;
         let canonicalContractApplied = false;
@@ -1056,11 +1056,11 @@ const server = http.createServer(async (req, res) => {
           canonicalContractApplied = true;
           answerRepaired = true;
         }
-        const answerRequirement = answerRepair.requirementFor(question, evidenceForCheck);
+        const answerRequirement = answerRepair.requirementFor(retrievalQuestion, evidenceForCheck);
         if (!canonicalContractApplied && answerRepair.shouldRepair({ answer: noConflict, hasLiveData: useMcp, evidence: evidenceForCheck, requirement: answerRequirement })) {
           status("Rechecking the answer against the live evidence…");
           try {
-            const repaired = await answerRepair.repair({ question, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement });
+            const repaired = await answerRepair.repair({ question: retrievalQuestion, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement });
             if (repaired?.text) {
               noFu = repaired.text;
               answerRepaired = true;
@@ -1081,7 +1081,7 @@ const server = http.createServer(async (req, res) => {
         const citations = cited.citations;
         const guarded = answerGuard.enforce({
           answer: cited.text, datasets: liveVisualizations, plan,
-          visualizationsEnabled: visualizations, question,
+          visualizationsEnabled: visualizations, question, privacyQuestion: retrievalQuestion,
           privacyGuardEnabled: !moderatorAccess,
         });
         let answer = visualization.ensure(guarded.answer, liveVisualizations, { required: guarded.required, question });

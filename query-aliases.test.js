@@ -4,6 +4,27 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const aliases = require("./query-aliases");
 
+test("bridges ticket 1234 blockade wording to command, front support, and trade closure", () => {
+  const question = "how do we blockade ddr";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /blockadeClosureFor.*tradeApproaches/i.test(query)));
+  assert.ok(out.some(query => /INTERDICTION.*fromSeaControl/i.test(query)));
+  assert.ok(out.some(query => /NavairCommandClient/i.test(query)));
+  assert.match(aliases.guidance(question), /20 percent.*front-interdiction/i);
+  assert.match(aliases.answerIssue(question, "Set ships to Blockade."), /defense officeholder/i);
+  assert.equal(aliases.answerIssue(
+    question,
+    "The defense officeholder opens Naval and air command, stations naval formations on DDR's trade approach, and selects the Blockade standing order. The order takes effect on the next turn. The panel's 20 percent enemy supply cut is front supply interdiction and is separate from the trade blockade.",
+  ), "");
+});
+
+test("normalizes the air-superiority spelling from ticket 1234", () => {
+  const question = "and how do we incraase air sueprioryty";
+  const out = aliases.expand(question);
+  assert.ok(out.includes("CHANNEL_RATES airSuperiority"));
+  assert.match(aliases.guidance(question), /regional naval-air channel/i);
+});
+
 test("bridges player wording for a state-corporation spin-off to the canonical mechanic", () => {
   const out = aliases.expand("They can also spin off state corps right?");
   assert.ok(out.some(query => /privatiz/i.test(query)));

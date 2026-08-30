@@ -1,6 +1,7 @@
 "use strict";
 
 const visualization = require("./visualization");
+const queryAliases = require("./query-aliases");
 
 const BLOCK = /```(?:mermaid|mmd|ahd-map)\s*\n[\s\S]*?```\s*/gi;
 const MAP_BLOCK = /```ahd-map\s*\n([\s\S]*?)```/i;
@@ -32,6 +33,8 @@ const GENERIC_MILITARY_MECHANIC = new RegExp(
   "i",
 );
 const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
+const GENERIC_MECHANIC_INSTRUCTION = /^(?:open|go|set|move|assign|choose|use|put|keep|select|station|send|fly|order)\b/i;
+const LIVE_INSTRUCTION_TARGET = /\b(?:[A-Z][A-Za-z'-]+|[A-Z]{2,3})['’]s\b|\b(?:current|currently|live|existing|available|deployed|stationed)\b/i;
 const CAPITALIZED_WORD = /^[A-Z][A-Za-z'-]*/;
 const CAPITALIZED_LOCATION = /\b(?:from|in|near|for|within|of)\s+([A-Z][A-Za-z'-]+)\b/g;
 const CAPITALIZED_ANYWHERE = /\b[A-Z][A-Za-z'-]*\b/g;
@@ -50,7 +53,9 @@ const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live
 function isGenericMilitaryMechanicSentence(sentence, question) {
   const text = sentence.trim();
   if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
-  if (!GENERIC_MECHANICS_QUESTION.test(String(question || ""))) return false;
+  const normalizedQuestion = queryAliases.normalizePlayerWording(question);
+  if (!GENERIC_MECHANICS_QUESTION.test(normalizedQuestion)) return false;
+  if (GENERIC_MECHANIC_INSTRUCTION.test(text) && !LIVE_INSTRUCTION_TARGET.test(text)) return true;
   const hasUnknownName = [...text.matchAll(CAPITALIZED_ANYWHERE)]
     .some((match) => !/^[A-Z0-9_]{2,}$/.test(match[0])
       && !GENERIC_NAME_WORDS.has(match[0].toLowerCase().replace(/'s$/, "")));
@@ -197,11 +202,11 @@ function matchingDataset(datasets, metric) {
 // Prevent a model from presenting a plausible-looking but unsupported chart.
 // Canonical maps and chart data are produced by the live adapters, never copied
 // from a model response.
-function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyGuardEnabled = true }) {
+function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyQuestion = question, privacyGuardEnabled = true }) {
   let text = String(answer || "").trim();
   const issues = [];
   if (privacyGuardEnabled) {
-    const protectedAnswer = protectPublicAnswer(text, question);
+    const protectedAnswer = protectPublicAnswer(text, privacyQuestion);
     if (protectedAnswer !== text) {
       text = protectedAnswer;
       issues.push("private_military_intelligence_removed");
