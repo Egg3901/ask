@@ -4,6 +4,46 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const guard = require("./answer-guard");
 
+test("public answers remove live military intelligence paraphrases", () => {
+  const sensitive = [
+    "Northland currently operates three armored corps.",
+    "Northland's army consists of twelve infantry battalions.",
+    "Northland is at 43% readiness.",
+    "The Airlift Wing is absent from Northland forces.",
+    "Northland is missing a Logistics Command.",
+    "Northland maintains two carrier groups near the coast.",
+  ];
+  for (const answer of sensitive) {
+    assert.notEqual(guard.protectPublicAnswer(answer), answer, answer);
+  }
+});
+
+test("private military questions are refused before a euphemistic answer can pass", () => {
+  const answer = guard.protectPublicAnswer(
+    "They are well prepared.",
+    "How many battalions does Northland currently deploy?",
+  );
+  assert.match(answer, /public|fog of war|private military/i);
+  assert.doesNotMatch(answer, /well prepared/i);
+});
+
+test("public answers preserve generic quantified military mechanics", () => {
+  const mechanics = "A division contains three brigades in the formation model.";
+  assert.equal(guard.protectPublicAnswer(mechanics, "How are divisions composed?"), mechanics);
+  const commandMechanic = "A Logistics Command adds regional supply throughput.";
+  assert.equal(guard.protectPublicAnswer(commandMechanic, "What does a Logistics Command do?"), commandMechanic);
+});
+
+test("the final answer guard replaces military intelligence and records the issue", () => {
+  const result = guard.enforce({
+    answer: "Northland maintains two carrier groups near the coast.",
+    question: "What is happening near the coast?",
+    plan: { display: { kind: "prose" }, visual: "optional" },
+  });
+  assert.doesNotMatch(result.answer, /Northland|carrier groups/i);
+  assert.ok(result.issues.includes("private_military_intelligence_removed"));
+});
+
 test("flags a refusal when live evidence was available", () => {
   assert.equal(guard.detectRefusal("I cannot determine your net worth from what I have.", true), true);
   assert.equal(guard.detectRefusal("I do not have access to that.", true), true);
