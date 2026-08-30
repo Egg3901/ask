@@ -1223,6 +1223,7 @@ var CONVS=${JSON.stringify((conversations || []).map(c => ({ id: c.id, title: c.
 var STARTERS=${JSON.stringify(starterCatalog).replace(/</g, "\\u003c")};
 var LIVE_ICON=${JSON.stringify(icon("zap", { size: 10 }))},ARROW_ICON=${JSON.stringify(icon("arrow-right", { size: 15 }))};
 var MODEL_NAMES=${JSON.stringify(require("./models").displayMap())};
+var MODEL_PROVIDERS=${JSON.stringify(require("./models").providerMap())};
 var VIZ_ALLOWED=${entitlement?.visualizations ? "true" : "false"};
 var MODEL_URLS=${JSON.stringify(require("./models").urlMap())};
 var GAMES=${JSON.stringify(gameRegistry.publicList())};
@@ -1308,7 +1309,8 @@ var replayQuestion=new URLSearchParams(location.search).get('replay');
 if(replayQuestion){q.value=replayQuestion.slice(0,500);setTimeout(function(){q.focus();q.dispatchEvent(new Event('input'));},0);}
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
 function modelName(d){var id=d&&d.modelId?d.modelId:(d&&d.model?d.model:'');if(d&&d.modelName)return d.modelName;return MODEL_NAMES[id]||'';}
-function setFlags(turn,d){if(!turn)return;var n=turn.querySelector('.flag-model');if(!n)return;var name=modelName(d),url=MODEL_URLS[d.modelId||d.model];if(!name)return;if(url){n.innerHTML='<a href="'+esc(url)+'" target="_blank" rel="noopener" title="About '+esc(name)+'">'+esc(name)+'</a>';}else{n.textContent=name;}}
+function modelProvider(d){var id=d&&d.modelId?d.modelId:(d&&d.model?d.model:'');return d&&d.providerName?d.providerName:(MODEL_PROVIDERS[id]||'');}
+function setFlags(turn,d){if(!turn)return;var n=turn.querySelector('.flag-model');if(!n)return;var name=modelName(d),provider=modelProvider(d),label=name+(provider?' · '+provider:''),url=MODEL_URLS[d.modelId||d.model];if(!name)return;if(url){n.innerHTML='<a href="'+esc(url)+'" target="_blank" rel="noopener" title="About '+esc(label)+'">'+esc(label)+'</a>';}else{n.textContent=label;}}
 function mermaidCfg(){var light=document.documentElement.getAttribute('data-theme')==='light';
   var v=light
     ?{background:'#ffffff',primaryColor:'#f2f2f3',primaryTextColor:'#0a0a0a',primaryBorderColor:'#b0b0b0',lineColor:'#8a8a8a',secondaryColor:'#e6e6e7',tertiaryColor:'#f6f6f7',mainBkg:'#f2f2f3',nodeBorder:'#b0b0b0',clusterBkg:'#fafafa',clusterBorder:'#d4d4d4',textColor:'#0a0a0a',fontFamily:'Inter, system-ui, sans-serif'}
@@ -1923,8 +1925,8 @@ function sharedView(conv) {
       <div class="ask-q"><span class="qmark">Q</span><div class="qt">${esc(t.question)}</div></div>
       <div><div class="ask-ans-head">${mark(20)}
         <span class="lbl">Answer</span><span class="flag flag-model">${models.urlFor(t.model)
-          ? `<a href="${esc(models.urlFor(t.model))}" target="_blank" rel="noopener">${esc(models.displayFor(t.model))}</a>`
-          : esc(models.displayFor(t.model))}</span>
+          ? `<a href="${esc(models.urlFor(t.model))}" target="_blank" rel="noopener">${esc(models.displayFor(t.model))} · ${esc(models.providerDisplayFor(t.model))}</a>`
+          : `${esc(models.displayFor(t.model))} · ${esc(models.providerDisplayFor(t.model))}`}</span>
         ${t.id ? `<span class="ans-tools"><button class="tbtn" type="button" data-shared-report="${Number(t.id)}">Report</button></span>` : ""}</div>
         <div class="ask-direct" data-md>${esc(t.answer || "")}</div>
         ${(t.citations || []).length ? `<div class="srcs">${t.citations.map(c =>

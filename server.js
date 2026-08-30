@@ -15,6 +15,8 @@ const mcp = require("./mcp");
 const retrieve = require("./retrieve");
 const grounding = require("./grounding");
 const investigate = require("./investigate");
+const queryAliases = require("./query-aliases");
+const answerRepair = require("./answer-repair");
 const history = require("./history");
 const navigation = require("./navigation");
 const corrections = require("./corrections");
@@ -29,6 +31,7 @@ const answerAudit = require("./answer-audit");
 const ogImage = require("./og-image");
 const games = require("./games");
 const clarification = require("./clarification");
+const discordAsk = require("./discord-ask");
 
 // Where the docs build writes its output. Ask reads only the per-game logo from
 // it, so a missing docs build degrades to a 404 mark, never a broken page.
@@ -71,9 +74,13 @@ const html = (res, code, body) => {
   res.end(body);
 };
 async function readJson(req, cap = 16384) {
+  if (Object.hasOwn(req, "_askJson")) return req._askJson;
   let b = ""; req.on("data", c => { b += c; if (b.length > cap) req.destroy(); });
   await new Promise(r => req.on("end", r));
-  try { return JSON.parse(b || "{}"); } catch { return null; }
+  try {
+    req._askJson = JSON.parse(b || "{}");
+    return req._askJson;
+  } catch { return null; }
 }
 const norm = q => q.toLowerCase().replace(/\s+/g, " ").replace(/[?.!,]+$/, "").trim();
 
@@ -86,7 +93,7 @@ function askSecretOk(req) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
-  const p = url.pathname;
+  let p = url.pathname;
 
   try {
     if (req.method === "GET" && p === "/healthz") return json(res, 200, { ok: true });
@@ -257,7 +264,25 @@ const server = http.createServer(async (req, res) => {
       return json(res, answerId ? 200 : 400, { ok: Boolean(answerId), answerId, usage: store.discordUsage(body.discordId) });
     }
 
-    const session = await auth.resolve(req);
+    // Discord enters through the same pipeline as the browser. The shared
+    // secret authenticates the bot, then a synthetic public-player session
+    // gives the existing handler the same quota, self-scope, retrieval, live
+    // tools, guards, telemetry, and SSE events without a second answer engine.
+    let internalSession = null;
+    if (req.method === "POST" && p === "/api/discord-ask/answer") {
+      if (!askSecretOk(req)) return json(res, 401, { error: "Not authorized." });
+      const body = await readJson(req, 65536);
+      if (!body) return json(res, 400, { error: "Bad request." });
+      try {
+        internalSession = discordAsk.discordSession(body);
+        req._askJson = discordAsk.normalizeDiscordAsk(body);
+        p = "/api/ask";
+      } catch (error) {
+        return json(res, 400, { error: String(error?.message || error) });
+      }
+    }
+
+    const session = internalSession || await auth.resolve(req);
 
     // ── page ────────────────────────────────────────────────────────────────
     // Public, cacheable release notes. No session required — nothing here is
@@ -623,7 +648,7 @@ const server = http.createServer(async (req, res) => {
             areas: [], citations: [], cached: false, usedMcp: false, cost: 0,
             followup: 0, followupsLeft: 0, followups: [], vizBlocked: false,
             reportUrl: null, liveSources: [], model: "Ask", modelId: "ask-privacy",
-            modelName: "Ask", conflicts: [], usage: store.usage(key, ent),
+            modelName: "Ask", provider: "lakeside", providerName: "Lakeside", conflicts: [], usage: store.usage(key, ent),
             liveHint: null,
           });
         }
@@ -694,7 +719,7 @@ const server = http.createServer(async (req, res) => {
             citations: store.safeJson(hit.citations), cached: true, usedMcp: false, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
             model: router.label(cachedModel),
             modelId: cachedModel,
-            modelName: models.displayFor(cachedModel),
+            modelName: models.displayFor(cachedModel), provider: models.providerOf(cachedModel), providerName: models.providerDisplayFor(cachedModel),
             usage: u,
             // A "why is MY x so high" question answered from code alone: offer to
             // re-run it against live game state, if the player has live quota left.
@@ -769,7 +794,7 @@ const server = http.createServer(async (req, res) => {
         req.on("close", () => { clientGone = true; activeGenerations.delete(reqId); });
 
         send("meta", { convId, reqId, cost, followup, followupsLeft, usedMcp: useMcp, model: route.label, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
-          modelId: route.chain[0], modelName: models.displayFor(route.chain[0]), status: plan.status });
+          modelId: route.chain[0], modelName: models.displayFor(route.chain[0]), provider: models.providerOf(route.chain[0]), providerName: models.providerDisplayFor(route.chain[0]), status: plan.status });
 
         // A first-turn pronoun has no antecedent to retrieve. Letting semantic
         // search guess one produced a confident answer about an unrelated
@@ -794,7 +819,7 @@ const server = http.createServer(async (req, res) => {
             usedMcp: false, cost: 0, followup, followupsLeft, followups: [], vizBlocked,
             vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
             reportUrl: null, liveSources: [], model: "Ask", modelId: "ask-clarification",
-            modelName: "Ask", conflicts: [], usage: store.usage(key, ent), liveHint: null, validation,
+            modelName: "Ask", provider: "lakeside", providerName: "Lakeside", conflicts: [], usage: store.usage(key, ent), liveHint: null, validation,
           });
           try { res.end(); } catch {}
           return;
@@ -823,8 +848,16 @@ const server = http.createServer(async (req, res) => {
           // covers every system the question spans, not just the one the single
           // embedding lands nearest. decompose() fails open to [] and
           // searchMulti with no sub-queries is a plain search.
-          const subQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion);
+          const aliases = queryAliases.expand(retrievalQuestion);
+          const generatedQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion);
+          const subQueries = [...new Set([...generatedQueries, ...aliases])];
           hits = await retrieve.searchMulti(retrievalQuestion, subQueries, { ...retrieveOpts, game });
+          // Alias evidence answers a known player-language to code-language
+          // mismatch. Merge literal hits too, so top-K scoring for the original
+          // wording cannot evict the canonical neighboring subsystem.
+          for (const alias of aliases) {
+            hits = retrieve.mergeEvidence(hits, retrieve.searchExact(alias, { limit: 5, maxChars: 8000, game }));
+          }
           if (investigate.needsMechanicEvidence(retrievalQuestion)) {
             const exact = retrieve.searchExact(retrievalQuestion, { limit: 8, maxChars: 14000, game });
             hits = retrieve.mergeEvidence(hits, exact);
@@ -864,13 +897,14 @@ const server = http.createServer(async (req, res) => {
         if (matchedCorrections.length) status(`Injecting ${matchedCorrections.length} verified correction${matchedCorrections.length === 1 ? "" : "s"}…`);
 
         // Live game state, only when asked for and only read-only.
-        let liveBlock = "", liveVisualizations = [], liveEvidence = { tools: [], visualizations: [] };
+        let liveBlock = "", liveVisualizations = [], liveAnswerContract = null, liveEvidence = { tools: [], visualizations: [] };
         let liveTargeted = false;
         if (useMcp) {
           status(plan.status || "Querying live game state (read-only)…");
           try {
             const intelligence = await mcp.liveIntelligence(question, session.context, null, plan, onAction);
             liveBlock = intelligence.text;
+            liveAnswerContract = intelligence.answerContract || null;
             liveTargeted = intelligence.targeted === true;
             liveVisualizations = intelligence.visualizations || [];
             liveEvidence = {
@@ -882,6 +916,7 @@ const server = http.createServer(async (req, res) => {
           } catch {
             liveBlock = "";
             liveVisualizations = [];
+            liveAnswerContract = null;
           }
         }
 
@@ -946,6 +981,7 @@ const server = http.createServer(async (req, res) => {
               + (historyBlock ? `\n\n${historyBlock}` : "")
               + (liveBlock ? `\n\n${liveBlock}` : "")
               + (investigation ? `\n\n${investigation.text}` : "")
+              + (queryAliases.guidance(question) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(question)}` : "")
               // "Where do I find this" is answered from the real menu map, not guessed.
               + (navBlock ? `\n\n${navBlock}` : ""),
             // Deep answers are for exploring a system across several turns, so
@@ -1000,10 +1036,48 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        const { text: noFu, followups } = prompt.extractFollowups(raw);
+        let { text: noFu, followups } = prompt.extractFollowups(raw);
         const { text: noConflict, conflicts } = prompt.extractConflicts(noFu);
+        // The old pipeline only logged a refusal despite already holding live
+        // evidence. Repair that response while the request is still open, then
+        // let the normal citation and safety guards inspect the repaired answer.
+        // The web client replaces streamed draft text with the canonical done
+        // payload, while Discord only consumes that final payload.
+        const evidenceForCheck = [
+          matchedCorrections.length ? corrections.block(matchedCorrections) : "",
+          hits?.context, historyBlock, liveBlock, investigation?.text,
+          queryAliases.guidance(question),
+        ].filter(Boolean).join("\n\n");
+        let answerRepaired = false;
+        let canonicalContractApplied = false;
+        if (liveAnswerContract) {
+          noFu = liveAnswerContract;
+          servedModel = "ask-live-contract";
+          canonicalContractApplied = true;
+          answerRepaired = true;
+        }
+        const answerRequirement = answerRepair.requirementFor(question, evidenceForCheck);
+        if (!canonicalContractApplied && answerRepair.shouldRepair({ answer: noConflict, hasLiveData: useMcp, evidence: evidenceForCheck, requirement: answerRequirement })) {
+          status("Rechecking the answer against the live evidence…");
+          try {
+            const repaired = await answerRepair.repair({ question, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement });
+            if (repaired?.text) {
+              noFu = repaired.text;
+              answerRepaired = true;
+              if (repaired.model) servedModel = repaired.model;
+              if (repaired.usage) {
+                llmUsage = {
+                  prompt_tokens: Number(llmUsage.prompt_tokens || 0) + Number(repaired.usage.prompt_tokens || 0),
+                  completion_tokens: Number(llmUsage.completion_tokens || 0) + Number(repaired.usage.completion_tokens || 0),
+                };
+              }
+            }
+          } catch { /* the original answer remains visible and auditable */ }
+        }
+        const finalConflictExtraction = answerRepaired ? prompt.extractConflicts(noFu) : { text: noConflict, conflicts: [] };
+        if (finalConflictExtraction.conflicts.length) conflicts.push(...finalConflictExtraction.conflicts);
         if (conflicts.length) store.recordConflicts(conflicts, { question, user_key: key });
-        const cited = cites.apply(noConflict, { question, game });
+        const cited = cites.apply(finalConflictExtraction.text, { question, game });
         const citations = cited.citations;
         const guarded = answerGuard.enforce({
           answer: cited.text, datasets: liveVisualizations, plan,
@@ -1022,10 +1096,6 @@ const server = http.createServer(async (req, res) => {
         // Judge against EVERYTHING the answer model saw. Checking against the
         // retrieval context alone would flag claims grounded in live data or
         // investigation evidence.
-        const evidenceForCheck = [
-          matchedCorrections.length ? corrections.block(matchedCorrections) : "",
-          hits?.context, historyBlock, liveBlock, investigation?.text,
-        ].filter(Boolean).join("\n\n");
         // Deep AND pro: deep is where bridging invention was measured, but pro
         // exists for exactly the multi-system questions that invite it, and a
         // check that only runs on ~5% of traffic protects nobody. Flash gets
@@ -1074,7 +1144,7 @@ const server = http.createServer(async (req, res) => {
         // leaking as an answer, and it is the single most common failure shape.
         const narratedEvidence = answerGuard.detectBundleNarration(answer);
         if (narratedEvidence) console.warn(`[ask] evidence-bundle narration plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : [])], grounding: groundingNotes, inventedPaths, missedPaths };
+        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : [])], grounding: groundingNotes, inventedPaths, missedPaths };
         const areas = cites.areasFor(hits?.files || []);
 
         if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {
@@ -1149,13 +1219,15 @@ const server = http.createServer(async (req, res) => {
         }
 
         send("done", {
-          convId, answerId, answer, areas, citations, cached: false, usedMcp: useMcp,
+          convId, answerId, answer, areas, citations, cached: false, usedMcp: liveDataRead,
           cost, followup, followupsLeft, followups, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0, reportUrl,
           // What live game state this answer actually read, named for a player.
           liveSources: liveSourcesUsed,
           model: router.label(servedModel),
           modelId: servedModel,
           modelName: models.displayFor(servedModel),
+          provider: models.providerOf(servedModel),
+          providerName: models.providerDisplayFor(servedModel),
           conflicts: conflicts.map(c => ({ source: c.source, page: c.page, claim: c.claim, actual: c.actual })),
           usage: store.usage(key, ent),
           // Answered from code but the question reads like a live-state one, and
@@ -1165,7 +1237,7 @@ const server = http.createServer(async (req, res) => {
         });
         // Random-sample QA: a free model re-reads this answer and logs whether
         // it actually answered. Fire-and-forget — must not delay res.end().
-        answerAudit.maybeAudit({ answerId, question, answer, hadLive: useMcp, issues: validation.issues });
+        answerAudit.maybeAudit({ answerId, question, answer, hadLive: liveDataRead, issues: validation.issues });
 
         try { res.end(); } catch {}
         return;

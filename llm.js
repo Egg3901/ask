@@ -34,6 +34,24 @@ const URLS = {
   opencodego: () => process.env.OPENCODE_GO_URL || "https://opencode.ai/zen/go/v1/chat/completions",
   commandcode: () => process.env.COMMANDCODE_URL || "https://api.commandcode.ai/provider/v1/chat/completions",
 };
+
+// Railway service references are normally configured as a base URL. Ollama's
+// OpenAI-compatible request contract lives at /v1/chat/completions, so posting
+// the same body to the service root produces a 405. Preserve explicit paths,
+// but make a bare host safe in every environment.
+function completionUrl(provider, configured = URLS[provider]?.()) {
+  const raw = String(configured || "").trim();
+  if (provider !== "ollama" || !raw) return raw;
+  try {
+    const url = new URL(raw);
+    if (url.pathname === "/" || url.pathname === "/v1" || url.pathname === "/v1/") {
+      url.pathname = "/v1/chat/completions";
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return raw;
+  }
+}
 const DEFAULT_MODEL = process.env.ASK_MODEL || models.CHAINS.flash[0];
 const RETRIES_PER_MODEL = Number(process.env.ASK_LLM_RETRIES || 2);
 
@@ -147,7 +165,7 @@ async function attempt({ id, system, history, question, effort, maxTokens, onDel
       return { text: msg, usage: j.usage || null, finish, model: id, effort: resolved };
     }
 
-    const r = await fetch(URLS[provider](), {
+    const r = await fetch(completionUrl(provider), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -312,7 +330,7 @@ const HELPER_FREE_TIMEOUT_MS = Number(process.env.ASK_HELPER_FREE_TIMEOUT_MS || 
 
 async function helperAttempt(id, body, timeoutMs) {
   const provider = models.CATALOG[id]?.provider || (id.includes("/") ? "openrouter" : "deepseek");
-  const r = await fetch(URLS[provider](), {
+  const r = await fetch(completionUrl(provider), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -326,7 +344,12 @@ async function helperAttempt(id, body, timeoutMs) {
   });
   if (!r.ok) return null;
   const d = await r.json();
-  return d.choices?.[0]?.message || null;
+  const message = d.choices?.[0]?.message || null;
+  if (message) {
+    message._askModel = id;
+    message._askUsage = d.usage || null;
+  }
+  return message;
 }
 
 async function helperChat(body, timeoutMs) {
@@ -344,11 +367,17 @@ async function helperChat(body, timeoutMs) {
 }
 
 async function complete({ system, question, maxTokens = 600, timeoutMs = 12000 }) {
+  const result = await completeResult({ system, question, maxTokens, timeoutMs });
+  return result?.text || null;
+}
+
+async function completeResult({ system, question, maxTokens = 600, timeoutMs = 12000 }) {
   const msg = await helperChat({
     messages: [{ role: "system", content: system }, { role: "user", content: question }],
     temperature: 0, max_tokens: maxTokens,
   }, timeoutMs);
-  return msg?.content || null;
+  if (!msg?.content) return null;
+  return { text: msg.content, model: msg._askModel || null, usage: msg._askUsage || null };
 }
 
 // Raw chat turn for the investigator loop: full message list in, the model's
@@ -359,4 +388,4 @@ async function chatRaw({ messages, tools = null, maxTokens = 900, timeoutMs = 20
   return helperChat(body, timeoutMs);
 }
 
-module.exports = { stream, complete, chatRaw, cooldownState, MODEL: DEFAULT_MODEL, MAX_INFLIGHT, HELPER_CHAIN };
+module.exports = { stream, complete, completeResult, chatRaw, cooldownState, completionUrl, MODEL: DEFAULT_MODEL, MAX_INFLIGHT, HELPER_CHAIN };

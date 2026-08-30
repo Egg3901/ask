@@ -24,7 +24,7 @@ const FORCE_OPERATION = new RegExp(
   "i",
 );
 const PRIVATE_MILITARY_QUESTION = new RegExp(
-  String.raw`\bhow many\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b(?:which|what)\b[^?\n]{0,45}\b${MILITARY_INVENTORY}\b[^?\n]{0,45}\b(?:does|do)\b[^?\n]{0,45}\b(?:have|field|deploy|station|operate|maintain|lack)\b|\bwhat is\b[^?\n]{0,75}\b(?:readiness|force strength|army strength|military strength|force composition|order of battle)\b|\b(?:does|do|is|are)\b[^?\n]{0,90}\b(?:have|field|deploy|station|operate|maintain|lack|missing|readiness)\b|\b(?:current|live|roster|force composition|order of battle)\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b`,
+  String.raw`\bhow many\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b(?:which|what)\b[^?\n]{0,45}\b${MILITARY_INVENTORY}\b[^?\n]{0,45}\b(?:does|do)\b[^?\n]{0,45}\b(?:have|field|deploy|station|operate|maintain|lack)\b|\bwhat is\b[^?\n]{0,75}\b(?:readiness|force strength|army strength|military strength|force composition|order of battle)\b|\b(?:does|do|is|are)\b[^?\n]{0,90}\b(?:have|field|deploy|station|operate|maintain|lack|missing|readiness)\b|\b(?:current|live|roster|force composition|order of battle)\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b(?:compare|rank)\b[^?\n]{0,100}\b(?:current|live)\b[^?\n]{0,70}\b(?:militar(?:y|ies)|arm(?:y|ies)|armed forces?)\b`,
   "i",
 );
 const GENERIC_MILITARY_MECHANIC = new RegExp(

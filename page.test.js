@@ -304,13 +304,17 @@ test("the client bundle names the answering model without leaking a vendor slug"
   const names = all.match(/var MODEL_NAMES=(\{.*?\});/);
   assert.ok(names, "MODEL_NAMES not injected into the client");
   const map = JSON.parse(names[1]);
+  const providers = all.match(/var MODEL_PROVIDERS=(\{.*?\});/);
+  assert.ok(providers, "MODEL_PROVIDERS not injected into the client");
+  const providerMap = JSON.parse(providers[1]);
   const models = require("./models");
   for (const id of Object.values(models.CHAINS).flat()) {
     assert.ok(map[id], `${id} is routable but has no display name`);
     assert.ok(!map[id].includes("/"), `${id} display name leaks a vendor slug`);
+    assert.ok(providerMap[id], `${id} is routable but has no provider name`);
   }
 
-  // The tier badge is gone: the header shows only the model name chip.
+  // The tier badge is gone: the header shows model and provider provenance.
   assert.ok(!/function modelBadge/.test(all), "tier badge machinery should be removed");
   assert.ok(html.includes("flag flag-model"), "model chip markup missing");
   assert.ok(!html.includes('<span class="flag"></span>'), "empty tier badge span should be gone");

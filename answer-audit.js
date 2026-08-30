@@ -29,6 +29,7 @@ const AUDIT_ALWAYS = new Set([
   "narrated_evidence_bundle",
   "truncated",
   "refused_with_live_evidence",
+  "answer_contract_repaired",
   "irrelevant_visualization_withheld",
   "required_live_map_missing",
   "required_live_map_unavailable",

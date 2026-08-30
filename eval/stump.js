@@ -25,6 +25,8 @@ const games = require("../games");
 const navigation = require("../navigation");
 const history = require("../history");
 const clarification = require("../clarification");
+const queryAliases = require("../query-aliases");
+const answerRepair = require("../answer-repair");
 
 // A believable non-staff player context, so self-pinned tools exercise the
 // real privacy path instead of a staff bypass.
@@ -84,8 +86,13 @@ async function runCase(c) {
     retrievalQuestion = await grounding.condense(chatHistory, c.q).catch(() => null) || c.q;
   }
 
-  const subQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion).catch(() => []);
+  const aliases = queryAliases.expand(retrievalQuestion);
+  const generatedQueries = route.tier === "flash" ? [] : await grounding.decompose(retrievalQuestion).catch(() => []);
+  const subQueries = [...new Set([...generatedQueries, ...aliases])];
   let hits = await retrieve.searchMulti(retrievalQuestion, subQueries, { game }).catch(() => null);
+  for (const alias of aliases) {
+    hits = retrieve.mergeEvidence(hits, retrieve.searchExact(alias, { limit: 5, maxChars: 8000, game }));
+  }
   if (investigate.needsMechanicEvidence(retrievalQuestion)) {
     const exact = retrieve.searchExact(retrievalQuestion, { limit: 8, maxChars: 14000, game });
     hits = retrieve.mergeEvidence(hits, exact);
@@ -104,12 +111,13 @@ async function runCase(c) {
     historyBlock = recent ? recent.text : "";
   }
 
-  let liveBlock = "", liveTargeted = false;
+  let liveBlock = "", liveTargeted = false, liveAnswerContract = null;
   if (c.live) {
     try {
       const intel = await mcp.liveIntelligence(c.q, context, null, plan, null);
       liveBlock = intel.text || "";
       liveTargeted = intel.targeted === true;
+      liveAnswerContract = intel.answerContract || null;
     } catch {}
   }
   // Mirror server: flash runs the scout when live heuristics missed, and any
@@ -131,13 +139,20 @@ async function runCase(c) {
     + (historyBlock ? `\n\n${historyBlock}` : "")
     + (liveBlock ? `\n\n${liveBlock}` : "")
     + (investigation ? `\n\n${investigation.text}` : "")
+    + (queryAliases.guidance(c.q) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(c.q)}` : "")
     + (navBlock ? `\n\n${navBlock}` : "");
 
   const out = await llm.stream({ system, history: chatHistory, question: c.q, deep: false, tier: route.tier, chain: route.chain, effort: route.effort, onDelta: () => {} });
   const raw = out.text || "";
-  const { text: answer } = prompt.extractFollowups(raw);
+  let { text: answer } = prompt.extractFollowups(raw);
 
-  const evidence = [matched.length ? corrections.block(matched) : "", hits?.context, historyBlock, liveBlock, investigation?.text].filter(Boolean).join("\n\n");
+  const evidence = [matched.length ? corrections.block(matched) : "", hits?.context, historyBlock, liveBlock, investigation?.text, queryAliases.guidance(c.q)].filter(Boolean).join("\n\n");
+  const requirement = answerRepair.requirementFor(c.q, evidence);
+  if (liveAnswerContract) answer = liveAnswerContract;
+  else if (answerRepair.shouldRepair({ answer, hasLiveData: c.live, evidence, requirement })) {
+    const repaired = await answerRepair.repair({ question: c.q, answer, evidence, requirement }).catch(() => null);
+    if (repaired?.text) answer = repaired.text;
+  }
   const claims = await grounding.check(answer, evidence).catch(() => []);
   const split = grounding.classifyPaths(answer, evidence, retrieve.hasPath);
   const issues = answerGuard.inspect(answer, plan);

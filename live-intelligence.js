@@ -326,6 +326,51 @@ function sectorSummary(raw) {
   });
 }
 
+const MARKET_GAP_WORDS = /\b(?:not (?:own|owned|have|operate)|doesn'?t (?:own|have|operate)|missing|unowned|untapped|uncovered|potential (?:areas?|markets?|states?|regions?)|expansion opportunit)\b/i;
+
+function marketCoverage(raw, sectorType) {
+  const data = payload(raw);
+  const markets = (data?.currentStakes || [])
+    .filter(stake => !sectorType || stake.sector === sectorType)
+    .map(stake => ({
+      country: stake.country || null,
+      state: stake.state || null,
+      stateName: stake.stateName || null,
+      sharePct: Number.isFinite(Number(stake.sharePct)) ? Number(stake.sharePct) : null,
+    }));
+  return markets.length ? asJson(markets) : null;
+}
+
+function uncoveredHomeMarkets(sectorsRaw, universeRaw, country, sectorType) {
+  const sectors = payload(sectorsRaw);
+  const universe = payload(universeRaw);
+  const owned = new Set((sectors?.currentStakes || [])
+    .filter(stake => stake.sector === sectorType && stake.country === country)
+    .map(stake => String(stake.state || "")));
+  const uncovered = (universe?.regions || [])
+    .filter(region => region?.id && !owned.has(String(region.id)))
+    .map(region => ({ id: region.id, area: region.label || region.id, population: Number(region.value || 0) }))
+    .sort((a, b) => b.population - a.population);
+  if (!uncovered.length) return null;
+  return {
+    scope: country,
+    sector: sectorType,
+    uncoveredCount: uncovered.length,
+    // Potential means a useful shortlist. Population is the only comparable
+    // opportunity proxy in this lookup, so keep the ranking explicit instead
+    // of implying that it proves revenue or profitability.
+    largestUncoveredByPopulation: uncovered.slice(0, 20),
+    sizingCaveat: "Population is a sizing proxy only. Check live sector demand, input availability, and acquisition cost before investing.",
+  };
+}
+
+function marketGapAnswer(corporationName, gaps) {
+  const rows = gaps.largestUncoveredByPopulation.map((row, index) =>
+    `| ${index + 1} | ${row.area} | ${row.id} | ${Math.round(row.population).toLocaleString("en-US")} |`,
+  ).join("\n");
+  return `## Largest uncovered ${gaps.sector} markets in ${gaps.scope}\n\n${corporationName} has no ${gaps.sector} stake in the ${gaps.uncoveredCount} home-country areas outside its current coverage. These are the 20 largest uncovered areas by population:\n\n| Rank | Area | Region | Population |\n|---:|---|---|---:|\n${rows}\n\n> Population is a sizing proxy, not a profitability forecast. Check live sector demand, input availability, and acquisition cost before investing.`;
+}
+
 function dominantSector(raw) {
   const data = payload(raw);
   const totals = new Map();
@@ -435,6 +480,7 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
   const text = String(question || "");
   const parts = [];
   const visualizations = [];
+  let answerContract = null;
   const usedTools = [];
   const candidateMapRequested = plan?.intent === "candidate_roster" || mapMetric(text, "country") === "candidate_roster";
   const aggregateMapRequested = MAP_WORDS.test(text) && Boolean(geoAggregateMetric(text));
@@ -662,6 +708,26 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
     if (corporation) parts.push(`THIS PLAYER'S CORPORATION (${ownCorpName}${context.corporation.ticker ? `, ${context.corporation.ticker}` : ""}${context.corporation.role ? `, they are ${context.corporation.role}` : ""}):\n${cap(corporation, 3500)}`);
     if (sectors) parts.push(`${explicitState ? `FOCUSED CORPORATION MARKET CELL (${explicitState}, ${explicitSector})` : "THIS PLAYER'S CORPORATION SECTORS"}:\n${cap(sectorSummary(sectors), 4500)}`);
 
+    // A gap question needs a complete set difference, not the eight strongest
+    // stakes used by the ordinary overview. Preserve every owned market in a
+    // compact list and fetch the home-country region universe so the writer can
+    // calculate uncovered areas instead of refusing despite having live data.
+    if (sectors && explicitSector && MARKET_GAP_WORDS.test(text)) {
+      const coverage = marketCoverage(sectors, explicitSector);
+      if (coverage) parts.push(`COMPLETE OWNED ${explicitSector.toUpperCase()} MARKET COVERAGE (${ownCorpName}):\n${coverage}`);
+      const homeCountry = payload(corporation)?.corporation?.countryId;
+      if (homeCountry) {
+        const universe = await call("map_snapshot", { scope: "country", country: homeCountry, metric: "population" });
+        if (universe && !/MCP error/i.test(universe)) {
+          const gaps = uncoveredHomeMarkets(sectors, universe, homeCountry, explicitSector);
+          if (gaps) {
+            parts.push(`PRECOMPUTED UNCOVERED HOME-COUNTRY ${explicitSector.toUpperCase()} MARKETS (answer with this table now; do not refuse because a global universe is unavailable):\n${asJson(gaps)}`);
+            answerContract = marketGapAnswer(ownCorpName, gaps);
+          }
+        }
+      }
+    }
+
     const peerSector = explicitSector || (PEER_WORDS.test(text) ? dominantSector(sectors) : null);
     if (peerSector) {
       const comparison = await call("trace_sector", { sectorType: peerSector });
@@ -710,11 +776,12 @@ ${cap(sector, 5000)}`);
   if (visualizations.length) {
     parts.push(`VISUALIZATION DATA:\n${asJson(visualizations.slice(0, 2))}`);
   }
-  if (!parts.length) return { text: "", visualizations: [], usedTools, targeted: false };
+  if (!parts.length) return { text: "", visualizations: [], usedTools, targeted: false, answerContract };
   return {
     text: `LIVE GAME INTELLIGENCE (read-only, fetched just now; current facts outrank stale documentation):\n\n${parts.join("\n\n")}`,
     visualizations,
     usedTools,
+    answerContract,
     // False means the heuristics matched nothing and all we have is the world
     // snapshot every question gets. That is the state in which answers used to
     // tell players the data did not exist, so it is the signal to send the scout.

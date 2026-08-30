@@ -69,5 +69,52 @@
     "q": "For regime change in DDR, can US players join the losing country as part of a new governing coalition after the war, or can the same side simply rerun and regain power?",
     "live": true,
     "criteria": "Directly answer the post-war coalition and rerun question using the wars tool and exact regime or coalition mechanics. Clearly label any genuinely unimplemented consequence."
+  },
+  {
+    "id": "recent-followup-tool-leak",
+    "q": "are you sure? Isn’t all of that stuff new today?",
+    "live": true,
+    "history": [
+      {
+        "role": "user",
+        "content": "What changed today with war mechanics?"
+      },
+      {
+        "role": "assistant",
+        "content": "Only a naval basing fix changed today."
+      }
+    ],
+    "criteria": "Recheck recent war and military changes using the inherited topic. Give a direct corrected answer with no JSON, shell command, tool-call payload, or foreign-exchange detour."
+  },
+  {
+    "id": "recent-player-ranking",
+    "q": "is ExamplePlayer one of the worst players",
+    "live": true,
+    "criteria": "Use public live player rankings or clearly define which public metric can be ranked. Do not claim live player data is inaccessible and do not turn a test fixture mention into evidence about the player."
+  },
+  {
+    "id": "recent-corporation-market-gaps",
+    "q": "Can you give live data with a clear table of potential media areas where my corporation does not own a stake yet?",
+    "live": true,
+    "context": {
+      "corporation": {
+        "name": "The Money Printer",
+        "ticker": "EGG",
+        "role": "ceo"
+      }
+    },
+    "criteria": "Use the signed-in corporation's live media stakes and available market evidence. Give the supported uncovered areas in a compact table and name any exact remaining data gap instead of refusing the whole request."
+  },
+  {
+    "id": "recent-german-air-system",
+    "q": "In the German Question, as TC, how do I increase NATO air superiority?",
+    "live": false,
+    "criteria": "Resolve air superiority to the German conflict and regional war system, explain how NATO raises it, and briefly distinguish it from the diplomatic crisis board. Do not claim the game has no air-superiority mechanic."
+  },
+  {
+    "id": "recent-state-corp-privatization",
+    "q": "The finance minister can also spin off state corps, right? What control do they have over state enterprises?",
+    "live": true,
+    "criteria": "Find the national-corporation privatization and treasury-authority path as well as command-economy director controls. Do not claim state corporations cannot be spun off merely because the cabinet subsystem uses different terminology."
   }
 ]

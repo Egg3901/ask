@@ -13,6 +13,11 @@ test("recognizes requests for Ask's own data and tool inventory", () => {
   assert.equal(investigate.needsCapabilityInventory("what data determines inflation?"), false);
 });
 
+test("treats player-asserted capabilities as mechanics that require evidence", () => {
+  assert.equal(investigate.needsMechanicEvidence("They can also spin off state corps right?"), true);
+  assert.equal(investigate.needsMechanicEvidence("Can the finance minister privatize a state enterprise?"), true);
+});
+
 test("reclassifies every formerly general failure into a testable capability", () => {
   const expected = new Map([
     [13, "output_reliability"], [14, "output_reliability"],

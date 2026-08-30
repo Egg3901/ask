@@ -277,6 +277,10 @@ test("does not spend live quota on a purely timeless mechanics question", () => 
   assert.equal(mcp.looksLive("How are action points calculated?"), false);
 });
 
+test("recognizes a live player-ranking question even without the word rank", () => {
+  assert.equal(mcp.looksLive("is tweamonster one of the worst players"), true);
+});
+
 test("extracts an explicitly named corporation without treating private or own requests as names", () => {
   assert.equal(mcp.namedCorporation("Why is Tinkey corporation valued so highly?"), "Tinkey");
   assert.equal(mcp.namedCorporation("What is the balance sheet of Tinky Corporation?"), "Tinky");
@@ -392,6 +396,44 @@ test("uses player context to compare their corporation with live peers and chart
   assert.match(context, /RETAIL SECTOR COMPARISON BASELINE:/);
   assert.match(context, /VISUALIZATION DATA:/);
   assert.match(context, /Peer One/);
+});
+
+test("builds complete owned coverage and a region universe for corporation market-gap questions", async () => {
+  const calls = [];
+  const fakeCall = async (name, args) => {
+    calls.push({ name, args });
+    if (name === "game_overview") return "{}";
+    if (name === "trace_corp") return JSON.stringify({ corporation: { name: "My Company", countryId: "US" } });
+    if (name === "trace_sector") return JSON.stringify({
+      currentStakes: [
+        { country: "US", state: "CA", stateName: "California", sector: "media", sharePct: 20 },
+        { country: "US", state: "TX", stateName: "Texas", sector: "media", sharePct: 10 },
+      ],
+    });
+    if (name === "map_snapshot") return JSON.stringify({ regions: [
+      { id: "CA", label: "California", value: 1 },
+      { id: "TX", label: "Texas", value: 1 },
+      { id: "FL", label: "Florida", value: 1 },
+    ] });
+    return null;
+  };
+
+  const intelligence = await mcp.liveIntelligence(
+    "Give me a table of potential media areas my corporation does not own yet",
+    { corporation: { name: "My Company", role: "ceo" } },
+    fakeCall,
+  );
+  const context = intelligence.text;
+
+  assert.ok(calls.some(call => call.name === "map_snapshot" && call.args.country === "US"));
+  assert.match(context, /COMPLETE OWNED MEDIA MARKET COVERAGE/);
+  assert.match(context, /PRECOMPUTED UNCOVERED HOME-COUNTRY MEDIA MARKETS/);
+  assert.match(context, /Florida/);
+  assert.doesNotMatch(context, /California.*uncovered|Texas.*uncovered/i);
+  assert.match(intelligence.answerContract, /Largest uncovered media markets in US/);
+  assert.match(intelligence.answerContract, /Florida/);
+  assert.doesNotMatch(intelligence.answerContract, /California|Texas/);
+  assert.doesNotMatch(intelligence.answerContract, /\|\s*(?:revenue|profit)\b|\$[\d,.]+/i);
 });
 
 test("treats a named account corporation and its public peers as the player's corporation", async () => {
