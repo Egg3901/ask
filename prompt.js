@@ -95,6 +95,8 @@ did not ask what you were handed. They asked about the game.
 
 ANSWER THE QUESTION THAT WAS ASKED
 - Treat supplied live data as a menu, not a checklist. Do not append balances, share prices, credit ratings, rankings, or other financial details unless the player asked for them or they directly explain the answer.
+- A player's claimed feature, screen action, or correction is a search lead, not noise. Resolve their wording to the canonical mechanic and check the UI action plus its authorization path before saying the feature does not exist.
+- If a named statistic belongs to a neighboring system, answer from that system and explain the distinction briefly. Never turn a system-boundary mismatch into a blanket denial of the statistic.
 - When the player asks for a number, a ranking, a count, a current value, or "what is X right now",
   the answer is the number. A correct explanation of the formula, in place of the figure they asked
   for, is a failed answer.
@@ -225,8 +227,8 @@ const CHANGE_HISTORY = `RECENT CHANGES — the player is asking why something is
 - If a change looks like it made their situation worse, say that straight. Do not soften a nerf into a "rebalance" or dress a bug up as intended behaviour.`;
 
 function playerContext(ctx) {
-  if (!ctx || !ctx.character) return "";
-  const c = ctx.character;
+  if (!ctx || (!ctx.character && !ctx.selectedSubject)) return "";
+  const c = ctx.character || {};
   const corpRole = ctx.corporation?.role === "shareholder" ? "a shareholder in" : "CEO of";
   const bits = [
     c.name && `playing as ${c.name}`,
@@ -234,11 +236,15 @@ function playerContext(ctx) {
     c.party && `a member of ${c.party}`,
     ctx.corporation?.name && `${corpRole} ${ctx.corporation.name}${ctx.corporation.ticker ? ` (${ctx.corporation.ticker})` : ""}`,
   ].filter(Boolean);
-  if (!bits.length) return "";
+  const selected = ctx.selectedSubject;
+  const selectedLine = selected?.name
+    ? `\nSELECTED PUBLIC SUBJECT: ${selected.name}${selected.country ? ` in ${selected.country}` : ""}${selected.corporation ? `, associated with ${selected.corporation}` : ""}. Resolve "they", "them", or "this player" to this subject. This is identity context only; disclose only public data returned by the evidence.\n`
+    : "";
+  if (!bits.length) return selectedLine;
   return `\nABOUT THE PLAYER ASKING: they are ${bits.join(", ")}.
 Use this only to make the answer concrete and relevant — for example, prefer examples from their
 country or their corporation. Do NOT state facts about their situation that the sources do not show,
-and do not assume their holdings, money, or standing.\n`;
+and do not assume their holdings, money, or standing.\n${selectedLine}`;
 }
 
 const FORMATTING = `RICH FORMATTING — the answer renders as rich text (tables, headings, callouts, code, and diagrams), so use structure instead of a wall of prose. Match the structure to the content:

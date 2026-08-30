@@ -28,6 +28,7 @@ const llm = require("./llm");
 const retrieve = require("./retrieve");
 const mcp = require("./mcp");
 const history = require("./history");
+const queryAliases = require("./query-aliases");
 
 // Two effort levels. Deep questions get room to actually chase a thread across
 // systems; everything else stays tight so latency stays honest.
@@ -193,6 +194,9 @@ Work like an investigator:
 - Read the question and the evidence already collected. Decide what is still missing to answer it fully and precisely.
 - Call tools to fill exactly those gaps. Follow leads: if an excerpt references a constant, file, or system you have not seen, search for it. If the question names a corporation, country, or election and live tools are available, look it up.
 - If semantic search misses a formula or named mechanic, call grep_code with its exact words or likely camelCase symbol, then read_file on the matching path. Do not report a mechanic absent until both search styles miss it.
+- Player wording often names the screen action rather than the code concept. Search close product synonyms too (for example spin off / float / sell a state enterprise may be privatization of a national corporation), and inspect the UI action plus its authorization route before denying that a capability exists.
+- When the question names a tracked value from a neighboring subsystem, follow that value. Do not deny it merely because the first named feature does not own it (for example air superiority during the German war belongs to the war and regional air system, not the diplomatic crisis board).
+- Treat a player's correction or claimed capability as a strong search lead. Verify it, but do not override it with an absolute "does not exist" conclusion based on one subsystem or one failed wording match.
 - If the player asks what Ask, its API, or its tools can provide, call list_capabilities. Do not infer the inventory from examples or source filenames.
 - If the player says something changed, broke, dropped, got worse, or used to work differently, search the change history for the files the code excerpts came from, then read the one change that fits. Current code cannot date a change; only the history can.
 - Prefer few, well-aimed calls. Stop as soon as the evidence would let a careful writer answer with real numbers and mechanisms.
@@ -204,8 +208,9 @@ UNKNOWN: <what you searched for and could not find, or "nothing" if the evidence
 Never call a tool for data about other players' private holdings or hidden information. Public data only.`;
 
 function needsMechanicEvidence(question) {
-  return /\b(?:calculat(?:e|ed|ion)|formula|affect(?:s|ed|ing)?|impact|cause|causing|driv(?:e|es|ing)|lower|reduce|cut|curb|raise|increase|decrease|fastest|limits?|how does|what happens if|comes? from|source of|determines?)\b/i
-    .test(String(question || ""));
+  const text = String(question || "");
+  return /\b(?:calculat(?:e|ed|ion)|formula|affect(?:s|ed|ing)?|impact|cause|causing|driv(?:e|es|ing)|lower|reduce|cut|curb|raise|increase|decrease|fastest|limits?|how does|what happens if|comes? from|source of|determines?|authority|allowed|possible)\b/i.test(text)
+    || /\bcan\b[^?\n]{0,100}\b(?:do|appoint|control|direct|privati[sz]e|spin[\s-]?off|create|buy|sell|change|set|operate|manage)\b/i.test(text);
 }
 
 function needsCapabilityInventory(question) {
@@ -323,9 +328,13 @@ async function run({ question, context = null, useLive = false, deep = false, on
   const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs(isStaff) : [])];
   const historyDays = history.sinceDaysFor(question);
   const started = Date.now();
+  const resolution = queryAliases.guidance(question);
 
   const playerLine = context?.character?.name
     ? `\n(The asker plays ${context.character.name}${context.character.country ? ` in ${context.character.country}` : ""}${context.corporation?.name ? `, runs ${context.corporation.name}` : ""}.)`
+    : "";
+  const subjectLine = context?.selectedSubject?.name
+    ? `\n(The Discord command explicitly selected ${context.selectedSubject.name}${context.selectedSubject.country ? ` in ${context.selectedSubject.country}` : ""} as the public subject. Resolve pronouns to that character, but use only public tools and public facts.)`
     : "";
   const staffLine = isStaff
     ? `\n(The asker is STAFF: you MAY trace any named player or corporation they ask about, not only their own.)`
@@ -335,7 +344,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
     // A cheap scout model reads a conditional instruction in the system prompt
     // as optional and never fires the tool. When the caller already knows this
     // is a change question, say so as an order in the turn it is answering.
-    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${staffLine}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.${
+    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${subjectLine}${staffLine}${resolution ? `\n\nDOMAIN RESOLUTION (required): ${resolution}` : ""}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.${
       changeQuestion && historyDefs.length
         ? `\n\nThis player is reporting that something CHANGED. The current code cannot tell the writer WHEN it changed, so you MUST call search_history — first for the system in the question, then, if a code excerpt points at the file behind it, again with that path. Open the one change that fits with show_change. Do not stop after search_code alone.`
         : ""}` },

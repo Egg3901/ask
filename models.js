@@ -227,12 +227,24 @@ function effortFor(id, want) {
 const RETIRED = {
   "deepseek-v3-flash": "DeepSeek Flash",
   "discord-ask": "Discord",
+  "ask-live-contract": "Live Data",
 };
 
 // The model picker was removed 2026-08-27: every request rides the tier chain
 // (free pool rotation + paid backstop). Auto is the only behavior.
 
-const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai" };
+const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai", ollama: "https://ollama.com" };
+const PROVIDER_LABELS = {
+  ollama: "Ollama Cloud",
+  commandcode: "Command Code",
+  deepseek: "DeepSeek API",
+  google: "Google AI",
+  openrouter: "OpenRouter",
+  opencode: "OpenCode Zen",
+  opencodego: "OpenCode Go",
+  discord: "Discord",
+  lakeside: "Lakeside",
+};
 
 /** Where a player can read about the model that answered them. */
 function urlFor(id) {
@@ -283,7 +295,19 @@ function providerOf(id) {
   if (/^minimax/i.test(s)) return "commandcode";
   if (/-free$/.test(s) || /^(mimo|muse-spark|hy3|laguna|nemotron-3)/i.test(s)) return "opencode";
   if (s === "discord-ask") return "discord";
+  if (s === "ask-live-contract") return "lakeside";
   return s.includes("/") ? "openrouter" : "deepseek";
+}
+
+function providerDisplayFor(id) {
+  const provider = providerOf(id);
+  return PROVIDER_LABELS[provider] || provider;
+}
+
+function providerMap() {
+  const out = {};
+  for (const id of [...Object.keys(CATALOG), ...Object.keys(RETIRED)]) out[id] = providerDisplayFor(id);
+  return out;
 }
 
 /** Display tier for a stored model id, including ids retired from the catalog. */
@@ -304,4 +328,4 @@ function tierMap() {
   return out;
 }
 
-module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, FREE_POOL, PAID_BACKSTOP, ensureBackstop, chainFrom, effortFor, tierOf, providerOf, displayFor, displayMap, tierMap, urlFor, urlMap };
+module.exports = { CATALOG, EXCLUDED, CHAINS, EFFORT, TIER_LABELS, FREE_POOL, PAID_BACKSTOP, ensureBackstop, chainFrom, effortFor, tierOf, providerOf, providerDisplayFor, providerMap, displayFor, displayMap, tierMap, urlFor, urlMap };

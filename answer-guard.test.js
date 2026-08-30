@@ -27,6 +27,12 @@ test("private military questions are refused before a euphemistic answer can pas
   assert.doesNotMatch(answer, /well prepared/i);
 });
 
+test("a current named-country military comparison is refused before streaming", () => {
+  const question = "Compare the current militaries of the US, UK, Russia, and East Germany.";
+  assert.equal(guard.asksForPrivateMilitaryIntelligence(question), true);
+  assert.match(guard.protectPublicAnswer("", question), /public|fog of war|private military/i);
+});
+
 test("public answers preserve generic quantified military mechanics", () => {
   const mechanics = "A division contains three brigades in the formation model.";
   assert.equal(guard.protectPublicAnswer(mechanics, "How are divisions composed?"), mechanics);
