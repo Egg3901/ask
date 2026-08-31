@@ -1014,7 +1014,7 @@ const server = http.createServer(async (req, res) => {
         // the code scout even when the heuristic live pass found a country.
         const needsMechanicEvidence = investigate.needsMechanicEvidence(question);
         const needsCapabilityInventory = investigate.needsCapabilityInventory(question);
-        const needsSpecialistEvidence = plan.intent === "causal_autopsy" || plan.intent === "claim_verification";
+        const needsSpecialistEvidence = plan.intent === "causal_autopsy" || plan.intent === "claim_verification" || plan.intent === "election_debrief";
         let investigation = null;
         if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory || needsSpecialistEvidence || moderatorPrivateQuestion)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));

@@ -46,3 +46,14 @@ test("briefs render one line per matched playbook", () => {
   const writer = playbooks.writerBrief("why has my portfolio wealth changed since the election?");
   assert.ok(writer.startsWith("ANSWER METHOD"));
 });
+
+test("post-race debriefs get the decompose-the-margin method", () => {
+  const hit = playbooks.matches("why did I lose my senate race, what cost me the election?");
+  assert.ok(hit.some(p => p.id === "election_debrief"));
+  const brief = playbooks.scoutBrief("debrief my presidential race");
+  assert.match(brief, /trace_race/);
+  assert.match(brief, /off limits/);
+  const writer = playbooks.writerBrief("post-mortem my house election please");
+  assert.match(writer, /structural versus playable/);
+  assert.match(writer, /never predict an unresolved race/i);
+});
