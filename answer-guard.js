@@ -71,11 +71,29 @@ function isGenericMilitaryMechanicSentence(sentence, question) {
     .some((match) => !GENERIC_NAME_WORDS.has(match[1].toLowerCase().replace(/'s$/, "")));
 }
 
+// Inventory words that also live in civilian vocabulary. "The market includes
+// 500,000 units" tripped FORCE_POSSESSION and replaced a stock-price answer
+// with the military refusal (observed live 2026-08-31). These only count as
+// military when the sentence or the question carries military context; the
+// unambiguous inventory (divisions, fleets, warheads, carrier groups...)
+// still triggers on its own.
+const AMBIGUOUS_INVENTORY = /\b(?:units?|equipment|personnel|commands?|wings?|ships?|aircraft|corps)\b/i;
+const UNAMBIGUOUS_INVENTORY = /\b(?:logistics? commands?|airlift wings?|formations?|divisions?|brigades?|battalions?|regiments?|squadrons?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|readiness|deployments?|force strength|army strength|military strength|tanks?|submarines?|missiles?|nuclear weapons?|warheads?)\b/i;
+const MILITARY_CONTEXT = /\b(?:militar\w*|arm(?:y|ies)|nav(?:y|ies)|naval|air force|war|wars|combat|battle|front|deploy\w*|garrison\w*|invasion|offensive|defen[cs]e|troops?|soldiers?|roster|readiness|conflict|armou?red|infantry|mechani[sz]ed|artillery|fighters?|bombers?|warships?|station\w*)\b/i;
+
+function sentenceHasMilitaryMeaning(sentence, question) {
+  if (UNAMBIGUOUS_INVENTORY.test(sentence)) return true;
+  if (!AMBIGUOUS_INVENTORY.test(sentence)) return true;
+  return MILITARY_CONTEXT.test(sentence) || MILITARY_CONTEXT.test(String(question || ""));
+}
+
 function containsPrivateMilitaryIntelligence(answer, question = "") {
   return String(answer || "").split(/(?<=[.!?])\s+|\n+/).some((sentence) => {
     if (isGenericMilitaryMechanicSentence(sentence, question)) return false;
-    return FORCE_INVENTORY.test(sentence) || FORCE_POSSESSION.test(sentence)
+    const tripped = FORCE_INVENTORY.test(sentence) || FORCE_POSSESSION.test(sentence)
       || FORCE_QUANTITY.test(sentence) || FORCE_ABSENCE.test(sentence) || FORCE_OPERATION.test(sentence);
+    if (!tripped) return false;
+    return sentenceHasMilitaryMeaning(sentence, question);
   });
 }
 

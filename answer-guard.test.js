@@ -233,3 +233,24 @@ test("a fenced JSON tool call is a leak, not an answer", () => {
   assert.equal(guard.looksLikeToolLeak('The payload is `{"name": "Tinky Winky Corporation", "ticker": "TWC"}`.'), false);
   assert.equal(guard.looksLikeToolLeak('Cloture needs three fifths of the votes cast.'), false);
 });
+
+test("civilian sentences with ambiguous inventory words are not military intelligence", () => {
+  const question = "How does the game calculate a corporation stock price each turn?";
+  const answer = "The market cap includes 500,000 units of outstanding stock. Each corporation has equipment and personnel costs in its ledger. Price moves with earnings per share.";
+  assert.equal(guard.protectPublicAnswer(answer, question), answer);
+  // Real military leaks still refuse: unambiguous inventory stands alone...
+  assert.equal(
+    guard.protectPublicAnswer("The US currently has 12 armored divisions stationed in Europe.", question),
+    guard.protectPublicAnswer("", "what is the live military roster for the US?"),
+  );
+  // ...and ambiguous words still refuse when the sentence carries military context.
+  assert.notEqual(
+    guard.protectPublicAnswer("The German army has 40 ships deployed near the front.", question),
+    "The German army has 40 ships deployed near the front.",
+  );
+  // A military question keeps full protection even for ambiguous words.
+  assert.notEqual(
+    guard.protectPublicAnswer("They have 300 aircraft available.", "what aircraft does the UK have deployed right now?"),
+    "They have 300 aircraft available.",
+  );
+});
