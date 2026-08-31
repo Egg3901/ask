@@ -9,8 +9,22 @@ function clean(value, max) {
   return String(value || "").trim().slice(0, max);
 }
 
+// The web form enforces 500 chars client-side, but the Discord command allows
+// 2000 — and the ask handler 400s anything over its limit, so a long Discord
+// question used to fail outright after the player typed it all out. Clamp at
+// a word boundary instead: a trimmed question gets an answer, a 400 gets nothing.
+const MAX_QUESTION = 500;
+
+function clampQuestion(text) {
+  const s = String(text || "").trim();
+  if (s.length <= MAX_QUESTION) return s;
+  const cut = s.slice(0, MAX_QUESTION);
+  const boundary = cut.lastIndexOf(" ");
+  return boundary > MAX_QUESTION * 0.6 ? cut.slice(0, boundary) : cut;
+}
+
 function normalizeDiscordAsk(body = {}) {
-  const question = clean(body.question, 2000);
+  const question = clampQuestion(clean(body.question, 2000));
   if (!question) throw new Error("question required");
   const responseLength = clean(body.responseLength, 20).toLowerCase();
   const convId = /^[A-Za-z0-9_-]{6,40}$/.test(String(body.convId || ""))
@@ -65,4 +79,4 @@ function discordSession(body = {}) {
   };
 }
 
-module.exports = { normalizeDiscordAsk, discordSession };
+module.exports = { normalizeDiscordAsk, discordSession, clampQuestion, MAX_QUESTION };

@@ -131,7 +131,11 @@ test("corrections block names the lesson and asserts precedence", () => {
 
 test("the investigator scales its caps with question depth", () => {
   const source = require("node:fs").readFileSync(require.resolve("./investigate.js"), "utf8");
-  assert.match(source, /deep \? CAPS\.deep : CAPS\.standard/);
+  // Three budgets now: deep for multi-part, pro for reasoning-tier questions,
+  // standard for the flash rescue pass.
+  assert.match(source, /if \(deep \|\| tier === "deep"\) return CAPS\.deep/);
+  assert.match(source, /if \(tier === "pro"\) return CAPS\.pro/);
+  assert.match(source, /const caps = capsFor\(\{ deep, tier \}\)/);
   assert.match(source, /SEARCHED AND NOT FOUND/);
 });
 
@@ -238,4 +242,43 @@ test("with no index available nothing is called a retrieval miss", () => {
     "See src/lib/anything.ts.", "no evidence here", undefined);
   assert.deepEqual(missed, []);
   assert.deepEqual(invented, ["src/lib/anything.ts"]);
+});
+
+test("revise rewrites an answer when the audit flags claims", async () => {
+  const grounding = require("./grounding");
+  const revised = "Inflation is set by the commodity index in the code. The prime-rate pass-through I described earlier is not modeled.".repeat(3);
+  const complete = async ({ question }) => {
+    assert.match(question, /UNSUPPORTED CLAIMS/);
+    assert.match(question, /invented Phillips curve/);
+    return { text: revised, model: "revise-model" };
+  };
+  const out = await grounding.revise({
+    question: "Why is inflation high?",
+    answer: "Because of the Phillips curve linking unemployment to prices.".repeat(6),
+    claims: ["invented Phillips curve"],
+    evidence: "commodity index excerpt",
+    complete,
+  });
+  assert.equal(out.text, revised);
+  assert.equal(out.model, "revise-model");
+});
+
+test("revise refuses to replace an answer with a stub and fails open", async () => {
+  const grounding = require("./grounding");
+  const longAnswer = "A long detailed answer about the bond market. ".repeat(30);
+  const stub = await grounding.revise({
+    question: "q", answer: longAnswer, claims: ["x"], evidence: "e",
+    complete: async () => ({ text: "Short." }),
+  });
+  assert.equal(stub, null);
+  const empty = await grounding.revise({
+    question: "q", answer: longAnswer, claims: ["x"], evidence: "e",
+    complete: async () => null,
+  });
+  assert.equal(empty, null);
+  const noClaims = await grounding.revise({
+    question: "q", answer: longAnswer, claims: [], evidence: "e",
+    complete: async () => { throw new Error("must not be called"); },
+  });
+  assert.equal(noClaims, null);
 });

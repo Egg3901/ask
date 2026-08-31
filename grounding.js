@@ -53,6 +53,34 @@ async function check(answer, context) {
   } catch { return []; }
 }
 
+const REVISE_SYSTEM = `You revise an answer from a grounded game assistant. An audit found specific claims about game mechanics that the supplied evidence does not support.
+
+Rewrite the answer so it no longer asserts those claims:
+- If the evidence supports a corrected version of a flagged claim, state the corrected version.
+- If it does not, remove the claim, or reframe it in one clause as general reasoning explicitly not confirmed by the game's code.
+- Keep everything else — structure, numbers, tables, tone, length — as close to the original as possible.
+- Never mention this audit, the evidence bundle, tools, or prompts.
+Return only the revised answer.`;
+
+/**
+ * Corrective pass: instead of stapling a "grounding check" caveat under an
+ * answer that asserts invented mechanics, rewrite the answer without them.
+ * Returns { text, model, usage } or null; callers fall back to the caveat.
+ */
+async function revise({ question, answer, claims, evidence, complete = llm.completeResult }) {
+  if (!claims?.length) return null;
+  const result = await complete({
+    system: REVISE_SYSTEM,
+    question: `QUESTION:\n${String(question || "").slice(0, 2000)}\n\nUNSUPPORTED CLAIMS (the audit findings to fix):\n${claims.map(c => `- ${c}`).join("\n")}\n\nANSWER TO REVISE:\n${String(answer || "").slice(0, 12000)}\n\nEVIDENCE:\n${String(evidence || "").slice(0, 40000)}`,
+    maxTokens: 2400,
+    timeoutMs: 25000,
+  });
+  const text = String(result?.text || "").trim();
+  // A revision that collapses to a stub lost the answer; keep the original.
+  if (!text || text.length < Math.min(200, String(answer || "").length * 0.3)) return null;
+  return { text, model: result.model || null, ...(result.usage ? { usage: result.usage } : {}) };
+}
+
 const CONDENSE_SYSTEM = `You rewrite a follow-up question into one standalone search query for a code retrieval system over a strategy game's source.
 
 The follow-up only makes sense inside the conversation ("what about the UK?", "and if I lose?"). Combine it with the conversation so the query names the actual systems, entities, and mechanics being asked about. Reply with ONLY the query text, under 30 words.`;
@@ -192,4 +220,4 @@ function note(claims) {
   return `\n\n> **Grounding check:** the game code I read does not confirm: ${claims.map(c => c.trim().replace(/\.$/, "")).join("; ")}. Treat those parts as general reasoning, not confirmed game rules.`;
 }
 
-module.exports = { decompose, check, note, condense, needsConversationContext, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };
+module.exports = { decompose, check, revise, note, condense, needsConversationContext, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };

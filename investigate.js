@@ -29,15 +29,25 @@ const retrieve = require("./retrieve");
 const mcp = require("./mcp");
 const history = require("./history");
 const queryAliases = require("./query-aliases");
+const playbooks = require("./playbooks");
+const calc = require("./calc");
 
-// Two effort levels. Deep questions get room to actually chase a thread across
-// systems; everything else stays tight so latency stays honest.
+// Three effort levels. Deep questions get room to actually chase a thread
+// across systems; pro sits between (multi-system questions routed off flash
+// deserve more than the flash rescue budget); everything else stays tight so
+// latency stays honest.
 const CAPS = {
   standard: {
     rounds: Number(process.env.ASK_INVESTIGATE_ROUNDS || 3),
     calls: Number(process.env.ASK_INVESTIGATE_CALLS || 6),
     deadlineMs: Number(process.env.ASK_INVESTIGATE_DEADLINE_MS || 30000),
     evidenceChars: Number(process.env.ASK_INVESTIGATE_MAX_CHARS || 24000),
+  },
+  pro: {
+    rounds: Number(process.env.ASK_INVESTIGATE_PRO_ROUNDS || 4),
+    calls: Number(process.env.ASK_INVESTIGATE_PRO_CALLS || 8),
+    deadlineMs: Number(process.env.ASK_INVESTIGATE_PRO_DEADLINE_MS || 40000),
+    evidenceChars: Number(process.env.ASK_INVESTIGATE_PRO_MAX_CHARS || 32000),
   },
   deep: {
     rounds: Number(process.env.ASK_INVESTIGATE_DEEP_ROUNDS || 5),
@@ -46,6 +56,12 @@ const CAPS = {
     evidenceChars: Number(process.env.ASK_INVESTIGATE_DEEP_MAX_CHARS || 40000),
   },
 };
+
+function capsFor({ deep = false, tier = null } = {}) {
+  if (deep || tier === "deep") return CAPS.deep;
+  if (tier === "pro") return CAPS.pro;
+  return CAPS.standard;
+}
 const RESULT_CAP = 5000;
 
 // Public, read-only gamestate lookups a player could reasonably see themselves.
@@ -142,6 +158,19 @@ const INDEX_BROWSE_DEFS = [
   },
 ];
 
+const CALCULATE_DEF = {
+  type: "function",
+  function: {
+    name: "calculate",
+    description: "Evaluate an arithmetic expression exactly. Use for EVERY derived number: growth rates, shares, differences, ratios, per-capita figures. Supports + - * / ^ ( ), thousands separators, k/m/b/t suffixes, a trailing % (15% = 0.15), and sum(), avg(), min(), max(), abs(), sqrt(), round(x, places), pctchange(old, new), share(part, whole). Numbers only, no variables.",
+    parameters: {
+      type: "object",
+      properties: { expression: { type: "string", description: "The arithmetic expression, e.g. pctchange(1.2m, 1.5m) or share(45,000, 320,000)." } },
+      required: ["expression"],
+    },
+  },
+};
+
 const CAPABILITY_DEF = {
   type: "function",
   function: {
@@ -200,6 +229,7 @@ Work like an investigator:
 - If the player asks what Ask, its API, or its tools can provide, call list_capabilities. Do not infer the inventory from examples or source filenames.
 - If the player says something changed, broke, dropped, got worse, or used to work differently, search the change history for the files the code excerpts came from, then read the one change that fits. Current code cannot date a change; only the history can.
 - Prefer few, well-aimed calls. Stop as soon as the evidence would let a careful writer answer with real numbers and mechanisms.
+- Never do arithmetic in your head. Any derived number the writer will need — a growth rate, a share, a difference, a per-capita figure — goes through the calculate tool so the evidence carries the exact value.
 - A search that finds nothing is itself evidence: it means the game likely does not model that thing. Note it, do not keep rephrasing the same hunt more than once.
 - When nothing useful is missing, stop calling tools and reply with exactly two lines for the writer:
 ESTABLISHED: <what the gathered evidence shows, one compressed sentence>
@@ -265,6 +295,14 @@ async function liveToolDefs(privateAccess = false) {
 
 async function execute(name, args, { useLive, context, game, historyDays, privateAccess = false }) {
   if (name === "list_capabilities") return capabilityCatalog(privateAccess);
+  if (name === "calculate") {
+    try {
+      const value = calc.evaluate(String(args.expression || ""));
+      return `${String(args.expression || "").trim()} = ${calc.format(value)}`;
+    } catch (e) {
+      return `Calculation error: ${String(e.message || e).slice(0, 120)}`;
+    }
+  }
   if (name === "search_code") {
     const found = await retrieve.search(String(args.query || ""), { topK: 5, maxChars: 9000, game });
     return found ? found.context : "No matching source found for that query.";
@@ -321,14 +359,21 @@ async function execute(name, args, { useLive, context, game, historyDays, privat
  * Run the investigation. Returns { text, tools } or null when nothing was
  * gathered. `text` is a prompt-ready evidence block.
  */
-async function run({ question, context = null, useLive = false, deep = false, onAction = null, game = null, changeQuestion = false }) {
-  const caps = deep ? CAPS.deep : CAPS.standard;
+async function run({ question, context = null, useLive = false, deep = false, tier = null, seenPaths = null, onAction = null, game = null, changeQuestion = false }) {
+  const caps = capsFor({ deep, tier });
   const isStaff = context?.isAdmin === true || context?.isModerator === true;
   const historyDefs = (await history.available(game)) ? HISTORY_TOOL_DEFS : [];
-  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs(isStaff) : [])];
+  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CALCULATE_DEF, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs(isStaff) : [])];
   const historyDays = history.sinceDaysFor(question);
   const started = Date.now();
   const resolution = queryAliases.guidance(question);
+  const method = playbooks.scoutBrief(question);
+  // The scout used to open with the same searches primary retrieval had just
+  // run, spending a third of its call budget re-finding known files. Telling
+  // it what is already in hand turns those calls into follow-the-reference.
+  const seenLine = Array.isArray(seenPaths) && seenPaths.length
+    ? `\n\nPrimary retrieval already supplied excerpts from: ${seenPaths.slice(0, 12).join(", ")}. Do not re-search for these files — chase what they reference, or what is still missing.`
+    : "";
 
   const playerLine = context?.character?.name
     ? `\n(The asker plays ${context.character.name}${context.character.country ? ` in ${context.character.country}` : ""}${context.corporation?.name ? `, runs ${context.corporation.name}` : ""}.)`
@@ -344,7 +389,7 @@ async function run({ question, context = null, useLive = false, deep = false, on
     // A cheap scout model reads a conditional instruction in the system prompt
     // as optional and never fires the tool. When the caller already knows this
     // is a change question, say so as an order in the turn it is answering.
-    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${subjectLine}${staffLine}${resolution ? `\n\nDOMAIN RESOLUTION (required): ${resolution}` : ""}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.${
+    { role: "user", content: `PLAYER QUESTION: ${question}${playerLine}${subjectLine}${staffLine}${resolution ? `\n\nDOMAIN RESOLUTION (required): ${resolution}` : ""}${method ? `\n\n${method}` : ""}${seenLine}\n\nLive game tools ${useLive ? "ARE" : "are NOT"} available for this question. Gather what the writer needs.${
       changeQuestion && historyDefs.length
         ? `\n\nThis player is reporting that something CHANGED. The current code cannot tell the writer WHEN it changed, so you MUST call search_history — first for the system in the question, then, if a code excerpt points at the file behind it, again with that path. Open the one change that fits with show_change. Do not stop after search_code alone.`
         : ""}` },
@@ -357,7 +402,9 @@ async function run({ question, context = null, useLive = false, deep = false, on
   let calls = 0;
 
   for (let round = 0; round < caps.rounds; round++) {
-    if (Date.now() - started > caps.deadlineMs) break;
+    // The first round always runs: a slow tool-def fetch before the loop was
+    // consuming the whole deadline and returning null with zero calls made.
+    if (round > 0 && Date.now() - started > caps.deadlineMs) break;
     const msg = await llm.chatRaw({ messages, tools: defs, maxTokens: 900, timeoutMs: 20000 });
     if (!msg) break;
     const toolCalls = (msg.tool_calls || []).slice(0, caps.calls - calls);
@@ -383,6 +430,9 @@ async function run({ question, context = null, useLive = false, deep = false, on
       // the writer say "the game does not model X" with confidence instead of
       // bridging the gap with invented mechanics.
       if (name === "search_code" && /^No matching source/.test(result)) misses.push(String(args.query || "").slice(0, 120));
+      // A literal-symbol miss is stronger negative evidence than a semantic
+      // one: the exact wording is not in the corpus at all.
+      if (name === "grep_code" && /^No exact indexed source match/.test(result)) misses.push(`${String(args.query || "").slice(0, 120)} (exact symbol search)`);
       const budget = caps.evidenceChars - blocks.join("").length;
       if (budget > 200 && !/^(No matching source|No result\.|Tool not available|Tool failed)/.test(result)) {
         blocks.push(`--- ${name}(${JSON.stringify(args).slice(0, 160)}) ---\n${cap(result, budget)}`);
@@ -416,6 +466,6 @@ async function run({ question, context = null, useLive = false, deep = false, on
 }
 
 module.exports = {
-  run, needsMechanicEvidence, needsCapabilityInventory, capabilityCatalog,
+  run, needsMechanicEvidence, needsCapabilityInventory, capabilityCatalog, capsFor,
   LIVE_ALLOWLIST, MODERATOR_LIVE_ALLOWLIST, SELF_ONLY_TOOLS,
 };

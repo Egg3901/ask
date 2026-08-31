@@ -164,3 +164,21 @@ test("deep answers get a wider evidence window and more of the thread", () => {
   assert.match(retrieve, /maxChars = MAX_CHARS/);
   assert.match(retrieve, /let budget = maxChars;/);
 });
+
+test("escalate lifts an auto flash route to pro exactly once", () => {
+  const flash = router.choose({ question: "what is a tariff?" });
+  assert.equal(flash.tier, "flash");
+  const up = router.escalate(flash, "retrieval came back thin");
+  assert.equal(up.tier, "pro");
+  assert.equal(up.escalated, "retrieval came back thin");
+  assert.deepEqual(up.chain, router.CHAINS.pro);
+  assert.ok(up.reasons.some(r => r.includes("escalated")));
+  // Already pro: unchanged, same object.
+  assert.equal(router.escalate(up, "again"), up);
+});
+
+test("escalate respects a staff-forced quick effort", () => {
+  const forced = router.choose({ question: "why is the economy collapsing across every market?", effort: "quick" });
+  assert.equal(forced.tier, "flash");
+  assert.equal(router.escalate(forced, "thin"), forced);
+});

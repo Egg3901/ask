@@ -2,6 +2,22 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.11.0 - 2026-08-31
+
+### Added
+- Ask now acts on its own quality checks instead of only reporting them. When a draft cites a real source file that retrieval never supplied, Ask reads that file and corrects the answer against its actual contents before delivery. When the grounding audit flags an unsupported mechanic claim on the reasoning tiers, Ask rewrites the answer without it and re-audits, keeping the caveat only when the rewrite cannot be verified.
+- Questions whose evidence comes back thin, or where the research pass reports a key fact it could not establish, are escalated from the fast tier to the reasoning tier before the answer is written.
+- The research scout has an exact calculator for every derived number: growth rates, shares, differences, and per-capita figures are now computed, not predicted.
+- Distilled investigation playbooks steer both the research pass and the writer on question classes with known traps: wealth trends, regional economic series, market shares and their denominators, war status under fog of war, disputed elections, causal economy questions, and exchange rates.
+- Answers that stop mid-sentence, describe their own evidence instead of answering, or cite files they never read now trigger the repair pass that previously only caught refusals.
+
+### Changed
+- The research scout gets a budget matched to the question tier, no longer re-searches files primary retrieval already supplied, and always completes at least one investigation round.
+- Exact-symbol search misses now count as strong negative evidence alongside semantic misses.
+
+### Fixed
+- Long questions from Discord are trimmed at a word boundary instead of being rejected outright.
+
 ## 1.10.1 - 2026-08-31
 
 ### Changed
