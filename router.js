@@ -14,6 +14,7 @@ const MODELS = {
 
 const COMPLEX = /\b(?:why|compare|contrast|tradeoffs?|trade-offs?|interact|interaction|relationship|across|trace|diagnose|root cause|what caused|step by step|edge cases?|all the ways|combined effect|consequences?)\b/i;
 const CROSS_SYSTEM = /\b(?:affect|impact|feed into|depend on|change).{0,50}\b(?:economy|election|government|corporation|company|party|country|market|budget|inflation|growth|turn)\b/i;
+const SPECIALIST = /\b(?:causal autopsy|causal chain|root cause|forensic explanation|fact-check|fact check|verify (?:the )?(?:previous|prior|last|earlier) answer|audit (?:the )?(?:previous|prior|last|earlier) answer)\b/i;
 
 // How hard to think, as a control separate from how much to write.
 //
@@ -68,6 +69,7 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
   let tier;
   if (multiPart || report) { tier = "deep"; if (report) reasons.push("report"); }
   else if (visualizations) { tier = "pro"; reasons.push("visualization"); }
+  else if (SPECIALIST.test(text)) { tier = "pro"; reasons.push("specialist evidence synthesis"); }
   else tier = score >= 4 ? "pro" : "flash";
 
   // An explicit effort wins outright. A report still forces deep: it is a

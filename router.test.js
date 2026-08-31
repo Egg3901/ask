@@ -54,6 +54,16 @@ test("routes cross-system analysis to Pro", () => {
   }).tier, "pro");
 });
 
+test("routes verification and causal autopsy through a reasoning model", () => {
+  for (const question of [
+    "Verify the previous answer",
+    "Run a causal autopsy on my inflation spike",
+    "What is the root cause of this price collapse?",
+  ]) {
+    assert.equal(router.choose({ question, useMcp: true }).tier, "pro", question);
+  }
+});
+
 test("length does not touch routing: it says how much to write, not how hard to think", () => {
   // These were one control and are now two. Asking for a long answer used to add
   // 6 to the score and drag a simple lookup onto a reasoning model; asking for a

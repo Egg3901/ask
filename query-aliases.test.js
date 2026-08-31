@@ -4,6 +4,24 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const aliases = require("./query-aliases");
 
+test("answers the reported army-logistics question without crossing into CAS", () => {
+  const question = "how do army logistics work in game?";
+  const answer = aliases.canonicalAnswer(question);
+  assert.match(answer, /throughput/i);
+  assert.match(answer, /overextend/i);
+  assert.match(answer, /SUPPLIED/);
+  assert.doesNotMatch(answer, /\bCAS\b|air superiority/i);
+  assert.equal(aliases.answerIssue(question, answer), "");
+});
+
+test("delivery contracts are selected from the literal turn, not a contaminated retrieval rewrite", () => {
+  const question = "how do army logistics work in game?";
+  const retrievalQuestion = `${question}: close air support, air superiority`;
+  const answer = aliases.deliveryContract(question, retrievalQuestion);
+  assert.match(answer, /throughput/i);
+  assert.doesNotMatch(answer, /\bCAS\b|air superiority/i);
+});
+
 test("corrects ticket 1235 production-method retool timing", () => {
   const question = "How long does it take for a sector to retool to another production method?";
   const out = aliases.expand(question);

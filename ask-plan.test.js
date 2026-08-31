@@ -127,3 +127,21 @@ test("routes prescriptive inflation questions through focused fiscal data", () =
     assert.equal(request.suppressGenericCountryEconomy, true, q);
   }
 });
+
+test("creates explicit contracts for the five new Ask capabilities", () => {
+  const logistics = plan.create("How do army logistics work in game?");
+  assert.equal(logistics.intent, "army_logistics");
+  assert.equal(logistics.live, "none");
+
+  const verification = plan.create("Verify the previous answer claim by claim");
+  assert.equal(verification.intent, "claim_verification");
+
+  const autopsy = plan.create("Run a causal autopsy on why my inflation spiked");
+  assert.equal(autopsy.intent, "causal_autopsy");
+  assert.equal(autopsy.live, "required");
+
+  const scenario = plan.create("Chart what happens to iron if demand rises 5% per turn for 12 turns");
+  assert.equal(scenario.intent, "scenario_lab");
+  assert.equal(scenario.live, "required");
+  assert.equal(scenario.visual, "required");
+});

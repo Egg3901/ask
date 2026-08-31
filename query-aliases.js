@@ -23,6 +23,27 @@ function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
 
 const RULES = [
   {
+    match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b/i,
+    queries: [
+      "src/lib/military/battle.ts supplyState throughput demand SUPPLIED STRAINED SHORTAGE CUT OFF",
+      "src/lib/military/occupation.ts derivedSupply overextensionPenalty compressionPenalty",
+      "src/lib/military/config.ts OCCUPATION supplyNeutral overextensionPenalty compressionPenalty",
+      "src/lib/military/commandChain.ts units follow general posted conflict",
+      "src/lib/seeds/wiki/content/militaryCommands.ts Logistics Command supply throughput overseas sustainment",
+      "src/lib/seeds/wiki/content/fightingABattle.ts watch supply front outruns logistics",
+    ],
+    guidance: "Explain battlefield logistics, not corporate freight and not naval-air support. Front supply is a throughput-versus-demand ratio. Throughput begins with front infrastructure and gains from logistics formations, usable rear/support depth, relevant general training, and national logistics doctrine. Unit upkeep creates demand. Territorial position then scales throughput: advancing overextends the winner while compression hurts the losing side more, and the derived penalty recovers when the line moves back. Name the four supply bands and the direct combat effects. Distinguish the organizational Logistics Command from the actual battle formula: current battle supply reads formations, generals, doctrine, infrastructure, and front position; it does not directly read the command type or its supply-priority label.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/throughput/i.test(text) || !/demand/i.test(text)) return "The answer must explain front supply as throughput divided by unit demand.";
+      if (!/overextend/i.test(text) || !/recover|moves? back|swings? back|retreat/i.test(text)) return "The answer must explain that advances overextend supply and that the derived penalty recovers when the front moves back.";
+      if (!/SUPPLIED/.test(text) || !/STRAINED/.test(text) || !/SHORTAGE/.test(text) || !/CUT OFF/.test(text)) return "The answer must name the four player-facing supply bands.";
+      if (!/combat|effectiveness/i.test(text) || !/attrition/i.test(text)) return "The answer must connect low supply to combat effectiveness and attrition.";
+      if (!/does not directly read|not directly|separate/i.test(text) || !/Logistics Command/i.test(text)) return "The answer must distinguish the Logistics Command label from the current battle-supply inputs.";
+      return "";
+    },
+  },
+  {
     match: /\b(?:retool(?:ing|ed)?|production method(?:s)?[\s\S]{0,80}(?:change|switch|transition|take|long)|(?:change|switch|transition)[\s\S]{0,80}(?:production method|operating strateg(?:y|ies)))\b/i,
     queries: [
       "src/lib/constants/sectorStrategies.ts STRATEGY_TRANSITION_TURNS STRATEGY_COOLDOWN_TURNS getEffectiveStrategyRates blendRates",
@@ -259,6 +280,10 @@ function answerIssue(question, answer) {
 // outside these narrow contracts still use the normal retrieval and model path.
 const CANONICAL_ANSWERS = [
   {
+    match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b/i,
+    text: "Army logistics is the supply calculation at each front. Each side has one shared supply pool. Demand is the formations' upkeep burden. Throughput starts with the front's infrastructure, then gains from logistics-trait formations, air-mobile support, generals trained in supply, national logistics doctrine, and formations actually serving behind or supporting the line. Extra rear units stop helping once the logistical tail is larger than the force it feeds. The game turns throughput divided by demand into a 0 to 100 supply level: 85+ is SUPPLIED, 55 to 84 is STRAINED, 30 to 54 is SHORTAGE, and below 30 is CUT OFF. Lower supply directly reduces combat effectiveness and raises attrition. Front position matters too. An advance gradually overextends the winner; being compressed into a pocket hurts the loser more. This is derived from the current line, so supply recovers if the front moves back. A Logistics Command is the organizational structure intended for multi-region and overseas sustainment, but the current battle formula does not directly read the command type or its Normal, High, or Emergency supply-priority label. It reads the formations, usable rear and support depth, generals, doctrine, infrastructure, demand, and territorial position.",
+  },
+  {
     match: /\b(?:retool(?:ing|ed)?|production method(?:s)?[\s\S]{0,80}(?:change|switch|transition|take|long)|(?:change|switch|transition)[\s\S]{0,80}(?:production method|operating strateg(?:y|ies)))\b/i,
     text: "A sector normally takes 12 turns to retool to another production method. The new method is selected immediately, but its commodity input and output rates blend linearly from the old method to the new one across those 12 turns, so it is not a one-turn all-or-nothing switch. A normal change costs 25 percent of the sector's daily revenue, carries transition margin disruption, and starts a 24-turn switch cooldown at the same time. There is one faster exception: an extraction method that meaningfully supplies a resource whose global supply is below half of demand gets a waived fee and a six-turn transition. At the Plants tier, the installed capacity's value is retained, but its unit count can be re-denominated for the new output mix. productionPolicyLevel and the sector growth-rate controls are separate mechanics and do not determine retool time.",
   },
@@ -297,4 +322,10 @@ function canonicalAnswer(question) {
   return CANONICAL_ANSWERS.filter(item => item.match.test(text)).map(item => item.text).join("\n\n");
 }
 
-module.exports = { expand, guidance, answerIssue, canonicalAnswer, normalizePlayerWording };
+// Retrieval rewrites may include prior-thread terms so semantic search can find
+// context. They are not authority to replace the answer to a clean new topic.
+function deliveryContract(question, retrievalQuestion, { contextual = false } = {}) {
+  return canonicalAnswer(contextual ? retrievalQuestion : question);
+}
+
+module.exports = { expand, guidance, answerIssue, canonicalAnswer, deliveryContract, normalizePlayerWording };
