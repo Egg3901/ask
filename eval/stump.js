@@ -131,7 +131,7 @@ async function runCase(c) {
   if (route.tier !== "flash" || liveMissedTarget || (c.live && trendish) || chaseChange || needsMechanicEvidence || needsCapabilityInventory) {
     investigation = await investigate.run({ question: c.q, context, useLive: c.live, deep: false, game, changeQuestion }).catch(() => null);
   }
-  const navBlock = navigation.block(c.q);
+  const navBlock = navigation.block(retrievalQuestion);
 
   const system = prompt.build({ style: "standard", length: "standard", context, indexContext: "", visualizations: c.visualizations === true, visualizationRequested: c.visualizations === true, liveData: c.live, report: false, game, changeHistory: historyBlock !== "" })
     + (matched.length ? `\n\n${corrections.block(matched)}` : "")
@@ -139,21 +139,25 @@ async function runCase(c) {
     + (historyBlock ? `\n\n${historyBlock}` : "")
     + (liveBlock ? `\n\n${liveBlock}` : "")
     + (investigation ? `\n\n${investigation.text}` : "")
-    + (queryAliases.guidance(c.q) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(c.q)}` : "")
+    + (queryAliases.guidance(retrievalQuestion) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(retrievalQuestion)}` : "")
     + (navBlock ? `\n\n${navBlock}` : "");
 
-  const out = await llm.stream({ system, history: chatHistory, question: c.q, deep: false, tier: route.tier, chain: route.chain, effort: route.effort, onDelta: () => {} });
+  const mechanicsAnswerContract = queryAliases.canonicalAnswer(retrievalQuestion);
+  const out = mechanicsAnswerContract
+    ? { text: mechanicsAnswerContract, model: "ask-mechanics-contract" }
+    : await llm.stream({ system, history: chatHistory, question: c.q, deep: false, tier: route.tier, chain: route.chain, effort: route.effort, onDelta: () => {} });
   const raw = out.text || "";
   let { text: answer } = prompt.extractFollowups(raw);
 
-  const evidence = [matched.length ? corrections.block(matched) : "", hits?.context, historyBlock, liveBlock, investigation?.text, queryAliases.guidance(c.q)].filter(Boolean).join("\n\n");
-  const requirement = answerRepair.requirementFor(c.q, evidence);
+  const evidence = [matched.length ? corrections.block(matched) : "", hits?.context, historyBlock, liveBlock, investigation?.text, queryAliases.guidance(retrievalQuestion)].filter(Boolean).join("\n\n");
+  const requirement = answerRepair.requirementFor(retrievalQuestion, evidence);
   if (liveAnswerContract) answer = liveAnswerContract;
+  else if (mechanicsAnswerContract) answer = mechanicsAnswerContract;
   else if (answerRepair.shouldRepair({ answer, hasLiveData: c.live, evidence, requirement })) {
-    const repaired = await answerRepair.repair({ question: c.q, answer, evidence, requirement }).catch(() => null);
+    const repaired = await answerRepair.repair({ question: retrievalQuestion, answer, evidence, requirement }).catch(() => null);
     if (repaired?.text) answer = repaired.text;
   }
-  const claims = await grounding.check(answer, evidence).catch(() => []);
+  const claims = mechanicsAnswerContract ? [] : await grounding.check(answer, evidence).catch(() => []);
   const split = grounding.classifyPaths(answer, evidence, retrieve.hasPath);
   const issues = answerGuard.inspect(answer, plan);
   const refused = answerGuard.detectRefusal(answer, c.live) && c.live;

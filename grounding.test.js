@@ -24,6 +24,17 @@ test("preserves named stats when condensing a vague follow-up", () => {
   );
 });
 
+test("preserves mechanic phrases for a vague navigation follow-up", () => {
+  const history = [
+    { role: "user", content: "How do we blockade DDR and increase air superiority?" },
+    { role: "assistant", content: "Use Naval and air command." },
+  ];
+  assert.equal(
+    grounding.restoreContextTerms("Where is the tab used to", history, "where can we find that tab"),
+    "Where is the tab used to: blockade, air superiority, Naval and air command",
+  );
+});
+
 test("no ungrounded claims means no note at all", () => {
   assert.equal(grounding.note([]), "");
   assert.equal(grounding.note(null), "");

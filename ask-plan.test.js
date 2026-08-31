@@ -13,6 +13,16 @@ test("classifies a candidate roster map as required live canonical map output", 
   assert.equal(request.display.metric, "candidate_roster");
 });
 
+test("requires canonical live data for an open-ended visualization showcase", () => {
+  const request = plan.create("What is the most interesting visualization you can show me from the game?");
+  assert.equal(request.id, "live-showcase");
+  assert.equal(request.intent, "live_showcase");
+  assert.equal(request.live, "required");
+  assert.equal(request.display.kind, "map");
+  assert.equal(request.display.canonical, true);
+  assert.equal(request.visual, "required");
+});
+
 test("treats a House seat question as rules prose rather than country economy", () => {
   const request = plan.create("Can two Democrats get elected to New York House seats?");
   assert.equal(request.id, "election-rules");

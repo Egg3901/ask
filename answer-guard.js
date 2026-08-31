@@ -1,11 +1,15 @@
 "use strict";
 
 const visualization = require("./visualization");
+const queryAliases = require("./query-aliases");
 
 const BLOCK = /```(?:mermaid|mmd|ahd-map)\s*\n[\s\S]*?```\s*/gi;
 const MAP_BLOCK = /```ahd-map\s*\n([\s\S]*?)```/i;
 
-const MILITARY_INVENTORY = String.raw`(?:logistics? commands?|airlift wings?|commands?|units?|formations?|divisions?|brigades?|battalions?|regiments?|corps|squadrons?|wings?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|personnel|equipment|readiness|deployments?|force strength|army strength|military strength|tanks?|aircraft|ships?|submarines?|missiles?|nuclear weapons?)`;
+const MILITARY_INVENTORY = String.raw`(?:logistics? commands?|airlift wings?|commands?|units?|formations?|divisions?|brigades?|battalions?|regiments?|corps|squadrons?|wings?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|personnel|equipment|readiness|deployments?|force strength|army strength|military strength|tanks?|aircraft|ships?|submarines?|missiles?|nuclear weapons?|warheads?)`;
+// Unlike conventional rosters, national warhead totals are deliberately published
+// on World > Conflicts. Do not turn that designed public record into a privacy refusal.
+const PUBLIC_NUCLEAR_RECORD = /\b(?:warheads?|nuclear (?:weapon )?stockpile|nuclear powers? strip)\b/i;
 const FORCE_POSSESSION = new RegExp(
   String.raw`\b(?:has|have|had|lacks?|without|no|zero|fields?|fielded|deploys?|deployed|stations?|stationed|includes?|contains?)\b[^.!?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,60}\b(?:on (?:its|their|the) roster|in (?:its|their|the) forces?|available|deployed|stationed)\b`,
   "i",
@@ -31,7 +35,9 @@ const GENERIC_MILITARY_MECHANIC = new RegExp(
   String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
   "i",
 );
-const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
+const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput|save|saved|persist|revert|reset|change)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
+const GENERIC_MECHANIC_INSTRUCTION = /^(?:open|go|set|move|assign|choose|use|put|keep|select|station|send|fly|order)\b/i;
+const LIVE_INSTRUCTION_TARGET = /\b(?:[A-Z][A-Za-z'-]+|[A-Z]{2,3})['’]s\b|\b(?:current|currently|live|existing|available|deployed|stationed)\b/i;
 const CAPITALIZED_WORD = /^[A-Z][A-Za-z'-]*/;
 const CAPITALIZED_LOCATION = /\b(?:from|in|near|for|within|of)\s+([A-Z][A-Za-z'-]+)\b/g;
 const CAPITALIZED_ANYWHERE = /\b[A-Z][A-Za-z'-]*\b/g;
@@ -49,8 +55,11 @@ const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live
 
 function isGenericMilitaryMechanicSentence(sentence, question) {
   const text = sentence.trim();
+  if (PUBLIC_NUCLEAR_RECORD.test(text) && PUBLIC_NUCLEAR_RECORD.test(question)) return true;
   if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
-  if (!GENERIC_MECHANICS_QUESTION.test(String(question || ""))) return false;
+  const normalizedQuestion = queryAliases.normalizePlayerWording(question);
+  if (!GENERIC_MECHANICS_QUESTION.test(normalizedQuestion)) return false;
+  if (GENERIC_MECHANIC_INSTRUCTION.test(text) && !LIVE_INSTRUCTION_TARGET.test(text)) return true;
   const hasUnknownName = [...text.matchAll(CAPITALIZED_ANYWHERE)]
     .some((match) => !/^[A-Z0-9_]{2,}$/.test(match[0])
       && !GENERIC_NAME_WORDS.has(match[0].toLowerCase().replace(/'s$/, "")));
@@ -71,7 +80,9 @@ function containsPrivateMilitaryIntelligence(answer, question = "") {
 }
 
 function asksForPrivateMilitaryIntelligence(question) {
-  return PRIVATE_MILITARY_QUESTION.test(String(question || ""));
+  const text = String(question || "");
+  if (PUBLIC_NUCLEAR_RECORD.test(text)) return false;
+  return PRIVATE_MILITARY_QUESTION.test(text);
 }
 
 function protectPublicAnswer(answer, question = "") {
@@ -197,11 +208,11 @@ function matchingDataset(datasets, metric) {
 // Prevent a model from presenting a plausible-looking but unsupported chart.
 // Canonical maps and chart data are produced by the live adapters, never copied
 // from a model response.
-function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyGuardEnabled = true }) {
+function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyQuestion = question, privacyGuardEnabled = true }) {
   let text = String(answer || "").trim();
   const issues = [];
   if (privacyGuardEnabled) {
-    const protectedAnswer = protectPublicAnswer(text, question);
+    const protectedAnswer = protectPublicAnswer(text, privacyQuestion);
     if (protectedAnswer !== text) {
       text = protectedAnswer;
       issues.push("private_military_intelligence_removed");
