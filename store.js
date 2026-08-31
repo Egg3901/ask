@@ -416,14 +416,30 @@ function digest(sinceMs) {
 // this feeds a curated queue rather than writing test cases directly. The
 // point is that no reported failure silently drops out of the loop between
 // the telemetry row and the committed replay suite.
+// Only DEFECT codes qualify. escalated_tier, grounding_revised,
+// retrieval_miss_healed, answer_contract_repaired and
+// canonical_answer_contract are the pipeline WORKING (actions taken or
+// contracts served), and letting them in drowned the real failures 5:1 on
+// the first live pull.
+const REPLAY_DEFECTS = new Set([
+  "truncated", "narrated_evidence_bundle", "refused_with_live_evidence",
+  "insufficient_evidence", "irrelevant_visualization_withheld",
+]);
 function replayCandidates(sinceMs, limit = 40) {
   try {
     const rows = db.prepare(`SELECT id, question, feedback_rating, feedback_reason, validation, plan, model, ts
       FROM asks WHERE ts>? AND cached=0 AND (
         feedback_rating='down'
         OR json_array_length(COALESCE(json_extract(validation,'$.issues'),'[]')) > 0
-      ) ORDER BY ts DESC LIMIT ?`).all(Number(sinceMs) || 0, Math.min(Number(limit) || 40, 200));
-    return rows.map(row => {
+        OR json_array_length(COALESCE(json_extract(validation,'$.inventedPaths'),'[]')) > 0
+      ) ORDER BY ts DESC LIMIT ?`).all(Number(sinceMs) || 0, Math.min(Number(limit) || 40, 200) * 5);
+    return rows.filter(row => {
+      if (row.feedback_rating === "down") return true;
+      const validation = safeJson(row.validation) || {};
+      const issues = Array.isArray(validation.issues) ? validation.issues : [];
+      return issues.some(code => REPLAY_DEFECTS.has(code))
+        || (Array.isArray(validation.inventedPaths) && validation.inventedPaths.length > 0);
+    }).slice(0, Math.min(Number(limit) || 40, 200)).map(row => {
       const validation = safeJson(row.validation) || {};
       const plan = safeJson(row.plan) || {};
       return {

@@ -446,4 +446,11 @@ test("replay candidates capture downvoted and flagged answers with their defects
   // A clean, unrated answer is not a candidate.
   const cleanId = recordAnswer({ question: "clean answer", validation: JSON.stringify({ issues: [] }) });
   assert.ok(!store.replayCandidates(Date.now() - 60000).some(c => c.answerId === cleanId));
+  // The pipeline WORKING is not a defect: escalation, revision, healing and
+  // canonical contracts must not flood the curation queue.
+  const workingId = recordAnswer({ question: "escalated fine answer", validation: JSON.stringify({ issues: ["escalated_tier", "grounding_revised", "canonical_answer_contract"] }) });
+  assert.ok(!store.replayCandidates(Date.now() - 60000).some(c => c.answerId === workingId));
+  // An invented path is a defect even with no issue codes.
+  const inventedId = recordAnswer({ question: "invented path answer", validation: JSON.stringify({ issues: [], inventedPaths: ["src/lib/madeUp.ts"] }) });
+  assert.ok(store.replayCandidates(Date.now() - 60000).some(c => c.answerId === inventedId));
 });
