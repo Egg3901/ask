@@ -165,3 +165,12 @@ test("a post-race why-did-I-lose question plans as an election debrief", () => {
   const autopsy = plan.create("Why did I lose my senate race?", {}, "autopsy");
   assert.equal(autopsy.intent, "causal_autopsy");
 });
+
+test("a returning-player catch-up question plans as an away briefing", () => {
+  const briefing = plan.create("What did I miss while I was away for a week?");
+  assert.equal(briefing.intent, "away_briefing");
+  assert.equal(briefing.live, "required");
+  assert.equal(plan.create("Catch me up on what happened since I last played").intent, "away_briefing");
+  // A specific mechanics question with the word missed is not a briefing.
+  assert.notEqual(plan.create("Why did my bill miss the floor vote?").intent, "away_briefing");
+});

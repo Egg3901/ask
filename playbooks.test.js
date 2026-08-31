@@ -57,3 +57,12 @@ test("post-race debriefs get the decompose-the-margin method", () => {
   assert.match(writer, /structural versus playable/);
   assert.match(writer, /never predict an unresolved race/i);
 });
+
+test("away briefings get the personal-anchors method", () => {
+  const brief = playbooks.scoutBrief("what did I miss while I was away?");
+  assert.match(brief, /game_overview/);
+  assert.match(brief, /Public data only for everyone else/);
+  const writer = playbooks.writerBrief("catch me up, been gone a week");
+  assert.match(writer, /most consequential change/);
+  assert.match(writer, /suggested next action/);
+});

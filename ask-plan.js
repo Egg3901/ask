@@ -62,6 +62,19 @@ function create(question, context = {}, mode = "auto") {
     status: "Reading the battlefield supply rules…", requestedMode, context,
   };
 
+  // Away-turn briefing: the asker was gone and wants to know what moved for
+  // THEM. This is the companion's continuity job in a persistent world that
+  // advances without you; it needs live data by definition, and the playbook
+  // scopes it to the asker's own anchors (seat, corporation, country) plus
+  // public world events, never other players' private state.
+  const awayBriefing = /\b(?:what (?:did|have) i miss(?:ed)?|catch me up|what(?:'s| has| is) (?:happened|changed|new|been going on)\b.{0,40}\b(?:away|gone|offline|last (?:log(?:ged)?[- ]?in|played|time|session)|while i)|since i (?:last )?(?:logged|played|was (?:on|here|around))|been (?:away|gone|offline)\b.{0,40}\b(?:what|anything|update|brief))/i.test(text);
+  if (awayBriefing) return {
+    id: "away-briefing", intent: "away_briefing", live: "required",
+    display: { kind: "prose", metric: null, canonical: false },
+    visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: false,
+    status: "Catching you up on what moved while you were away…", requestedMode, context,
+  };
+
   // Post-race debrief: the asker wants to understand a resolved contest they
   // were in ("why did I lose my senate race"). Post-hoc analysis of the
   // asker's own race is squarely fair play; forecasting a LIVE contested race
