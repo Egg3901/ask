@@ -6,7 +6,10 @@ const queryAliases = require("./query-aliases");
 const BLOCK = /```(?:mermaid|mmd|ahd-map)\s*\n[\s\S]*?```\s*/gi;
 const MAP_BLOCK = /```ahd-map\s*\n([\s\S]*?)```/i;
 
-const MILITARY_INVENTORY = String.raw`(?:logistics? commands?|airlift wings?|commands?|units?|formations?|divisions?|brigades?|battalions?|regiments?|corps|squadrons?|wings?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|personnel|equipment|readiness|deployments?|force strength|army strength|military strength|tanks?|aircraft|ships?|submarines?|missiles?|nuclear weapons?)`;
+const MILITARY_INVENTORY = String.raw`(?:logistics? commands?|airlift wings?|commands?|units?|formations?|divisions?|brigades?|battalions?|regiments?|corps|squadrons?|wings?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|personnel|equipment|readiness|deployments?|force strength|army strength|military strength|tanks?|aircraft|ships?|submarines?|missiles?|nuclear weapons?|warheads?)`;
+// Unlike conventional rosters, national warhead totals are deliberately published
+// on World > Conflicts. Do not turn that designed public record into a privacy refusal.
+const PUBLIC_NUCLEAR_RECORD = /\b(?:warheads?|nuclear (?:weapon )?stockpile|nuclear powers? strip)\b/i;
 const FORCE_POSSESSION = new RegExp(
   String.raw`\b(?:has|have|had|lacks?|without|no|zero|fields?|fielded|deploys?|deployed|stations?|stationed|includes?|contains?)\b[^.!?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,60}\b(?:on (?:its|their|the) roster|in (?:its|their|the) forces?|available|deployed|stationed)\b`,
   "i",
@@ -52,6 +55,7 @@ const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live
 
 function isGenericMilitaryMechanicSentence(sentence, question) {
   const text = sentence.trim();
+  if (PUBLIC_NUCLEAR_RECORD.test(text) && PUBLIC_NUCLEAR_RECORD.test(question)) return true;
   if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
   const normalizedQuestion = queryAliases.normalizePlayerWording(question);
   if (!GENERIC_MECHANICS_QUESTION.test(normalizedQuestion)) return false;
@@ -76,7 +80,9 @@ function containsPrivateMilitaryIntelligence(answer, question = "") {
 }
 
 function asksForPrivateMilitaryIntelligence(question) {
-  return PRIVATE_MILITARY_QUESTION.test(String(question || ""));
+  const text = String(question || "");
+  if (PUBLIC_NUCLEAR_RECORD.test(text)) return false;
+  return PRIVATE_MILITARY_QUESTION.test(text);
 }
 
 function protectPublicAnswer(answer, question = "") {

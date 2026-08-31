@@ -968,47 +968,55 @@ const server = http.createServer(async (req, res) => {
         // for 10s+ before its first token).
         status(`Drafting with ${models.displayFor(route.chain[0])}…`);
 
-        const navBlock = game.multiplayer ? navigation.block(question) : "";
+        const navBlock = game.multiplayer ? navigation.block(retrievalQuestion) : "";
         let raw = "", failed = null, failedBusy = false, llmUsage = {}, servedModel = route.model;
         let finishReason = null, fellThrough = null;
         const genStart = Date.now();
         let firstTokenMs = null;
+        const mechanicsAnswerContract = queryAliases.canonicalAnswer(retrievalQuestion);
         try {
-          const out = await llm.stream({
-            system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, visualizationLimit: vizLimitReason ? { reason: vizLimitReason, limit: Number(ent.viz || 0), used: vizQuota.vizUsed } : null, liveData: useMcp, report: reportRequested, game, changeHistory: historyBlock !== "", tz, privateAccess: moderatorAccess })
-              + (matchedCorrections.length ? `\n\n${corrections.block(matchedCorrections)}` : "")
-              + (hits ? `\n\n${hits.context}` : "")
-              + (historyBlock ? `\n\n${historyBlock}` : "")
-              + (liveBlock ? `\n\n${liveBlock}` : "")
-              + (investigation ? `\n\n${investigation.text}` : "")
-              + (queryAliases.guidance(question) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(question)}` : "")
-              // "Where do I find this" is answered from the real menu map, not guessed.
-              + (navBlock ? `\n\n${navBlock}` : ""),
-            // Deep answers are for exploring a system across several turns, so
-            // they carry more of the thread than a one-shot lookup needs.
-            history: store.history(convId, key, deepAnswer ? DEEP_HISTORY_TURNS : 3),
-            question,
-            // Length sets the token ceiling; the tier sets how hard it thinks.
-            longAnswer: length === "deep",
-            tier: route.tier,
-            chain: route.chain,
-            effort: route.effort,
-            signal: ac.signal,
-            onDelta: piece => { if (firstTokenMs === null) firstTokenMs = Date.now() - genStart; send("delta", piece); },
-          });
-          raw = out.text || "";
-          llmUsage = out.usage || {};
-          finishReason = out.finish || null;
-          // The chain may have fallen through to a lower-scored model, so record
-          // what actually answered rather than what routing first asked for.
-          servedModel = out.model || route.model;
-          if (out.tried?.length) {
-            fellThrough = out.tried.map(t => t.model).join(",");
-            console.error("[ask] fell through:", out.tried.map(t => `${t.model}(${t.error})`).join(" | "), "->", servedModel);
+          if (mechanicsAnswerContract) {
+            raw = mechanicsAnswerContract;
+            servedModel = "ask-mechanics-contract";
+            firstTokenMs = Date.now() - genStart;
+            send("delta", raw);
+          } else {
+            const out = await llm.stream({
+              system: prompt.build({ style, length, context: session.context, indexContext: "", visualizations, visualizationRequested, visualizationLimit: vizLimitReason ? { reason: vizLimitReason, limit: Number(ent.viz || 0), used: vizQuota.vizUsed } : null, liveData: useMcp, report: reportRequested, game, changeHistory: historyBlock !== "", tz, privateAccess: moderatorAccess })
+                + (matchedCorrections.length ? `\n\n${corrections.block(matchedCorrections)}` : "")
+                + (hits ? `\n\n${hits.context}` : "")
+                + (historyBlock ? `\n\n${historyBlock}` : "")
+                + (liveBlock ? `\n\n${liveBlock}` : "")
+                + (investigation ? `\n\n${investigation.text}` : "")
+                + (queryAliases.guidance(retrievalQuestion) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(retrievalQuestion)}` : "")
+                // "Where do I find this" is answered from the real menu map, not guessed.
+                + (navBlock ? `\n\n${navBlock}` : ""),
+              // Deep answers are for exploring a system across several turns, so
+              // they carry more of the thread than a one-shot lookup needs.
+              history: store.history(convId, key, deepAnswer ? DEEP_HISTORY_TURNS : 3),
+              question,
+              // Length sets the token ceiling; the tier sets how hard it thinks.
+              longAnswer: length === "deep",
+              tier: route.tier,
+              chain: route.chain,
+              effort: route.effort,
+              signal: ac.signal,
+              onDelta: piece => { if (firstTokenMs === null) firstTokenMs = Date.now() - genStart; send("delta", piece); },
+            });
+            raw = out.text || "";
+            llmUsage = out.usage || {};
+            finishReason = out.finish || null;
+            // The chain may have fallen through to a lower-scored model, so record
+            // what actually answered rather than what routing first asked for.
+            servedModel = out.model || route.model;
+            if (out.tried?.length) {
+              fellThrough = out.tried.map(t => t.model).join(",");
+              console.error("[ask] fell through:", out.tried.map(t => `${t.model}(${t.error})`).join(" | "), "->", servedModel);
+            }
+            // One concise line per answer so slow models, fall-throughs and client
+            // disconnects are visible without turning on verbose logging.
+            console.log(`[ask] served=${servedModel} tier=${route.tier} live=${useMcp ? 1 : 0} firstTokenMs=${firstTokenMs} totalMs=${Date.now() - genStart} outTok=${llmUsage.completion_tokens || 0} clientGone=${clientGone ? 1 : 0}`);
           }
-          // One concise line per answer so slow models, fall-throughs and client
-          // disconnects are visible without turning on verbose logging.
-          console.log(`[ask] served=${servedModel} tier=${route.tier} live=${useMcp ? 1 : 0} firstTokenMs=${firstTokenMs} totalMs=${Date.now() - genStart} outTok=${llmUsage.completion_tokens || 0} clientGone=${clientGone ? 1 : 0}`);
         } catch (e) {
           failed = e?.name === "AbortError" ? "aborted" : String(e.message || e).slice(0, 160);
           if (failed !== "aborted") console.error(`[ask] gen failed tier=${route.tier} live=${useMcp ? 1 : 0} after ${Date.now() - genStart}ms:`, failed);
@@ -1056,6 +1064,12 @@ const server = http.createServer(async (req, res) => {
           canonicalContractApplied = true;
           answerRepaired = true;
         }
+        if (!canonicalContractApplied && mechanicsAnswerContract) {
+          noFu = mechanicsAnswerContract;
+          servedModel = "ask-mechanics-contract";
+          canonicalContractApplied = true;
+          answerRepaired = true;
+        }
         const answerRequirement = answerRepair.requirementFor(retrievalQuestion, evidenceForCheck);
         if (!canonicalContractApplied && answerRepair.shouldRepair({ answer: noConflict, hasLiveData: useMcp, evidence: evidenceForCheck, requirement: answerRequirement })) {
           status("Rechecking the answer against the live evidence…");
@@ -1100,7 +1114,7 @@ const server = http.createServer(async (req, res) => {
         // exists for exactly the multi-system questions that invite it, and a
         // check that only runs on ~5% of traffic protects nobody. Flash gets
         // the async variant below instead of a synchronous wait.
-        if ((deepAnswer || route.tier === "pro") && evidenceForCheck) {
+        if (!canonicalContractApplied && (deepAnswer || route.tier === "pro") && evidenceForCheck) {
           try {
             groundingNotes = await grounding.check(answer, evidenceForCheck);
             answer += grounding.note(groundingNotes);

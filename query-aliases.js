@@ -22,6 +22,46 @@ function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
 
 const RULES = [
   {
+    match: /\b(?:nukes?|nuke (?:someone|people|a country)|nuclear (?:strike|attack|use|weapons?|warheads?|stockpile)|warheads?)\b/i,
+    queries: [
+      "src/lib/military/nuclearProgram.ts deterrenceScore nuclearStandoffPossible warheads delivery legs",
+      "src/lib/coldwar/tension.ts standing nuclear pressure total warheads",
+      "src/app/world/conflicts/page.tsx nuclear programs public warheads",
+      "src/app/world/conflicts/_coldwar/TensionHeader.tsx nuclear powers strip warheads best device tier",
+      "src/app/country/[code]/executive/cabinet/[positionId]/office/components/military/NuclearTab.tsx Defence Office stockpile production",
+      "nuclear strike launch target action route combat resolution",
+    ],
+    guidance: "State the current implementation boundary plainly: there is no nuclear-strike action, target selector, or combat-resolution path, so players cannot launch a warhead at another country. Explain what the implemented program does instead: device research and public tests, delivery legs, stockpile production, deterrence credibility, standing Cold War tension, and crisis eligibility. The defense officeholder manages it in the Defence Office Nuclear tab. National warhead totals are intentionally public on World > Conflicts in the nuclear-powers strip, alongside the best device tier; do not treat that public record as a private military roster.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/no (?:nuclear[- ]strike|launch)|cannot (?:launch|use)|can(?:not|'t) (?:launch|use)/i.test(text) || !/target|combat|resolution|action/i.test(text)) return "The answer must plainly say that no nuclear-strike action or resolution path is currently implemented.";
+      if (!/deterren/i.test(text) || !/tension/i.test(text) || !/delivery/i.test(text)) return "The answer must explain the implemented purpose: delivery-backed deterrence and Cold War tension.";
+      if (!/World.{0,10}Conflicts|\/world\/conflicts/i.test(text) || !/warhead/i.test(text)) return "The answer must point to World > Conflicts for the intentionally public warhead totals.";
+      if (!/Defen[cs]e Office/i.test(text) || !/Nuclear tab/i.test(text)) return "The answer must identify the Defence Office Nuclear tab as the management surface.";
+      return "";
+    },
+  },
+  {
+    match: /\b(?:battle odds?|front(?:[ -]line)? (?:bar|meter|control)|gain(?:ing)? ground|ground (?:gain|move|movement)|costly defeat|stalemate)\b/i,
+    queries: [
+      "src/lib/military/battle.ts battleForecast oddsPct defender terrain engagementPlan coalition strength",
+      "src/lib/military/occupation.ts occupationShift decisiveMargin maxShift retreatYield control side B",
+      "src/lib/military/config.ts OCCUPATION decisiveMargin maxShift READINESS_TEMPO_K",
+      "src/lib/turn/battleResolution.ts controlBefore controlAfter winner margin loserRetreated",
+      "src/app/world/conflicts/combat/components/BattleOddsBar.tsx separate engagements defender terrain",
+      "src/lib/seeds/wiki/content/warWalkthrough.ts advance overextend consolidate frontage readiness supply",
+    ],
+    guidance: "Treat the two battle-odds rows as separate engagements, not complementary shares: whichever side attacks faces the defender's terrain advantage. Explain that the forecast pools only the coalition formations that fit the front, then applies unit strength and readiness, battle roles, generals, supply, reserves, terrain, and naval-air support. Distinguish forecast probability from the realized result, which also includes a per-battle fortune roll. The front bar changes from the realized winning margin: a margin of 45 or more takes the maximum five points, narrower wins scale below five points, and an orderly retreat reduces movement again. Control is side B's share, so it falls when side A gains and rises when side B gains. A Costly Defeat is still an attacker loss and may move the line only a small amount. Give practical, public ways to improve the next attack without exposing hidden enemy rosters: concentrate healthy formations within frontage, use suitable explicit battle roles, restore readiness and supply, post effective generals, coordinate coalition forces, and provide air superiority and close-air support. Mention the advance, consolidate, advance cadence when repeated attacks have ground down readiness or supply.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/separate (?:engagement|attack)|not complement/i.test(text) || !/terrain|defender/i.test(text)) return "The answer must explain that the two odds rows are separate engagements and that the defender receives terrain advantage in either direction.";
+      if (!/margin/i.test(text) || !/(?:five|5) (?:control )?(?:point|percent)/i.test(text) || !/narrow|scale/i.test(text)) return "The answer must explain that realized margin moves the front, with a five-point cap for a decisive result and smaller movement for narrower results.";
+      if (!/side B/i.test(text) || !/(?:falls?|decreas|down).{0,40}side A|side A.{0,40}(?:falls?|decreas|down)/i.test(text)) return "The answer must orient the front meter: it stores side B's share and falls when side A gains.";
+      if (!/readiness|strength/i.test(text) || !/supply/i.test(text) || !/battle role|role/i.test(text)) return "The answer must give practical ways to improve odds, including healthy strength or readiness, supply, and battle roles.";
+      return "";
+    },
+  },
+  {
     match: /\bblockad(?:e|ing|ed)\b/i,
     queries: [
       "src/lib/navair/blockade.ts blockadeClosureFor tradeApproaches blockadeAffinityMultiplier",
@@ -172,4 +212,40 @@ function answerIssue(question, answer) {
   return "";
 }
 
-module.exports = { expand, guidance, answerIssue, normalizePlayerWording };
+// These mechanics have compact, fully deterministic contracts. Returning the
+// canonical explanation prevents a provider from turning an indexed fact into a
+// guess, especially on short follow-ups such as "where is that tab?". Questions
+// outside these narrow contracts still use the normal retrieval and model path.
+const CANONICAL_ANSWERS = [
+  {
+    match: /\bNaval and air command\b/i,
+    text: "Open your country, go to Executive, open the Defence office, choose Commands, then select Naval and air command. Only the Defence Secretary or an admin can change stations and standing orders there. The Main Site now links this page directly from Defence Commands, so it no longer has to be found by guessing a hidden URL.",
+  },
+  {
+    match: /\bblockad(?:e|ing|ed)\b/i,
+    text: "Sea control, front interdiction, and a trade blockade are separate mechanics. The conflict panel's 20 percent enemy supply cut is front-supply interdiction, not trade closure. To blockade DDR's trade, the Defence Secretary opens the country's Defence office, chooses Naval and air command, stations naval formations on a DDR trade approach, and gives them the Blockade standing order. The order applies on the next turn. Partial closure raises trade friction; full closure now becomes possible when blockade pressure reaches at least nine times that approach's port defence.",
+  },
+  {
+    match: /\bair superiority\b/i,
+    text: "To build air superiority, the Defence Secretary opens the country's Defence office, chooses Naval and air command, stations air formations in the contested region, and assigns CAP or PATROL. Those are the two missions that count toward the regional air contest. The channel builds toward the side's current contest share by up to 12 points per turn and decays toward it by up to 15 points per turn. CAS does not build the air-superiority channel; it separately adds support to the ground battle. New stations and standing orders take effect through the next turn's naval-air pass.",
+  },
+  {
+    match: /\b(?:battle role|battle post)\b[\s\S]{0,120}\b(?:save|saving|saved|change|changing|revert|reverting|reset|keep|keeps|stick|stays?)\b|\b(?:save|saving|saved|change|changing|revert|reverting|reset|keep|keeps|stick|stays?)\b[\s\S]{0,120}\b(?:battle role|battle post)\b/i,
+    text: "A battle role that appears to change and then reverts is an authorization and persistence issue, not combat AI rewriting it. Only the country's Defence Secretary or an admin can save posture and battle-role orders. Other officials, including the Chancellor, have a read-only Combat Command view. The star marks the recommended role; it is separate from an explicitly saved role. The Main Site now disables those controls and shows the read-only reason instead of pretending an unauthorized change was saved.",
+  },
+  {
+    match: /\b(?:battle odds?|front(?:[ -]line)? (?:bar|meter|control)|gain(?:ing)? ground|ground (?:gain|move|movement)|costly defeat|stalemate)\b/i,
+    text: "The two battle-odds rows are separate engagements, not complementary shares. Whoever attacks faces the defender's terrain advantage, so both sides can have roughly even or sub-50 attack odds. The forecast uses only coalition formations that fit the frontage, then applies strength and readiness, battle roles, generals, supply, reserves, terrain, and naval-air support. The resolved battle also includes a fortune roll. The front bar then moves from the realized winning margin: a decisive margin of 45 or more takes the maximum five control points, narrower wins scale below five points, and an orderly retreat reduces the movement again. The stored control is side B's share, so it falls when side A gains and rises when side B gains. A Costly Defeat is still an attacker loss, and a narrow one moving the line by about two points is normal. To improve the next attack, concentrate healthy formations within frontage, set suitable battle roles, restore readiness and supply, post effective generals, coordinate coalition forces, and combine air superiority with CAS. If repeated attacks have ground the force down, use an advance, consolidate, advance cadence.",
+  },
+  {
+    match: /\b(?:nukes?|nuke (?:someone|people|a country)|nuclear (?:strike|attack|use|weapons?|warheads?|stockpile)|warheads?)\b/i,
+    text: "There is currently no nuclear-strike action, target selector, or combat-resolution path, so players cannot launch or use a warhead against another country. The implemented nuclear program provides deterrence and Cold War pressure instead: device research and public tests unlock production, delivery legs make the stockpile credible, national deterrence depends on warheads plus delivery systems, and world stockpiles raise standing tension. The Defence Secretary manages research, tests, delivery systems, and production in the Defence Office's Nuclear tab. Current national warhead totals are intentionally public under World > Conflicts in the nuclear-powers strip, alongside each program's best device tier.",
+  },
+];
+
+function canonicalAnswer(question) {
+  const text = normalizePlayerWording(question);
+  return CANONICAL_ANSWERS.filter(item => item.match.test(text)).map(item => item.text).join("\n\n");
+}
+
+module.exports = { expand, guidance, answerIssue, canonicalAnswer, normalizePlayerWording };

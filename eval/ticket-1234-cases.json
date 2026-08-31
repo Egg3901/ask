@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ticket-1234-blockade",
+    "live": false,
+    "q": "How do we blockade DDR?"
+  },
+  {
+    "id": "ticket-1234-air",
+    "live": false,
+    "q": "and how do we incraase air sueprioryty",
+    "history": [
+      { "role": "user", "content": "How do we blockade DDR?" },
+      { "role": "assistant", "content": "Use Naval and air command to issue naval and air standing orders." }
+    ]
+  },
+  {
+    "id": "ticket-1234-navigation",
+    "live": false,
+    "q": "where can we find that tab",
+    "history": [
+      { "role": "user", "content": "How do we blockade DDR and increase air superiority?" },
+      { "role": "assistant", "content": "Use Naval and air command." }
+    ]
+  },
+  {
+    "id": "ticket-1234-role-save",
+    "live": false,
+    "q": "Why does the battle post keep reverting when I change it? I am Chancellor, not Defence Secretary.",
+    "context": {
+      "character": { "name": "Theo", "country": "UK", "party": "Conservative Party" }
+    }
+  },
+  {
+    "id": "ticket-1234-front",
+    "live": false,
+    "q": "How does this battle odds/front bar change, why did DDR's costly defeat only move it about 2%, and what should we do to gain ground?",
+    "history": [
+      { "role": "user", "content": "We are trying to understand how to win the war. The battle odds show You attack 50% and They attack 58%." },
+      { "role": "assistant", "content": "Those are the projected odds shown in Combat Command." }
+    ]
+  },
+  {
+    "id": "ticket-1234-nuclear",
+    "live": false,
+    "q": "How can we nuke people, what is the point of our nukes, and where can I see how many we have?",
+    "context": {
+      "character": { "name": "Theo", "country": "UK", "party": "Conservative Party" }
+    }
+  }
+]

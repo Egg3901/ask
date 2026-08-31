@@ -58,6 +58,16 @@ const CONDENSE_SYSTEM = `You rewrite a follow-up question into one standalone se
 The follow-up only makes sense inside the conversation ("what about the UK?", "and if I lose?"). Combine it with the conversation so the query names the actual systems, entities, and mechanics being asked about. Reply with ONLY the query text, under 30 words.`;
 
 const CONTEXT_TERM_STOP = new Set(["What", "How", "Where", "When", "Why", "Which", "Available", "The", "This", "That"]);
+const CONTEXT_PHRASES = [
+  "blockade",
+  "air superiority",
+  "Naval and air command",
+  "battle role",
+  "battle post",
+  "battle odds",
+  "front bar",
+  "nuclear stockpile",
+];
 
 function namedContextTerms(historyTurns, question) {
   if (!/\b(?:scores?|stats?|these|those|them|it|that|this|increase|raise|lower)\b/i.test(String(question || ""))) return [];
@@ -71,9 +81,11 @@ function restoreContextTerms(query, historyTurns, question) {
   const base = String(query || "").trim();
   const standalone = base.length >= 8 && base.length <= 300 ? base : String(question || "").trim();
   if (!standalone) return null;
-  const missing = namedContextTerms(historyTurns, question)
+  const thread = (historyTurns || []).map(turn => String(turn?.content || turn?.question || "")).join("\n");
+  const phrases = CONTEXT_PHRASES.filter(phrase => new RegExp(`\\b${phrase.replace(/ /g, "\\s+")}\\b`, "i").test(thread));
+  const missing = [...namedContextTerms(historyTurns, question), ...phrases]
     .filter(term => !standalone.toLowerCase().includes(term.toLowerCase()));
-  return missing.length ? `${standalone}: ${missing.join(", ")}`.slice(0, 300) : standalone;
+  return missing.length ? `${standalone}: ${[...new Set(missing)].join(", ")}`.slice(0, 300) : standalone;
 }
 
 /**

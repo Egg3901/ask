@@ -73,6 +73,12 @@ test("ticket 1234 battle-role save explanation is not treated as roster leakage"
   ), answer);
 });
 
+test("ticket 1234 preserves the deliberately public nuclear stockpile record", () => {
+  const question = "Where can I see how many nuclear warheads the UK has?";
+  const answer = "Open World, then Conflicts. The nuclear powers strip publicly lists the UK's current warhead stockpile and best device tier.";
+  assert.equal(guard.protectPublicAnswer(answer, question), answer);
+});
+
 test("a mechanics question does not make named live formations publishable", () => {
   const answer = "Station Northland's three fighter wings in the contested region.";
   assert.notEqual(

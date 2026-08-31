@@ -18,6 +18,37 @@ test("bridges ticket 1234 blockade wording to command, front support, and trade 
   ), "");
 });
 
+test("explains ticket 1234 battle odds and front movement from the canonical resolver", () => {
+  const question = "How does this battle odds/front bar change, and why did a costly defeat only move it 2%?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /battleForecast.*oddsPct/i.test(query)));
+  assert.ok(out.some(query => /occupationShift.*decisiveMargin.*maxShift/i.test(query)));
+  assert.match(aliases.guidance(question), /separate engagements/i);
+  assert.match(aliases.guidance(question), /five points/i);
+  assert.equal(
+    aliases.answerIssue(
+      question,
+      "The 50% You attack and 58% They attack rows are separate engagements, not complements, because the defender receives terrain advantage in either direction. The displayed odds come from the effective engaged coalition forces at that front, including strength, readiness, roles, generals, supply, support, terrain, reserves, and air/naval support. After resolution, the winning side moves the front according to the realized battle margin: a decisive result is capped at 5 control points, while a narrower result scales below that. If the loser withdrew, the movement is reduced again. A 2 point move after a Costly Defeat is therefore normal. Side B owns the shown control share, so Side A gains when it falls and Side B gains when it rises. Improve the odds by concentrating healthy formations within frontage, setting appropriate battle roles, restoring readiness and supply, assigning generals, and using CAP or PATROL for air superiority plus CAS for ground support."
+    ),
+    ""
+  );
+});
+
+test("explains ticket 1234 nuclear use, purpose, and public stockpile location", () => {
+  const question = "How can we nuke people, what is the point of our nukes, and where can I see how many we have?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /nuclearProgram.*deterrenceScore/i.test(query)));
+  assert.ok(out.some(query => /world\/conflicts.*TensionHeader/i.test(query)));
+  assert.match(aliases.guidance(question), /no nuclear-strike action/i);
+  assert.equal(
+    aliases.answerIssue(
+      question,
+      "There is currently no nuclear-strike action, target selector, or combat resolution path, so players cannot launch a warhead at another country. Nuclear programs are implemented as deterrence and Cold War pressure: warheads plus delivery legs create a deterrence score, total world stockpiles raise standing tension, and tests create tension events. The Defence Secretary manages research, tests, delivery systems, and production in the Defence Office's Nuclear tab. For the public number, open World, then Conflicts: the nuclear powers strip lists each declared program's current warhead stockpile and best device tier."
+    ),
+    ""
+  );
+});
+
 test("normalizes the air-superiority spelling from ticket 1234", () => {
   const question = "and how do we incraase air sueprioryty";
   const out = aliases.expand(question);
@@ -134,4 +165,18 @@ test("checks that repaired cross-system answers satisfy the domain contract", ()
     "In the German Question, how do I increase NATO air superiority?",
     "Station wings in the region on CAP. The channel builds and decays outside the crisis board.",
   ), /CAP and PATROL/i);
+});
+
+test("canonical mechanic answers satisfy their own contracts", () => {
+  for (const question of [
+    "How do we blockade DDR?",
+    "How do we increase air superiority?",
+    "Why does my battle role revert when I save it?",
+    "How does the battle odds and front bar change?",
+    "How can we nuke people and where are warhead totals?",
+  ]) {
+    const answer = aliases.canonicalAnswer(question);
+    assert.ok(answer, question);
+    assert.equal(aliases.answerIssue(question, answer), "", question);
+  }
 });
