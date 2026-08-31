@@ -121,6 +121,28 @@ CREATE INDEX IF NOT EXISTS idx_audits_flagged ON answer_audits(answered, created
 -- table keeps the day, so weekly-active is measured rather than inferred.
 -- 'visit' is a signed-in page load, 'ask' is a question (web or Discord); the
 -- first source of the day wins, which is all the console distinguishes.
+CREATE TABLE IF NOT EXISTS watches(
+  id INTEGER PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  params TEXT NOT NULL,
+  state TEXT DEFAULT '{}',
+  active INTEGER DEFAULT 1,
+  created INTEGER NOT NULL,
+  last_checked INTEGER,
+  last_fired INTEGER);
+CREATE INDEX IF NOT EXISTS idx_watches_user ON watches(user_key, active);
+CREATE INDEX IF NOT EXISTS idx_watches_active ON watches(active, last_checked);
+
+CREATE TABLE IF NOT EXISTS watch_events(
+  id INTEGER PRIMARY KEY,
+  watch_id INTEGER NOT NULL,
+  user_key TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  seen INTEGER DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_watch_events_user ON watch_events(user_key, seen);
+
 CREATE TABLE IF NOT EXISTS user_days(
   user_key TEXT NOT NULL,
   day TEXT NOT NULL,             -- 'YYYY-MM-DD', UTC, same day boundary as the quota window
@@ -463,6 +485,48 @@ function replayCandidates(sinceMs, limit = 40) {
       };
     });
   } catch { return []; }
+}
+
+// ── Watchlists ──────────────────────────────────────────────────────────────
+// Public-state subscriptions ("tell me when X"), checked by an in-process
+// tick; fired events ride along with the player's next answer.
+function createWatch(userKey, kind, params, cap) {
+  const open = db.prepare("SELECT COUNT(*) n FROM watches WHERE user_key=? AND active=1").get(String(userKey)).n;
+  if (open >= cap) return { error: `You already have ${open} active watches (limit ${cap}). Delete one first ("delete watch #id").` };
+  const info = db.prepare("INSERT INTO watches(user_key,kind,params,created) VALUES(?,?,?,?)")
+    .run(String(userKey), String(kind), JSON.stringify(params || {}), Date.now());
+  return { id: Number(info.lastInsertRowid) };
+}
+function listWatches(userKey) {
+  return db.prepare("SELECT id,kind,params,created,last_fired FROM watches WHERE user_key=? AND active=1 ORDER BY id").all(String(userKey));
+}
+function deleteWatch(userKey, id) {
+  return db.prepare("UPDATE watches SET active=0 WHERE user_key=? AND id=? AND active=1").run(String(userKey), Number(id)).changes > 0;
+}
+function deleteAllWatches(userKey) {
+  return db.prepare("UPDATE watches SET active=0 WHERE user_key=? AND active=1").run(String(userKey)).changes;
+}
+// Oldest-checked first so a large population still rotates fairly under the
+// per-tick budget.
+function activeWatches(limit) {
+  return db.prepare("SELECT * FROM watches WHERE active=1 ORDER BY COALESCE(last_checked,0) LIMIT ?").all(Number(limit) || 50);
+}
+function updateWatchState(id, state, fired) {
+  db.prepare(`UPDATE watches SET state=?, last_checked=? ${fired ? ", last_fired=?" : ""} WHERE id=?`)
+    .run(...(fired ? [String(state), Date.now(), Date.now(), Number(id)] : [String(state), Date.now(), Number(id)]));
+}
+function addWatchEvent(watchId, userKey, message) {
+  db.prepare("INSERT INTO watch_events(watch_id,user_key,message,created) VALUES(?,?,?,?)")
+    .run(Number(watchId), String(userKey), String(message).slice(0, 300), Date.now());
+}
+/** Unseen events for a user, marked seen on read: they deliver exactly once. */
+function takeWatchEvents(userKey) {
+  const rows = db.prepare("SELECT id,message,created FROM watch_events WHERE user_key=? AND seen=0 ORDER BY id LIMIT 10").all(String(userKey));
+  if (rows.length) {
+    const mark = db.prepare("UPDATE watch_events SET seen=1 WHERE id=?");
+    for (const row of rows) mark.run(row.id);
+  }
+  return rows;
 }
 
 // ── Activity: who is still here, and how much are they asking ───────────────
@@ -1044,6 +1108,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, setEmbedHealth, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+module.exports = { db, S, userKey, usage, record, feedback, createWatch, listWatches, deleteWatch, deleteAllWatches, activeWatches, updateWatchState, addWatchEvent, takeWatchEvents, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, setEmbedHealth, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
   reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };

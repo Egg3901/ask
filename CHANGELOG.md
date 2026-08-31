@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.14.0 - 2026-08-31
+
+### Added
+- Watchlists: tell Ask to watch public game state and it alerts you with your next answer. "Watch USD/GBP and tell me when it crosses above 0.5", "let me know when there are new battles involving the US", or "watch for new US bills". Creating, listing ("my watches"), and deleting ("delete watch #3") are instant and free; checks run about every ten minutes. Five watches per player, twenty for staff.
+
 ## 1.13.0 - 2026-08-31
 
 ### Added
