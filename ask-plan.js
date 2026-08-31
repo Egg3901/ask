@@ -62,6 +62,21 @@ function create(question, context = {}, mode = "auto") {
     status: "Reading the battlefield supply rules…", requestedMode, context,
   };
 
+  // Post-race debrief: the asker wants to understand a resolved contest they
+  // were in ("why did I lose my senate race"). Post-hoc analysis of the
+  // asker's own race is squarely fair play; forecasting a LIVE contested race
+  // is not, and the playbook forbids it. Live is required because the debrief
+  // is built from the actual tally (trace_race), not vibes.
+  const electionDebrief = /\b(?:why (?:did|have) (?:i|we|my)\b.{0,60}\b(?:lo(?:se|st)|w[io]n)|what (?:cost|lost) (?:me|us)\b|debrief\b.{0,40}\b(?:race|election|campaign)|post[- ]?mortem\b.{0,40}\b(?:race|election)|(?:lost|won) (?:my|our|the) (?:seat|race|election|primary)\b.{0,30}\bwhy)/i.test(text)
+    && /\b(?:race|election|seat|primary|campaign|runoff|governor|senat|house|president|mayor|deputy)\b/i.test(text);
+  if (electionDebrief) return {
+    id: "election-debrief", intent: "election_debrief", live: "required",
+    display: { kind: "prose", metric: null, canonical: false },
+    visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: true,
+    status: "Pulling your race's actual tally and the rules it ran under…", requestedMode, context,
+  };
+
+
   if (candidateMap) return {
     id: "candidate-roster-map", intent: "candidate_roster", live: "required",
     display: { kind: "map", metric: "candidate_roster", canonical: true },

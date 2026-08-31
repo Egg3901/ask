@@ -43,6 +43,12 @@ const PLAYBOOKS = [
     writer: "Ground any election explanation in the specific race's numbers from the evidence. Never tell a player a seat they currently hold was wrongly won; if tally and complaint disagree, show both and say which mechanic explains the gap.",
   },
   {
+    id: "election_debrief",
+    match: /\b(?:why (?:did|have) (?:i|we|my)\b.{0,60}\b(?:lo(?:se|st)|w[io]n)|what (?:cost|lost) (?:me|us)\b|debrief\b.{0,40}\b(?:race|election|campaign)|post[- ]?mortem\b.{0,40}\b(?:race|election))/i,
+    scout: "Debrief a resolved race from its record: pull the exact race (trace_race), the asker's approval history around it (trace_approval), and the era's electoral rules for that chamber. Decompose the margin: turnout, favorability, incumbency, party lean, apportionment changes. Use calculate for every gap you quote. If the race is still LIVE, gather only public standing and stop: forecasting a contested race is off limits.",
+    writer: "Structure the debrief: the actual margin first, then the two or three channels that moved it (with numbers from the tally), then what was structural versus playable, then ONE concrete lesson for next time. Never tell a player a seat someone currently holds was wrongly won, and never predict an unresolved race.",
+  },
+  {
     id: "economy_causal",
     match: /\b(?:why (?:is|are|did|has|have)|what(?:'s| is) (?:causing|driving)|crash|spik\w+|collaps\w+|plummet\w+|soar\w+)\b.*\b(?:price|inflation|gdp|market|econom|stock|profit|revenue|wage|unemployment|currency|exchange)\b/i,
     scout: "For a 'why did X move' question, establish the timeline first: when did it move (trend series), what shipped near that turn (change history), and what does the current pulse show. A mechanic explanation without a date is a guess. Seeded configuration is not the live world; read live values before blaming a constant.",
