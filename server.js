@@ -1348,7 +1348,7 @@ const server = http.createServer(async (req, res) => {
                 chunkVectors: retrieve.vectorsFor(hits?.hits || [], game),
                 embedSentences: async texts => {
                   try {
-                    return await retrieve.embedBatch(texts, { timeoutMs: 8000, slice: 8, deadlineMs: 8000 });
+                    return await retrieve.embedBatch(texts, { timeoutMs: 12000, slice: 8, deadlineMs: 12000 });
                   } catch (e) {
                     console.warn(`[ask] attribution embed failed (${texts.length} sentences): ${String(e.message || e).slice(0, 160)}`);
                     throw e;
@@ -1522,7 +1522,10 @@ async function checkEmbedding(tag) {
   embedHealth.checkedAt = Date.now();
 }
 checkEmbedding("boot");
-setInterval(() => checkEmbedding("periodic"), 10 * 60 * 1000).unref();
+// Four minutes, deliberately inside ollama's five-minute keep_alive: the
+// check doubles as a keep-warm, so attribution's sentence batches never pay
+// a cold CPU model load (measured: a cold first batch blew its whole budget).
+setInterval(() => checkEmbedding("periodic"), 4 * 60 * 1000).unref();
 store.setEmbedHealth?.(embedHealth);
 
 // Default to loopback so the box stays behind Caddy; Railway sets HOST=0.0.0.0 for public ingress.
