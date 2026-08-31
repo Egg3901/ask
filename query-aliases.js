@@ -7,6 +7,7 @@ function normalizePlayerWording(question) {
   return String(question || "")
     .replace(/\bincra+ase\b/gi, "increase")
     .replace(/\bair\s+s[a-z]*(?:prior|prio|rior|ority|oryt)[a-z]*\b/gi, "air superiority")
+    .replace(/\bair[ -]force\s+(?:support|modifier)\b/gi, "air support")
     .replace(/\bbattle\s+post\b/gi, "battle role");
 }
 
