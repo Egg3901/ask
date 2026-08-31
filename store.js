@@ -410,6 +410,38 @@ function digest(sinceMs) {
   };
 }
 
+// Replay candidates: every downvoted or guard-flagged answer, shaped for the
+// eval/reported-failures.json curation flow. The conversion cannot be fully
+// automatic (the expected behavior is what the failed answer did NOT do), so
+// this feeds a curated queue rather than writing test cases directly. The
+// point is that no reported failure silently drops out of the loop between
+// the telemetry row and the committed replay suite.
+function replayCandidates(sinceMs, limit = 40) {
+  try {
+    const rows = db.prepare(`SELECT id, question, feedback_rating, feedback_reason, validation, plan, model, ts
+      FROM asks WHERE ts>? AND cached=0 AND (
+        feedback_rating='down'
+        OR json_array_length(COALESCE(json_extract(validation,'$.issues'),'[]')) > 0
+      ) ORDER BY ts DESC LIMIT ?`).all(Number(sinceMs) || 0, Math.min(Number(limit) || 40, 200));
+    return rows.map(row => {
+      const validation = safeJson(row.validation) || {};
+      const plan = safeJson(row.plan) || {};
+      return {
+        answerId: row.id,
+        name: String(row.question || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || `answer-${row.id}`,
+        question: String(row.question || "").slice(0, 500),
+        rating: row.feedback_rating || null,
+        reason: row.feedback_reason || null,
+        issues: Array.isArray(validation.issues) ? validation.issues : [],
+        grounding: Array.isArray(validation.grounding) ? validation.grounding : [],
+        observedIntent: plan.intent || null,
+        model: row.model || null,
+        ts: row.ts,
+      };
+    });
+  } catch { return []; }
+}
+
 // ── Activity: who is still here, and how much are they asking ───────────────
 // An ACTIVE user is one who signed in or asked a question inside the trailing
 // window (7 days by default). Both halves matter: Discord users never load a
@@ -989,6 +1021,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
   reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };

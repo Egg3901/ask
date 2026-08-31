@@ -418,6 +418,20 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, store.digest(Date.now() - days * 864e5));
     }
 
+    // Replay-candidate feed: every downvoted or guard-flagged answer, shaped
+    // for curation into eval/reported-failures.json (scripts/pull-replay-cases
+    // fetches this). Same auth as health.json. The loop this closes: a report
+    // lands in telemetry, becomes a frozen replay case, and the same failure
+    // can never ship twice unnoticed.
+    if (req.method === "GET" && p === "/console/replay.json") {
+      const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+      const supplied = Buffer.from(bearer), expected = Buffer.from(ASK_SECRET);
+      const internal = Boolean(ASK_SECRET) && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+      if (!internal && (!session || session.context?.isAdmin !== true)) return json(res, session ? 403 : 401, { error: "Staff only." });
+      const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 14, 1), 90);
+      return json(res, 200, { candidates: store.replayCandidates(Date.now() - days * 864e5) });
+    }
+
     // Staff answer review: one card at a time over everything nobody has judged.
     // The queue itself is built in the store; this only serves it.
     if (req.method === "GET" && p === "/console/review") {
