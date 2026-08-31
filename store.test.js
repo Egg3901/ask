@@ -421,3 +421,29 @@ test("the health digest names open doc conflicts instead of only counting them",
   assert.equal(named.actual, "3/5 of votes cast");
   assert.equal(named.source, "wiki");
 });
+
+test("replay candidates capture downvoted and flagged answers with their defects", () => {
+  const flaggedId = recordAnswer({
+    question: "Why did my approval crash after the tariff bill?",
+    validation: JSON.stringify({ issues: ["truncated"], grounding: [] }),
+    plan: JSON.stringify({ id: "general", intent: "general" }),
+  });
+  const downId = recordAnswer({
+    question: "How do bond coupons pay out?",
+    validation: JSON.stringify({ issues: [] }),
+  });
+  store.feedback({ answerId: downId, userKey: "ahd:user-1", rating: "down", reason: "wrong payout schedule" });
+  const candidates = store.replayCandidates(Date.now() - 60000);
+  const flagged = candidates.find(c => c.answerId === flaggedId);
+  assert.ok(flagged);
+  assert.deepEqual(flagged.issues, ["truncated"]);
+  assert.equal(flagged.observedIntent, "general");
+  const down = candidates.find(c => c.answerId === downId);
+  assert.ok(down);
+  assert.equal(down.rating, "down");
+  assert.equal(down.reason, "wrong payout schedule");
+  assert.match(down.name, /^how-do-bond-coupons/);
+  // A clean, unrated answer is not a candidate.
+  const cleanId = recordAnswer({ question: "clean answer", validation: JSON.stringify({ issues: [] }) });
+  assert.ok(!store.replayCandidates(Date.now() - 60000).some(c => c.answerId === cleanId));
+});
