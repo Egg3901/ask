@@ -43,6 +43,12 @@ const PLAYBOOKS = [
     writer: "Ground any election explanation in the specific race's numbers from the evidence. Never tell a player a seat they currently hold was wrongly won; if tally and complaint disagree, show both and say which mechanic explains the gap.",
   },
   {
+    id: "away_briefing",
+    match: /\b(?:what (?:did|have) i miss(?:ed)?|catch me up|since i (?:last )?(?:logged|played)|been (?:away|gone|offline))\b/i,
+    scout: "Brief a returning player from their own anchors: current turn first (game_overview), then what moved for THEM: their approval or race if they hold or contest a seat (trace_approval, elections for their country), their corporation and its sector (trace_corp, trace_sector), their home region's macro trend over the recent turns (macro_history), wars involving their country (wars), and recent legislation in their country (legislation_catalog). Skip any anchor the session context does not name. Public data only for everyone else.",
+    writer: "Write it as a briefing, not an essay: lead with the single most consequential change for this player, then short sections (your seat, your corporation, your country, the world) with numbers and turn references, and end with one concrete suggested next action. Omit any section with nothing to report rather than padding it.",
+  },
+  {
     id: "election_debrief",
     match: /\b(?:why (?:did|have) (?:i|we|my)\b.{0,60}\b(?:lo(?:se|st)|w[io]n)|what (?:cost|lost) (?:me|us)\b|debrief\b.{0,40}\b(?:race|election|campaign)|post[- ]?mortem\b.{0,40}\b(?:race|election))/i,
     scout: "Debrief a resolved race from its record: pull the exact race (trace_race), the asker's approval history around it (trace_approval), and the era's electoral rules for that chamber. Decompose the margin: turnout, favorability, incumbency, party lean, apportionment changes. Use calculate for every gap you quote. If the race is still LIVE, gather only public standing and stop: forecasting a contested race is off limits.",

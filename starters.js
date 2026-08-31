@@ -15,6 +15,7 @@ const CATEGORIES = {
 
 const QUESTIONS = [
   { id: "basics-turn-order", category: "basics", text: "What happens during a game turn, and in what order?" },
+  { id: "basics-away-briefing", category: "basics", text: "What did I miss while I was away?" },
   { id: "basics-actions", category: "basics", text: "How do actions and action points work?" },
   { id: "basics-character-stats", category: "basics", text: "What do my character stats change in practice?" },
   { id: "basics-reputation", category: "basics", text: "How is character reputation gained and lost?" },
