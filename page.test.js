@@ -40,14 +40,26 @@ test("keeps every output and display preference in one settings sheet", () => {
   assert.match(panel, /data-opt="length"/);
 });
 
-test("question-library categories stay visible while samples scroll", () => {
+test("question-library categories stay visible above the sample scroller", () => {
   const html = render();
   const tabs = html.match(/<div class="starter-tabs" id="starterTabs"[\s\S]*?<\/div>/)?.[0] || "";
 
   assert.match(tabs, /data-starter-category="for-you"/);
   assert.match(tabs, /data-starter-category="investigate"/);
-  assert.match(html, /\.starter-tabs\{[^}]*position:sticky;[^}]*top:0;[^}]*z-index:/);
+  assert.match(html, /\.starter-tabs\{[^}]*flex:0 0 auto;[^}]*overflow-x:auto/);
   assert.match(html, /@media\(max-width:560px\)\{[\s\S]*?\.starter-tabs\{[^}]*width:100%;[^}]*overflow-x:auto/);
+});
+
+test("mobile library keeps named categories outside the scrolling question list", () => {
+  const html = render();
+  const panel = html.match(/<div class="sheet question-sheet"[\s\S]*?<\/div><\/div>/)?.[0] || "";
+
+  const askTools = panel.match(/<button[^>]*data-starter-category="investigate"[^>]*>Ask tools<\/button>/)?.[0] || "";
+  assert.match(askTools, /aria-selected="true"/);
+  assert.match(panel, /<div class="starter-tabs"[^>]*>[\s\S]*?<\/div>\s*<div class="question-scroll" id="questionScroll">\s*<div class="ask-follow question-library"/);
+  assert.match(html, /\.question-sheet \.sheet-body\{[^}]*overflow:hidden/);
+  assert.match(html, /\.question-scroll\{[^}]*overflow-y:auto/);
+  assert.match(html, /starterCategory='investigate'/);
 });
 
 test("visible specialist mode controls send an explicit validated mode", () => {
@@ -58,6 +70,16 @@ test("visible specialist mode controls send an explicit validated mode", () => {
   }
   assert.match(html, /mode:mode/);
   assert.match(html, /function setAskMode\(mode\)/);
+});
+
+test("selected Ask mode has a brief plain-language explanation", () => {
+  const html = render();
+
+  assert.match(html, /id="askModeHint"[^>]*>Choose the best answer path<\/p>/);
+  assert.match(html, /data-ask-mode="verify"[^>]*data-mode-hint="Test each claim against game evidence"/);
+  assert.match(html, /data-ask-mode="autopsy"[^>]*data-mode-hint="Trace a live result through rules and recent changes"/);
+  assert.match(html, /data-ask-mode="scenario"[^>]*data-mode-hint="Project a bounded demand or supply shock"/);
+  assert.match(html, /askModeHint\.textContent=button\.dataset\.modeHint/);
 });
 
 test("changelog bullets keep wrapped Markdown continuation lines", () => {

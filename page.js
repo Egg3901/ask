@@ -325,7 +325,7 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
   background:transparent;color:var(--text-2);padding:.42rem .72rem;font-size:.7rem;cursor:pointer;transition:all var(--t)}
 .starter-browse:hover{color:var(--text);border-color:var(--border-2);background:var(--glass-2)}
 .starter-browse svg{width:12px;height:12px}
-.starter-tabs{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;gap:6px;width:100%;min-width:0;overflow-x:auto;scrollbar-width:none;padding:8px;background:var(--surface);border-bottom:1px solid var(--border)}
+.starter-tabs{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px;width:100%;min-width:0;overflow-x:auto;scrollbar-width:none;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
 .starter-tabs::-webkit-scrollbar{display:none}
 .starter-tab{flex:0 0 auto;border:1px solid var(--border-2);border-radius:var(--r-full);background:var(--bg-1);
   color:var(--text-2);padding:.34rem .7rem;font-size:.7rem;cursor:pointer;transition:all var(--t)}
@@ -347,28 +347,32 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
 .starter-meta{display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:.62rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .starter-live{display:inline-flex;align-items:center;gap:3px;color:var(--text-2)}
 .starter-live svg{width:10px;height:10px}
-.question-sheet .sheet-card{max-width:720px}
-.question-sheet .sheet-body{max-height:min(68vh,620px);overflow-y:auto;gap:12px}
+.question-sheet .sheet-card{max-width:720px;height:min(78dvh,700px);display:flex;flex-direction:column}
+.question-sheet .sheet-body{flex:1;min-height:0;padding:0;overflow:hidden;gap:0}
+.question-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:12px 16px 18px}
 .question-library{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
 .question-library .starter-card:first-child{grid-row:auto;min-height:78px;padding:14px 15px;font-size:.83rem}
 
 .ask-composer{flex:0 0 auto;padding:12px clamp(14px,4vw,24px) 18px;
   padding-bottom:max(18px,env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg-0) 22%)}
 .ask-comp-inner{max-width:820px;margin:0 auto}
-.ask-modes{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 4px 7px}
+.ask-modes{display:flex;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px;border-radius:12px;background:var(--glass-2)}
 .ask-modes::-webkit-scrollbar{display:none}
-.ask-mode{flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-full);background:var(--surface);color:var(--text-3);padding:.3rem .68rem;font-size:.68rem;font-weight:600;cursor:pointer}
-.ask-mode:hover{color:var(--text);border-color:var(--border-2)}
-.ask-mode.active{color:var(--text);border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.ask-mode{flex:0 0 auto;height:28px;border:0;border-radius:9px;background:transparent;color:var(--text-3);padding:0 .64rem;font-size:.66rem;font-weight:600;cursor:pointer;transition:color var(--t),background var(--t),box-shadow var(--t)}
+.ask-mode:hover{color:var(--text);background:var(--glass-hover)}
+.ask-mode.active{color:var(--text);background:var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.14)}
 /* Gradient hairline: lit from above, falls off toward the bottom edge. */
-.ask-comp-box{position:relative;display:flex;align-items:flex-end;gap:10px;padding:7px 7px 7px 16px;border:1px solid transparent;
+.ask-comp-box{position:relative;display:flex;flex-direction:column;gap:5px;padding:9px 9px 7px 16px;border:1px solid transparent;
   border-radius:28px;background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge) border-box;
   box-shadow:0 12px 32px rgba(0,0,0,.14),var(--hi);transition:box-shadow var(--t)}
 .ask-comp-box:focus-within{background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge-focus) border-box;
   box-shadow:0 14px 38px rgba(0,0,0,.18),0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
-.ask-comp-box textarea{flex:1;width:100%;padding:8px 2px;background:transparent;border:none;color:var(--text);font-family:var(--font);
+.ask-input-row{display:flex;align-items:flex-end;gap:10px;width:100%}
+.ask-comp-box textarea{flex:1;width:100%;padding:7px 2px;background:transparent;border:none;color:var(--text);font-family:var(--font);
   font-size:16px;resize:none;outline:none;min-height:24px;max-height:120px;line-height:1.5}
 .ask-comp-box textarea::placeholder{color:var(--text-3)}
+.ask-comp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding-top:4px;border-top:1px solid var(--border)}
+.ask-mode-hint{min-height:1em;margin:0;overflow:hidden;color:var(--text-3);font-size:.66rem;line-height:1.35;white-space:nowrap;text-overflow:ellipsis}
 .ask-send{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;
   border:none;background:var(--send-grad);color:var(--on-accent);cursor:pointer;
   box-shadow:var(--send-hi),0 2px 10px rgba(0,0,0,.35);
@@ -435,10 +439,14 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
   .starter-explorer .starter-card:first-child{grid-column:1 / -1;grid-row:auto;min-height:76px;padding:12px;font-size:.8rem}
   .starter-explorer .starter-card:first-child .starter-copy{align-self:start;max-width:none}
   .question-library{grid-template-columns:1fr}.question-library .starter-card:first-child{grid-column:auto}
-  .starter-tabs{width:100%;min-width:0;flex-wrap:nowrap;overflow-x:auto;padding:8px 4px}
+  .starter-tabs{width:100%;min-width:0;flex-wrap:nowrap;overflow-x:auto;padding:10px 14px}
+  .question-sheet .sheet-card{height:min(82dvh,720px)}
+  .question-scroll{padding:10px 14px max(16px,env(safe-area-inset-bottom))}
   .ask-composer{padding:7px 12px max(9px,env(safe-area-inset-bottom))}
-  .ask-modes{width:100%;min-width:0;padding-bottom:5px}
-  .ask-comp-box{border-radius:22px;padding:6px 6px 6px 14px}
+  .ask-modes{max-width:100%}
+  .ask-mode{padding:0 .5rem;font-size:.63rem}
+  .ask-comp-box{border-radius:22px;padding:8px 6px 6px 14px}
+  .ask-mode-hint{font-size:.61rem}
   .ask-send{width:38px;height:38px}
   .comp-foot{margin-top:4px;font-size:.65rem}
   .sheet{align-items:flex-end;padding:0}
@@ -1107,11 +1115,14 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <span class="starter-meta"><span>${esc(question.label)}</span>${question.live ? `<span class="starter-live">${icon("zap", { size: 10 })} Live</span>` : ""}</span>
     <span class="starter-copy">${esc(question.text)}</span>${icon("arrow-right", { size: 15 })}</button>`;
   const starterTabs = [
+    ["investigate", starterQuestions.CATEGORIES.investigate.label],
     ["for-you", corp || ch ? "For you" : "Featured"],
-    ...Object.entries(starterQuestions.CATEGORIES).map(([key, value]) => [key, value.label]),
+    ...Object.entries(starterQuestions.CATEGORIES)
+      .filter(([key]) => key !== "investigate")
+      .map(([key, value]) => [key, value.label]),
   ].map(([key, label], index) => `<button class="starter-tab${index === 0 ? " active" : ""}" type="button" role="tab" aria-selected="${index === 0 ? "true" : "false"}" data-starter-category="${key}">${esc(label)}</button>`).join("");
   const askModes = capabilities.publicModes().map((mode, index) =>
-    `<button class="ask-mode${index === 0 ? " active" : ""}" type="button" data-ask-mode="${mode.id}" aria-pressed="${index === 0 ? "true" : "false"}" title="${esc(mode.hint)}">${esc(mode.label)}</button>`
+    `<button class="ask-mode${index === 0 ? " active" : ""}" type="button" data-ask-mode="${mode.id}" data-mode-hint="${esc(mode.hint)}" aria-pressed="${index === 0 ? "true" : "false"}">${esc(mode.label)}</button>`
   ).join("");
 
   const segBtns = (obj, group, current) => Object.entries(obj).map(([k, v]) =>
@@ -1165,13 +1176,14 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
 
     <button class="jumpbtn" id="jump" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>Jump to latest</button>
     <div class="ask-composer"><div class="ask-comp-inner">
-      <div class="ask-modes" id="askModes" role="toolbar" aria-label="Answer mode">${askModes}</div>
       <form id="f"><div class="ask-comp-box">
-        <textarea id="q" rows="1" maxlength="500" placeholder="Ask about any part of the game…"></textarea>
-        <button class="ask-send" id="go" type="submit" aria-label="Ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
+        <div class="ask-input-row"><textarea id="q" rows="1" maxlength="500" placeholder="Ask about any part of the game…"></textarea>
+          <button class="ask-send" id="go" type="submit" aria-label="Ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
+        </div>
+        <div class="ask-comp-toolbar"><div class="ask-modes" id="askModes" role="toolbar" aria-label="Answer mode">${askModes}</div></div>
       </div></form>
       <div class="comp-foot">
-        <button class="live-mode" id="liveMode" type="button" aria-pressed="false">${icon("zap", { size: 12 })} <span>Code sources</span></button>
+        <div><button class="live-mode" id="liveMode" type="button" aria-pressed="false">${icon("zap", { size: 12 })} <span>Code sources</span></button><p class="ask-mode-hint" id="askModeHint" aria-live="polite">Choose the best answer path</p></div>
         <span class="comp-right"><span class="qcount" id="qcount" hidden></span><span class="thread-cost" id="costlbl"></span></span>
       </div>
     </div></div>
@@ -1215,7 +1227,9 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     <div class="sheet-head" id="questionTitle">Question library <button class="x" id="questionClose" type="button" aria-label="Close">×</button></div>
     <div class="sheet-body">
       <div class="starter-tabs" id="starterTabs" role="tablist" aria-label="Question topics">${starterTabs}</div>
-      <div class="ask-follow question-library" id="libraryQuestions"></div>
+      <div class="question-scroll" id="questionScroll">
+        <div class="ask-follow question-library" id="libraryQuestions"></div>
+      </div>
     </div>
   </div></div>`;
 
@@ -1245,13 +1259,14 @@ var f=document.getElementById('f'),q=document.getElementById('q'),go=document.ge
     live=document.getElementById('live'),visualizations=document.getElementById('visualizations'),convs=document.getElementById('convs'),
     side=document.getElementById('side'),scrim=document.getElementById('scrim'),settingsPanel=document.getElementById('settingsPanel'),
     starters=document.getElementById('starters'),starterExplorer=document.getElementById('starterExplorer'),
-    starterTabs=document.getElementById('starterTabs'),libraryQuestions=document.getElementById('libraryQuestions'),
+    starterTabs=document.getElementById('starterTabs'),libraryQuestions=document.getElementById('libraryQuestions'),questionScroll=document.getElementById('questionScroll'),
     questionPanel=document.getElementById('questionPanel'),liveMode=document.getElementById('liveMode'),askModes=document.getElementById('askModes'),
+    askModeHint=document.getElementById('askModeHint'),
     chartViewer=document.getElementById('chartViewer'),chartStage=document.getElementById('chartStage'),
     chartCanvas=document.getElementById('chartCanvas'),jump=document.getElementById('jump'),
     qcount=document.getElementById('qcount'),fbPanel=document.getElementById('fbPanel');
 var DOC_TITLE=document.title;
-var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you',askMode='auto';
+var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='investigate',askMode='auto';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
 var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard',effort:localStorage.getItem('ask.effort')||'auto'};
 
@@ -1442,10 +1457,10 @@ starterTabs.addEventListener('click',function(e){
   starterCategory=tab.dataset.starterCategory;
   starterTabs.querySelectorAll('.starter-tab').forEach(function(other){var active=other===tab;
     other.classList.toggle('active',active);other.setAttribute('aria-selected',active?'true':'false');});
-  renderLibrary();
+  renderLibrary();questionScroll.scrollTop=0;
 });
 function closeQuestions(){if(questionPanel.classList.contains('open')){questionPanel.classList.remove('open');document.getElementById('starterBrowse').focus();}}
-document.getElementById('starterBrowse').addEventListener('click',function(){renderLibrary();questionPanel.classList.add('open');document.getElementById('questionClose').focus();});
+document.getElementById('starterBrowse').addEventListener('click',function(){renderLibrary();questionScroll.scrollTop=0;questionPanel.classList.add('open');document.getElementById('questionClose').focus();});
 document.getElementById('questionClose').addEventListener('click',closeQuestions);
 questionPanel.addEventListener('click',function(e){if(e.target===questionPanel)closeQuestions();});
 
@@ -1673,6 +1688,7 @@ function setAskMode(mode){
   if(!askModes)return;
   askModes.querySelectorAll('[data-ask-mode]').forEach(function(item){var active=item.dataset.askMode===askMode;
     item.classList.toggle('active',active);item.setAttribute('aria-pressed',active?'true':'false');});
+  askModeHint.textContent=button.dataset.modeHint;
 }
 askModes.addEventListener('click',function(e){var button=e.target.closest('[data-ask-mode]');if(button)setAskMode(button.dataset.askMode);});
 q.addEventListener('input',function(){q.style.height='auto';q.style.height=Math.min(q.scrollHeight,160)+'px';go.disabled=q.value.trim().length<5;
