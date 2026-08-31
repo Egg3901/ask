@@ -79,6 +79,21 @@ test("ticket 1234 preserves the deliberately public nuclear stockpile record", (
   assert.equal(guard.protectPublicAnswer(answer, question), answer);
 });
 
+test("trusted canonical mechanics contracts cross the final delivery guard unchanged", () => {
+  const aliases = require("./query-aliases");
+  const question = "How do we blockade DDR, why does my battle role revert when I save it, how do we move the front, and can we use nuclear warheads?";
+  const answer = aliases.canonicalAnswer(question);
+  const delivered = guard.enforce({
+    answer,
+    question,
+    privacyQuestion: question,
+    privacyGuardEnabled: true,
+    trustedStaticAnswer: true,
+  });
+  assert.equal(delivered.answer, answer);
+  assert.deepEqual(delivered.issues, []);
+});
+
 test("a mechanics question does not make named live formations publishable", () => {
   const answer = "Station Northland's three fighter wings in the contested region.";
   assert.notEqual(

@@ -15,3 +15,9 @@ test("labels deterministic live-data contracts as Lakeside rather than an LLM pr
   assert.equal(models.providerOf("ask-live-contract"), "lakeside");
   assert.equal(models.providerDisplayFor("ask-live-contract"), "Lakeside");
 });
+
+test("labels deterministic mechanics contracts as Lakeside rather than an LLM provider", () => {
+  assert.equal(models.displayFor("ask-mechanics-contract"), "Mechanics");
+  assert.equal(models.providerOf("ask-mechanics-contract"), "lakeside");
+  assert.equal(models.providerDisplayFor("ask-mechanics-contract"), "Lakeside");
+});

@@ -1058,6 +1058,7 @@ const server = http.createServer(async (req, res) => {
         ].filter(Boolean).join("\n\n");
         let answerRepaired = false;
         let canonicalContractApplied = false;
+        let mechanicsContractApplied = false;
         if (liveAnswerContract) {
           noFu = liveAnswerContract;
           servedModel = "ask-live-contract";
@@ -1068,6 +1069,7 @@ const server = http.createServer(async (req, res) => {
           noFu = mechanicsAnswerContract;
           servedModel = "ask-mechanics-contract";
           canonicalContractApplied = true;
+          mechanicsContractApplied = true;
           answerRepaired = true;
         }
         const answerRequirement = answerRepair.requirementFor(retrievalQuestion, evidenceForCheck);
@@ -1097,6 +1099,7 @@ const server = http.createServer(async (req, res) => {
           answer: cited.text, datasets: liveVisualizations, plan,
           visualizationsEnabled: visualizations, question, privacyQuestion: retrievalQuestion,
           privacyGuardEnabled: !moderatorAccess,
+          trustedStaticAnswer: mechanicsContractApplied,
         });
         let answer = visualization.ensure(guarded.answer, liveVisualizations, { required: guarded.required, question });
         // Deep answers are where models invent connective tissue between systems

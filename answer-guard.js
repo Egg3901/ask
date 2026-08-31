@@ -208,10 +208,13 @@ function matchingDataset(datasets, metric) {
 // Prevent a model from presenting a plausible-looking but unsupported chart.
 // Canonical maps and chart data are produced by the live adapters, never copied
 // from a model response.
-function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyQuestion = question, privacyGuardEnabled = true }) {
+function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyQuestion = question, privacyGuardEnabled = true, trustedStaticAnswer = false }) {
   let text = String(answer || "").trim();
   const issues = [];
-  if (privacyGuardEnabled) {
+  // Canonical contracts are static source-controlled prose. They cannot contain
+  // retrieved live roster data, so reclassifying them as model output only creates
+  // false refusals when several safe mechanics are answered together.
+  if (privacyGuardEnabled && !trustedStaticAnswer) {
     const protectedAnswer = protectPublicAnswer(text, privacyQuestion);
     if (protectedAnswer !== text) {
       text = protectedAnswer;

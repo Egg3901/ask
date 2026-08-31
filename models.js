@@ -228,6 +228,7 @@ const RETIRED = {
   "deepseek-v3-flash": "DeepSeek Flash",
   "discord-ask": "Discord",
   "ask-live-contract": "Live Data",
+  "ask-mechanics-contract": "Mechanics",
 };
 
 // The model picker was removed 2026-08-27: every request rides the tier chain
@@ -295,7 +296,7 @@ function providerOf(id) {
   if (/^minimax/i.test(s)) return "commandcode";
   if (/-free$/.test(s) || /^(mimo|muse-spark|hy3|laguna|nemotron-3)/i.test(s)) return "opencode";
   if (s === "discord-ask") return "discord";
-  if (s === "ask-live-contract") return "lakeside";
+  if (s === "ask-live-contract" || s === "ask-mechanics-contract") return "lakeside";
   return s.includes("/") ? "openrouter" : "deepseek";
 }
 
