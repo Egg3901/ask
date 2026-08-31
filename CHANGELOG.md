@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.11.1 - 2026-08-31
+
+### Fixed
+- Reporting an answer from Discord now has real consequences: the report seeds a staff-review correction draft and evicts every cached variant of that question, exactly like a web report. Previously the Discord confirmation message claimed the issue was queued for review while nothing read it.
+- Web and shared-page reports now also evict the reported answer from the shared cache, so a wrong cached answer stops being served the moment someone reports it.
+
 ## 1.11.0 - 2026-08-31
 
 ### Added

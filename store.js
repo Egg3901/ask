@@ -295,6 +295,19 @@ function updateGrounding(answerId, claims) {
 S.evictCache = db.prepare("DELETE FROM answer_cache WHERE q=?");
 function evictCache(q) { try { if (q) S.evictCache.run(String(q)); } catch {} }
 
+// Downvote consequence: a reported answer must stop being served from the
+// shared cache. The cache key is `game:…|plan:…|style|length|viz:…|<normalized
+// question>`, and the reporter's style/length/viz flags are not stored with
+// the answer row, so evict every variant of that question rather than trying
+// to reconstruct one exact key.
+S.evictCacheByQuestion = db.prepare("DELETE FROM answer_cache WHERE q LIKE '%|' || ? ESCAPE '\\'");
+function evictCacheByQuestion(question) {
+  const normalized = String(question || "").toLowerCase().replace(/\s+/g, " ").replace(/[?.!,]+$/, "").trim();
+  if (!normalized) return 0;
+  const escaped = normalized.replace(/[\\%_]/g, ch => `\\${ch}`);
+  try { return S.evictCacheByQuestion.run(escaped).changes || 0; } catch { return 0; }
+}
+
 // The retrieval work queue. Every answer that cited a real, indexed file the
 // evidence never contained recorded that path in validation.missedPaths; this
 // rolls those up so the files retrieval repeatedly fails to hand over become a
@@ -967,6 +980,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
   reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };
