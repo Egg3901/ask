@@ -118,3 +118,13 @@ test("an explicit long-file path returns the chunk containing the named symbol",
   assert.match(found.context, /buildPerTurn: 12/);
   assert.match(found.context, /decayPerTurn: 15/);
 });
+
+const testEmbedBatchSlicing = require("node:test");
+testEmbedBatchSlicing.test("embedBatch slices long sentence lists into small requests", () => {
+  const source = require("node:fs").readFileSync(require.resolve("./retrieve.js"), "utf8");
+  // One giant request degraded attribution to lexical-only in production;
+  // pin the slicing loop so it cannot quietly regress.
+  if (!/for \(let offset = 0; offset < texts\.length; offset \+= slice\)/.test(source)) {
+    throw new Error("embedBatch no longer slices its input");
+  }
+});

@@ -69,18 +69,28 @@ async function embedQuery(text) {
   return Float32Array.from(v);
 }
 
-/** Batch document-side embeddings, for attribution over answer sentences. */
-async function embedBatch(texts, { timeoutMs = 20000 } = {}) {
+/**
+ * Batch document-side embeddings, for attribution over answer sentences.
+ * Sliced into small requests: a 40-60 sentence answer in ONE request blew
+ * past the serving instance's budget and the whole attribution silently
+ * degraded to lexical-only (measured live: semantic=false on long answers).
+ */
+async function embedBatch(texts, { timeoutMs = 20000, slice = 16 } = {}) {
   if (!texts.length) return [];
-  const r = await fetch(OLLAMA, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, input: texts.map(t => "search_document: " + t) }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!r.ok) throw new Error("embed " + r.status);
-  const d = await r.json();
-  if (!Array.isArray(d.embeddings) || d.embeddings.length !== texts.length) throw new Error("bad embedding batch");
-  return d.embeddings.map(v => Float32Array.from(v));
+  const out = [];
+  for (let offset = 0; offset < texts.length; offset += slice) {
+    const group = texts.slice(offset, offset + slice);
+    const r = await fetch(OLLAMA, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: MODEL, input: group.map(t => "search_document: " + t) }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!r.ok) throw new Error("embed " + r.status);
+    const d = await r.json();
+    if (!Array.isArray(d.embeddings) || d.embeddings.length !== group.length) throw new Error("bad embedding batch");
+    for (const v of d.embeddings) out.push(Float32Array.from(v));
+  }
+  return out;
 }
 
 /** Stored vectors for evidence chunks, keyed path#ord. Missing chunks are omitted. */

@@ -1340,7 +1340,7 @@ const server = http.createServer(async (req, res) => {
             if (chunks.length) {
               attributionReport = await attribution.attribute(answer, chunks, {
                 chunkVectors: retrieve.vectorsFor(hits?.hits || [], game),
-                embedSentences: texts => retrieve.embedBatch(texts, { timeoutMs: 12000 }),
+                embedSentences: texts => retrieve.embedBatch(texts, { timeoutMs: 20000 }),
               });
             }
           } catch { attributionReport = null; }
