@@ -18,6 +18,24 @@ test("bridges ticket 1234 blockade wording to command, front support, and trade 
   ), "");
 });
 
+test("corrects ticket 1235 and explains why CAS may not move the displayed percentage", () => {
+  const question = "Can you answer me if my air support is helping me at all in the war in Germany?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /frontSupport.*casWeightFor/i.test(query)));
+  assert.ok(out.some(query => /battleForecast.*sideAgg.*casWeight/i.test(query)));
+  assert.ok(out.some(query => /battle\/forecast.*navalAirSupport/i.test(query)));
+  assert.match(aliases.guidance(question), /not a dead or cosmetic stat/i);
+  assert.match(
+    aliases.answerIssue(question, "Air support does not help at all. The conflict engine does not use it."),
+    /must say plainly/i
+  );
+  const answer = aliases.canonicalAnswer(question);
+  assert.match(answer, /does affect the land war/i);
+  assert.match(answer, /ACTIVE/i);
+  assert.match(answer, /rounded to a whole percentage/i);
+  assert.equal(aliases.answerIssue(question, answer), "");
+});
+
 test("explains ticket 1234 battle odds and front movement from the canonical resolver", () => {
   const question = "How does this battle odds/front bar change, and why did a costly defeat only move it 2%?";
   const out = aliases.expand(question);
@@ -174,6 +192,7 @@ test("canonical mechanic answers satisfy their own contracts", () => {
     "Why does my battle role revert when I save it?",
     "How does the battle odds and front bar change?",
     "How can we nuke people and where are warhead totals?",
+    "Does close air support have any effect on my attack percentage?",
   ]) {
     const answer = aliases.canonicalAnswer(question);
     assert.ok(answer, question);
