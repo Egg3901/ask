@@ -4,6 +4,24 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const aliases = require("./query-aliases");
 
+test("corrects ticket 1235 production-method retool timing", () => {
+  const question = "How long does it take for a sector to retool to another production method?";
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /STRATEGY_TRANSITION_TURNS.*STRATEGY_COOLDOWN_TURNS/i.test(query)));
+  assert.ok(out.some(query => /shortageRetool.*SHORTAGE_RETOOL_TRANSITION_FACTOR/i.test(query)));
+  assert.match(aliases.guidance(question), /12-turn linear blend/i);
+  assert.match(
+    aliases.answerIssue(question, "It takes one turn and is controlled by productionPolicyLevel."),
+    /incorrectly claims/i
+  );
+  const answer = aliases.canonicalAnswer(question);
+  assert.match(answer, /normally takes 12 turns/i);
+  assert.match(answer, /24-turn switch cooldown/i);
+  assert.match(answer, /six-turn transition/i);
+  assert.match(answer, /productionPolicyLevel/i);
+  assert.equal(aliases.answerIssue(question, answer), "");
+});
+
 test("bridges ticket 1234 blockade wording to command, front support, and trade closure", () => {
   const question = "how do we blockade ddr";
   const out = aliases.expand(question);
@@ -193,6 +211,7 @@ test("canonical mechanic answers satisfy their own contracts", () => {
     "How does the battle odds and front bar change?",
     "How can we nuke people and where are warhead totals?",
     "Does close air support have any effect on my attack percentage?",
+    "How long does it take to retool to another production method?",
   ]) {
     const answer = aliases.canonicalAnswer(question);
     assert.ok(answer, question);

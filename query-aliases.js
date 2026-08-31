@@ -22,6 +22,26 @@ function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
 
 const RULES = [
   {
+    match: /\b(?:retool(?:ing|ed)?|production method(?:s)?[\s\S]{0,80}(?:change|switch|transition|take|long)|(?:change|switch|transition)[\s\S]{0,80}(?:production method|operating strateg(?:y|ies)))\b/i,
+    queries: [
+      "src/lib/constants/sectorStrategies.ts STRATEGY_TRANSITION_TURNS STRATEGY_COOLDOWN_TURNS getEffectiveStrategyRates blendRates",
+      "src/lib/corporations/commands/sectorOperations/setSectorStrategy.ts transitionStartTurn retoolCost transitionTurns shortageDiscount",
+      "src/lib/corporations/shortageRetool.ts SHORTAGE_RETOOL_TRANSITION_FACTOR SHORTAGE_RETOOL_SD_THRESHOLD",
+      "src/lib/turn/corporation/sectorTurn.ts strategyMarginMod transitionFromStrategyId transition complete",
+      "src/app/corporation/[id]/sector/[sectorId]/sections/StrategyPanel.tsx takes 12 turns transition progress",
+    ],
+    guidance: "A production method is the sector's operating strategy. A normal change begins immediately but retools through a 12-turn linear blend of the old and new input/output rates; it is not a one-turn all-or-nothing switch. The change normally costs 25 percent of daily sector revenue, applies transition margin disruption, and starts a 24-turn switch cooldown concurrently. A qualifying extraction switch into a severe global shortage, supply below half of demand for a meaningful target output, waives the fee and receives a six-turn transition. At the Plants tier, installed capacity value is retained but the unit count is re-denominated for the new output mix. Do not confuse productionPolicyLevel or growth-rate convergence with production-method retooling.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (/\b(?:takes?|within|after|is)\s+(?:one|1)[ -]turn\b|\b(?:one|1)[ -]turn (?:transition|retool)/i.test(text)) return "The answer incorrectly claims production-method retooling takes one turn.";
+      if (!/\b12[ -]turns?\b/i.test(text) || !/linear|blend|interpolat|gradual/i.test(text)) return "The answer must state that normal retooling is a 12-turn linear blend of the old and new methods.";
+      if (!/\b24[ -]turns?\b/i.test(text) || !/cooldown/i.test(text)) return "The answer must distinguish the concurrent 24-turn switch cooldown from the 12-turn retooling window.";
+      if (!/(?:\b6[ -]turns?\b|\bsix[ -]turns?\b)/i.test(text) || !/shortage|supply.{0,20}(?:half|50)/i.test(text)) return "The answer must mention the six-turn severe-shortage exception without presenting it as the normal timing.";
+      if (!/productionPolicyLevel|production policy|growth rate/i.test(text)) return "The answer must not confuse retooling with production policy or sector growth controls.";
+      return "";
+    },
+  },
+  {
     match: /\b(?:close[ -]air support|air support|CAS)\b/i,
     queries: [
       "src/lib/navair/frontSupport.ts casWeightFor CAS mission station archetypeRadius front region",
@@ -236,6 +256,10 @@ function answerIssue(question, answer) {
 // guess, especially on short follow-ups such as "where is that tab?". Questions
 // outside these narrow contracts still use the normal retrieval and model path.
 const CANONICAL_ANSWERS = [
+  {
+    match: /\b(?:retool(?:ing|ed)?|production method(?:s)?[\s\S]{0,80}(?:change|switch|transition|take|long)|(?:change|switch|transition)[\s\S]{0,80}(?:production method|operating strateg(?:y|ies)))\b/i,
+    text: "A sector normally takes 12 turns to retool to another production method. The new method is selected immediately, but its commodity input and output rates blend linearly from the old method to the new one across those 12 turns, so it is not a one-turn all-or-nothing switch. A normal change costs 25 percent of the sector's daily revenue, carries transition margin disruption, and starts a 24-turn switch cooldown at the same time. There is one faster exception: an extraction method that meaningfully supplies a resource whose global supply is below half of demand gets a waived fee and a six-turn transition. At the Plants tier, the installed capacity's value is retained, but its unit count can be re-denominated for the new output mix. productionPolicyLevel and the sector growth-rate controls are separate mechanics and do not determine retool time.",
+  },
   {
     match: /\b(?:close[ -]air support|air support|CAS)\b/i,
     text: "Close air support does affect the land war. Each eligible wing on the CAS mission adds scaled combat weight to its coalition's engaged mass, and the Main Site now uses that same support in both the displayed forecast and the resolved battle. A wing counts only if it is alive, assigned CAS, stationed somewhere that can reach the front region, and belongs to a country fighting on that side. CAP and PATROL are different: they build air superiority rather than direct CAS weight. I cannot verify a particular private wing from public Ask data. Check Combat Command's CLOSE AIR SUPPORT readout: it shows ACTIVE with the contributed combat weight, or NO ELIGIBLE CAS if the mission, station, range, or side does not qualify. The odds are rounded to a whole percentage, so a small real contribution can leave the displayed percentage unchanged even while CAS is active.",
