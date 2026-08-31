@@ -33,6 +33,7 @@ const games = require("./games");
 const clarification = require("./clarification");
 const discordAsk = require("./discord-ask");
 const watches = require("./watches");
+const notify = require("./notify");
 const capabilities = require("./capabilities");
 const playbooks = require("./playbooks");
 const attribution = require("./attribution");
@@ -608,6 +609,8 @@ const server = http.createServer(async (req, res) => {
         if (rating === "bad" && saved.question) {
           corrections.draft({ question: saved.question, reason: `staff review${note ? `: ${note}` : ""}`, sourceAnswerId: saved.id })
             .catch(() => {});
+          // A staff-confirmed bad answer credits the asker and tells them in-game.
+          notify.creditBack(saved.id, "staff review verdict: bad", "refund");
         }
         return json(res, 200, { ok: true, counts: store.reviewCounts() });
       }
@@ -1437,6 +1440,14 @@ const server = http.createServer(async (req, res) => {
         const liveSourcesUsed = mcp.liveSources(liveEvidence.tools);
         const liveDataRead = useMcp && liveSourcesUsed.length > 0;
 
+        // A flagged answer is free. The player is looking at the caveat, so
+        // no separate notification; the row is marked refunded so a later
+        // audit of the same answer cannot double-notify.
+        const inlineDefect = !canonicalContractApplied
+          && (refusedWithEvidence || truncated || narratedEvidence || inventedPaths.length > 0 || groundingNotes.length > 0);
+        const chargedCost = inlineDefect ? 0 : cost;
+        if (inlineDefect) answer += `\n\n> This one did not use a question: a quality check flagged issues with the answer, so it was credited back.`;
+
         const answerId = store.record({
           user_key: key, username: session.identity.username || null, conv_id: convId,
           question, answer, areas: JSON.stringify(areas), citations: JSON.stringify(citations),
@@ -1444,7 +1455,7 @@ const server = http.createServer(async (req, res) => {
           // Enabling live mode and then answering entirely from code costs the
           // player nothing, and this also makes used_mcp mean what the console
           // has always claimed it means: answers that really hit the game.
-          used_mcp: liveDataRead ? 1 : 0, cached: 0, cost, followup,
+          used_mcp: inlineDefect ? 0 : (liveDataRead ? 1 : 0), cached: 0, cost: chargedCost, followup,
           tokens_in: Number(llmUsage.prompt_tokens || 0), tokens_out: Number(llmUsage.completion_tokens || 0), model: servedModel,
           plan: JSON.stringify(plan), validation: JSON.stringify(validation), evidence: JSON.stringify(liveEvidence),
           ttft_ms: firstTokenMs, total_ms: Date.now() - genStart, fell_through: fellThrough, ts: Date.now(),
@@ -1453,6 +1464,7 @@ const server = http.createServer(async (req, res) => {
         // Charge a visualization slot only if one actually reached the player.
         // Enabling visualizations does not mean the model drew anything, and an
         // allowance that bills for prose is an allowance players learn to distrust.
+        if (inlineDefect) store.refundAnswer(answerId, "inline quality flags");
         const deliveredViz = visualization.contains(answer);
         if (deliveredViz) store.markVizUsed(answerId);
 
@@ -1480,6 +1492,7 @@ const server = http.createServer(async (req, res) => {
             store.updateGrounding(answerId, claims);
             store.evictCache(ckey);
             console.warn(`[ask] async grounding flags answerId=${answerId} claims=${JSON.stringify(claims)}`);
+            notify.creditBack(answerId, "async grounding audit flagged claims", "refund");
             return corrections.draft({ question, reason: `ungrounded claims: ${claims.join("; ")}`, sourceAnswerId: answerId });
           }).catch(() => { /* advisory only */ });
         }
@@ -1501,7 +1514,7 @@ const server = http.createServer(async (req, res) => {
 
         send("done", {
           convId, answerId, answer, areas, citations, cached: false, usedMcp: liveDataRead,
-          cost, followup, followupsLeft, followups, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0, reportUrl,
+          cost: chargedCost, followup, followupsLeft, followups, vizBlocked, vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0, reportUrl,
           // What live game state this answer actually read, named for a player.
           liveSources: liveSourcesUsed,
           model: router.label(servedModel),
@@ -1591,12 +1604,18 @@ async function checkEmbedding(tag) {
 // watch, deduped per identical tool query, fail-open per watch. Only runs
 // where a live game backs the tools.
 if (games.resolve("ahd").live) {
-  const watchTick = () => watches.checkAll({ store, call: mcp.call, log: line => console.warn(line) })
+  const watchTick = () => watches.checkAll({ store, call: mcp.call, log: line => console.warn(line), notifyFired: notify.watchFired })
     .then(({ checked, fired }) => { if (fired) console.log(`[watch] tick checked=${checked} fired=${fired}`); })
     .catch(e => console.warn("[watch] tick failed:", String(e.message || e).slice(0, 120)));
   setTimeout(watchTick, 90 * 1000).unref();
   setInterval(watchTick, 10 * 60 * 1000).unref();
 }
+
+// In-game notification sender: bounded batch every two minutes when the game
+// ingress is configured; unconfigured or failing delivery never blocks Ask.
+setInterval(() => notify.deliverPending({ log: line => console.warn(line) })
+  .then(({ sent }) => { if (sent) console.log(`[notify] delivered ${sent} in-game notification(s)`); })
+  .catch(() => {}), 2 * 60 * 1000).unref();
 
 checkEmbedding("boot");
 // Four minutes, deliberately inside ollama's five-minute keep_alive: the
