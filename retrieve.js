@@ -69,6 +69,36 @@ async function embedQuery(text) {
   return Float32Array.from(v);
 }
 
+/** Batch document-side embeddings, for attribution over answer sentences. */
+async function embedBatch(texts, { timeoutMs = 20000 } = {}) {
+  if (!texts.length) return [];
+  const r = await fetch(OLLAMA, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: MODEL, input: texts.map(t => "search_document: " + t) }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!r.ok) throw new Error("embed " + r.status);
+  const d = await r.json();
+  if (!Array.isArray(d.embeddings) || d.embeddings.length !== texts.length) throw new Error("bad embedding batch");
+  return d.embeddings.map(v => Float32Array.from(v));
+}
+
+/** Stored vectors for evidence chunks, keyed path#ord. Missing chunks are omitted. */
+function vectorsFor(evidence, game = null) {
+  const st = stateFor(game);
+  const h = open(st);
+  const out = new Map();
+  if (!h) return out;
+  const q = h.prepare("SELECT vec, dims FROM chunks WHERE path=? AND ord=? LIMIT 1");
+  for (const e of evidence || []) {
+    try {
+      const row = q.get(String(e.path || ""), Number(e.ord || 0));
+      if (row?.vec) out.set(`${e.path}#${e.ord}`, new Float32Array(row.vec.buffer, row.vec.byteOffset, row.dims));
+    } catch { /* chunk gone between retrieval and attribution: skip */ }
+  }
+  return out;
+}
+
 /**
  * Top chunks for a question, as text the model can actually read.
  * Returns { context, files, count } or null when the index is unavailable, so
@@ -495,6 +525,10 @@ function finish(scored, topK, claimType, maxChars = MAX_CHARS, st = { sourceAwar
     evidence.push({
       source: c.source || "code", repository: c.repository || null,
       revision: c.revision || null, path: c.path, ord: c.ord, score: c.score,
+      // The chunk body actually sent to the model, so downstream attribution
+      // can measure which sentences of the answer this chunk supports without
+      // re-parsing the assembled context string.
+      text: body,
     });
     const label = st.sourceAware
       ? `SOURCE ${c.source} @ ${c.revision} | ${c.path}`
@@ -562,4 +596,4 @@ function stats(game = null) {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
-module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, hasPath };
+module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, embedBatch, vectorsFor, hasPath };
