@@ -151,3 +151,17 @@ test("visible modes force specialist plans without magic wording", () => {
   assert.equal(plan.create("Why did prices move?", {}, "autopsy").intent, "causal_autopsy");
   assert.equal(plan.create("Iron demand rises 5% per turn for 12 turns", {}, "scenario").intent, "scenario_lab");
 });
+
+test("a post-race why-did-I-lose question plans as an election debrief", () => {
+  const debrief = plan.create("Why did I lose my senate race this cycle? I was ahead in approval.");
+  assert.equal(debrief.intent, "election_debrief");
+  assert.equal(debrief.live, "required");
+  const won = plan.create("What cost me the governor election?");
+  assert.equal(won.intent, "election_debrief");
+  // A rules question about elections is not a debrief.
+  const rules = plan.create("How many senate seats can one party hold?");
+  assert.notEqual(rules.intent, "election_debrief");
+  // An explicit specialist mode still wins over the phrasing.
+  const autopsy = plan.create("Why did I lose my senate race?", {}, "autopsy");
+  assert.equal(autopsy.intent, "causal_autopsy");
+});

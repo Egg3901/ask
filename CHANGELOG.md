@@ -2,6 +2,22 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.13.0 - 2026-08-31
+
+### Added
+- How I researched this: the research phases and tool calls Ask streams while it works are now kept, and every finished answer carries a collapsed timeline of those steps above its sources.
+- Per-sentence citation marks: when Ask can match a sentence to a source it actually read, that sentence gets a small superscript number. Tapping it opens the sources panel and highlights the file behind the claim.
+- An evidence drawer in the answer footer sums up everything an answer read, files and live game data together, in one compact row.
+- A grounding chip next to the model name shows what share of an answer's sentences were matched to the sources it read.
+
+### Changed
+- Tables are easier to scan: large raw numbers get thousands separators, and cells that lead with a signed percentage get an up or down marker.
+## 1.12.0 - 2026-08-31
+
+### Added
+- A sufficient-context gate on the reasoning tiers: before writing, a cheap audit names what the gathered evidence does not contain, and the answer is directed to say so plainly instead of improvising. Flagged answers never enter the shared cache.
+- Per-sentence answer attribution: every prose sentence is scored against the exact evidence chunks the model read, deterministically, with live-data blocks counted so live answers are not miscounted as unsupported. Coverage lands in telemetry and the console; fast-tier answers with very low coverage get an honest support note.
+
 ## 1.11.1 - 2026-08-31
 
 ### Fixed

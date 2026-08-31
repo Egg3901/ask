@@ -34,6 +34,7 @@ const clarification = require("./clarification");
 const discordAsk = require("./discord-ask");
 const capabilities = require("./capabilities");
 const playbooks = require("./playbooks");
+const attribution = require("./attribution");
 
 // Where the docs build writes its output. Ask reads only the per-game logo from
 // it, so a missing docs build degrades to a 404 mark, never a broken page.
@@ -1013,7 +1014,7 @@ const server = http.createServer(async (req, res) => {
         // the code scout even when the heuristic live pass found a country.
         const needsMechanicEvidence = investigate.needsMechanicEvidence(question);
         const needsCapabilityInventory = investigate.needsCapabilityInventory(question);
-        const needsSpecialistEvidence = plan.intent === "causal_autopsy" || plan.intent === "claim_verification";
+        const needsSpecialistEvidence = plan.intent === "causal_autopsy" || plan.intent === "claim_verification" || plan.intent === "election_debrief";
         let investigation = null;
         if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory || needsSpecialistEvidence || moderatorPrivateQuestion)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
@@ -1032,6 +1033,26 @@ const server = http.createServer(async (req, res) => {
             status("Key facts are still open — escalating to the reasoning tier…");
             console.log(`[ask] escalated flash->pro reason="scout unknown" q=${JSON.stringify(question.slice(0, 80))}`);
           }
+        }
+
+        // Sufficient-context gate (pro/deep): a cheap judge reads the gathered
+        // evidence BEFORE generation and names what it does not contain.
+        // Models given insufficient context answer plausibly from parametric
+        // memory instead of abstaining (measured 35-62% of the time in the
+        // literature), which here means invented mechanics. The gate cannot
+        // block an answer — it injects an explicit do-not-improvise directive
+        // and keeps the result out of the shared cache. Fails open.
+        let insufficiency = null;
+        if ((route.tier === "pro" || route.tier === "deep") && (hits?.context || liveBlock || investigation?.text)) {
+          try {
+            const preEvidence = [hits?.context, liveBlock, investigation?.text].filter(Boolean).join("\n\n");
+            const verdict = await grounding.sufficiency(contractQuestion, preEvidence);
+            if (!verdict.sufficient) {
+              insufficiency = verdict.missing;
+              status("The evidence looks incomplete — answering only what it supports…");
+              console.log(`[ask] insufficient evidence: ${JSON.stringify(insufficiency)} q=${JSON.stringify(question.slice(0, 80))}`);
+            }
+          } catch { insufficiency = null; }
         }
 
         // Evidence is assembled; the answer model is about to start streaming.
@@ -1064,6 +1085,7 @@ const server = http.createServer(async (req, res) => {
                 + (investigation ? `\n\n${investigation.text}` : "")
                 + (domainGuidance ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${domainGuidance}` : "")
                 + (methodBrief ? `\n\n${methodBrief}` : "")
+                + (insufficiency ? `\n\nEVIDENCE SUFFICIENCY AUDIT: a pre-check found the gathered evidence likely does NOT contain: ${insufficiency}\nDo not improvise that part. State plainly what the game's code and data do not show, and answer everything the evidence DOES support with its real values.` : "")
                 + (capabilityContract ? `\n\n${capabilityContract}` : "")
                 // "Where do I find this" is answered from the real menu map, not guessed.
                 + (navBlock ? `\n\n${navBlock}` : ""),
@@ -1286,10 +1308,37 @@ const server = http.createServer(async (req, res) => {
         // leaking as an answer, and it is the single most common failure shape.
         const narratedEvidence = answerGuard.detectBundleNarration(answer);
         if (narratedEvidence) console.warn(`[ask] evidence-bundle narration plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : []), ...(healedPaths.length ? ["retrieval_miss_healed"] : []), ...(groundingRevised ? ["grounding_revised"] : []), ...(route.escalated ? ["escalated_tier"] : [])], grounding: groundingNotes, inventedPaths, missedPaths };
+        // Deterministic per-sentence attribution: which evidence chunk supports
+        // each prose sentence, from one batch embedding call plus arithmetic.
+        // Live and investigation blocks join as lexical-only pseudo-chunks so a
+        // sentence grounded in live data is not miscounted as unsupported.
+        // Telemetry-first: recorded on the row and surfaced to the console; the
+        // only player-visible effect is a cautious note on flash answers with
+        // very low coverage, the tier that gets no synchronous claim audit.
+        let attributionReport = null;
+        if (!canonicalContractApplied) {
+          try {
+            const pseudo = [];
+            for (const [name, block] of [["live-data", liveBlock], ["investigation", investigation?.text || ""]]) {
+              for (let i = 0; i * 4000 < block.length && i < 8; i++) pseudo.push({ path: name, ord: i, text: block.slice(i * 4000, i * 4000 + 4000) });
+            }
+            const chunks = [...(hits?.hits || []).filter(h => h.text), ...pseudo];
+            if (chunks.length) {
+              attributionReport = await attribution.attribute(answer, chunks, {
+                chunkVectors: retrieve.vectorsFor(hits?.hits || [], game),
+                embedSentences: texts => retrieve.embedBatch(texts, { timeoutMs: 12000 }),
+              });
+            }
+          } catch { attributionReport = null; }
+          if (attributionReport && attributionReport.total >= 4 && attributionReport.coverage < 0.35
+              && route.tier === "flash" && !groundingNotes.length && !answerRepaired) {
+            answer += `\n\n> **Support check:** I could not match much of this answer to the sources I actually read, so treat the specifics as unverified.`;
+          }
+        }
+        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : []), ...(healedPaths.length ? ["retrieval_miss_healed"] : []), ...(groundingRevised ? ["grounding_revised"] : []), ...(route.escalated ? ["escalated_tier"] : []), ...(insufficiency ? ["insufficient_evidence"] : [])], grounding: groundingNotes, inventedPaths, missedPaths, ...(insufficiency ? { insufficiency } : {}), ...(attributionReport ? { attribution: { coverage: attributionReport.coverage, supported: attributionReport.supported, total: attributionReport.total, semantic: attributionReport.semantic, weak: attributionReport.weak.slice(0, 4), sentences: attributionReport.sentences.slice(0, 40).map(s => ({ score: s.score, cites: s.cites })) } } : {}) };
         const areas = cites.areasFor(hits?.files || []);
 
-        if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {
+        if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence && !insufficiency) {
           store.S.putCache.run(ckey, answer, JSON.stringify(areas), JSON.stringify(citations), servedModel, Date.now());
         }
         // Did this answer actually read the running world? liveEvidence.tools is
