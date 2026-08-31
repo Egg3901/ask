@@ -397,3 +397,17 @@ test("an answer that never read live data does not spend the live allowance", ()
   recordAnswer({ question: "Answered from live state", answer: BODY, used_mcp: 1, ts: Date.now() });
   assert.equal(store.usage("ahd:user-1", ent).mcpUsed, before + 1);
 });
+
+test("a downvote can evict every cached variant of the question", () => {
+  const now = Date.now();
+  store.S.putCache.run("game:ahd|plan:general|standard|standard|viz:0|how does cloture work", "a", "[]", "[]", "m", now);
+  store.S.putCache.run("game:ahd|plan:general|technical|deep|viz:1|how does cloture work", "b", "[]", "[]", "m", now);
+  store.S.putCache.run("game:ahd|plan:general|standard|standard|viz:0|how do tariffs work", "c", "[]", "[]", "m", now);
+  const evicted = store.evictCacheByQuestion("How does cloture work?");
+  assert.equal(evicted, 2);
+  assert.equal(store.S.getCache.get("game:ahd|plan:general|standard|standard|viz:0|how do tariffs work").answer, "c");
+  // LIKE metacharacters in a question must not widen the delete.
+  store.S.putCache.run("game:ahd|plan:general|standard|standard|viz:0|what is 100% mobilization", "d", "[]", "[]", "m", now);
+  assert.equal(store.evictCacheByQuestion("what is 100_ mobilization"), 0);
+  assert.equal(store.evictCacheByQuestion("What is 100% mobilization?"), 1);
+});

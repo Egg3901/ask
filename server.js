@@ -223,6 +223,14 @@ const server = http.createServer(async (req, res) => {
         rating,
         reason: String(body?.reason || ""),
       });
+      // Same consequences as an owner downvote: evict + queue for review.
+      if (ok && rating === "down") {
+        const brief = store.answerBrief(Number(body?.answerId));
+        if (brief?.question) {
+          store.evictCacheByQuestion(brief.question);
+          corrections.draft({ question: brief.question, reason: `shared-page report${body?.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`, sourceAnswerId: Number(body?.answerId) }).catch(() => {});
+        }
+      }
       return json(res, ok ? 200 : 404, { ok });
     }
     if (req.method === "POST" && p === "/api/discord-feedback") {
@@ -239,7 +247,26 @@ const server = http.createServer(async (req, res) => {
         answer: body.answer, rating, reason: String(body.reason || "").slice(0, 500), usedMcp: body.usedMcp === true,
         answerId: body.answerId != null ? Number(body.answerId) : null,
       });
-      return json(res, answerId ? 200 : 400, { ok: Boolean(answerId), answerId });
+      // A Discord report must have the same consequences as a web downvote:
+      // the answer stops being served from the shared cache and the report
+      // seeds a staff-review correction draft. Without these, the bot's
+      // "the issue is in the Ask review queue" confirmation was a lie — the
+      // report landed in a row nothing ever read.
+      let queued = false;
+      if (answerId && rating === "down") {
+        const brief = store.answerBrief(answerId);
+        const question = brief?.question || String(body.question || "");
+        if (question) {
+          store.evictCacheByQuestion(question);
+          corrections.draft({
+            question,
+            reason: `discord report${body.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`,
+            sourceAnswerId: answerId,
+          }).catch(() => {});
+          queued = true;
+        }
+      }
+      return json(res, answerId ? 200 : 400, { ok: Boolean(answerId), answerId, queued });
     }
 
     // Discord /ask quota. Non-staff bot callers get the same daily limits a web
@@ -534,10 +561,14 @@ const server = http.createServer(async (req, res) => {
           reason,
         });
         // A downvote is the strongest wrong-answer signal there is. Seed a
-        // staff-review draft correction from it (dedup'd, fire-and-forget).
+        // staff-review draft correction from it (dedup'd, fire-and-forget),
+        // and stop serving the reported answer from the shared cache — until
+        // now a cached wrong answer kept serving every asker for 24h after
+        // the report.
         if (ok && rating === "down") {
           const brief = store.answerBrief(Number(b?.answerId));
           if (brief?.question) {
+            store.evictCacheByQuestion(brief.question);
             corrections.draft({ question: brief.question, reason: `downvote${reason ? `: ${reason}` : ""}`, sourceAnswerId: Number(b?.answerId) })
               .catch(() => {});
           }
