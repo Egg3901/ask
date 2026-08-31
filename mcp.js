@@ -2,11 +2,13 @@
 
 // Read-only MCP transport adapters for the live-intelligence module.
 const intelligence = require("./live-intelligence");
+const scenarioLab = require("./scenario-lab");
 
 const TOKEN = process.env.MCP_TOKEN || "";
 const URLS = {
   gamestate: process.env.MCP_GAMESTATE_URL || "http://127.0.0.1:9730/mcp",
   engine: process.env.MCP_ENGINE_URL || "http://127.0.0.1:9731/mcp",
+  worldsim: process.env.MCP_WORLDSIM_URL || "https://mcp.lakesidegames.net/worldsim/mcp",
 };
 
 async function callServer(server, name, args = {}, timeoutMs = 25000, preserveToolError = false) {
@@ -77,7 +79,7 @@ function looksLive(question) {
 // narrow class live by default so a player cannot accidentally receive rules
 // prose merely because their local live-data switch is off.
 function requiresLive(question) {
-  return REQUIRED_LIVE_CANDIDATE_MAP.test(question || "");
+  return REQUIRED_LIVE_CANDIDATE_MAP.test(question || "") || Boolean(scenarioLab.parse(question));
 }
 
 // A context-aware "answer with live data" suggestion for a code-only answer
@@ -113,6 +115,9 @@ async function liveIntelligence(question, context, callTool = null, plan = null,
   const adapter = onAction
     ? (name, args, server, pte) => { try { onAction(name, args); } catch {} return base(name, args, server, pte); }
     : base;
+  if (plan?.intent === "scenario_lab") {
+    return scenarioLab.retrieve({ question, callTool: adapter });
+  }
   return intelligence.retrieve({ question, context, callTool: adapter, plan });
 }
 
@@ -168,6 +173,7 @@ const LIVE_LABELS = {
   character_balance_sheet: "Balance sheet",
   character_wealth_history: "Wealth history",
   country_groups: "Country groups",
+  sim_economy_whatif: "Economy Scenario Lab",
 };
 
 /**

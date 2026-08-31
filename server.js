@@ -32,6 +32,7 @@ const ogImage = require("./og-image");
 const games = require("./games");
 const clarification = require("./clarification");
 const discordAsk = require("./discord-ask");
+const capabilities = require("./capabilities");
 
 // Where the docs build writes its output. Ask reads only the per-game logo from
 // it, so a missing docs build degrades to a 404 mark, never a broken page.
@@ -666,7 +667,7 @@ const server = http.createServer(async (req, res) => {
         // that never wanted live data in the first place.
         const moderatorPrivateQuestion = moderatorAccess && answerGuard.asksForPrivateMilitaryIntelligence(question);
         const liveRequired = game.live && (plan.live === "required" || mcp.requiresLive(question) || reportRequested || moderatorPrivateQuestion);
-        const liveWanted = game.live && (liveRequired || body.useMcp === true);
+        const liveWanted = game.live && plan.live !== "none" && (liveRequired || body.useMcp === true);
         const wantMcp = liveWanted;
 
         // Follow-ups depend on the conversation's prior turns, so the shared
@@ -674,6 +675,9 @@ const server = http.createServer(async (req, res) => {
         // "what about the UK?" cached from one thread would otherwise be served
         // verbatim into an unrelated one. Only a fresh first turn is cacheable.
         const isFollowup = store.nextCost(convId, key).followup > 0;
+        // A later turn is not necessarily a follow-up. A complete new question
+        // is a topic pivot and must not inherit mechanics from the old thread.
+        const contextualFollowup = isFollowup && grounding.needsConversationContext(question);
         // Reasoning effort is staff-only. Everyone else is routed from the
         // question, which is a better signal than a dropdown the asker has no
         // basis to set, and it keeps the slow tier from being chosen by habit.
@@ -837,10 +841,13 @@ const server = http.createServer(async (req, res) => {
         // retrieval runs on a standalone rewrite fused with the thread. The
         // model still receives the player's literal question.
         let retrievalQuestion = question;
-        if (isFollowup) {
+        if (contextualFollowup) {
           status("Condensing the thread into a standalone query…");
           try { retrievalQuestion = (await grounding.condense(store.history(convId, key, 3), question)) || question; } catch {}
         }
+        // Delivery contracts use the player's literal turn after a topic pivot.
+        // The standalone rewrite is safe only when the turn truly needs context.
+        const contractQuestion = contextualFollowup ? retrievalQuestion : question;
         status(deepAnswer ? "Decomposing into sub-queries, searching code, docs & wiki…" : "Vector-searching code & docs…");
         try {
           const retrieveOpts = deepAnswer ? { topK: DEEP_TOP_K, maxChars: DEEP_MAX_CHARS } : {};
@@ -876,7 +883,7 @@ const server = http.createServer(async (req, res) => {
         // "stocks fell", the commit says "bounded equity liquidity facility",
         // and the equity files are what connect them.
         let historyBlock = "";
-        const changeQuestion = history.changeish(question) && await history.available(game);
+        const changeQuestion = (history.changeish(question) || plan.intent === "causal_autopsy") && await history.available(game);
         if (changeQuestion) {
           status("Checking what shipped recently…");
           try {
@@ -954,8 +961,9 @@ const server = http.createServer(async (req, res) => {
         // the code scout even when the heuristic live pass found a country.
         const needsMechanicEvidence = investigate.needsMechanicEvidence(question);
         const needsCapabilityInventory = investigate.needsCapabilityInventory(question);
+        const needsSpecialistEvidence = plan.intent === "causal_autopsy" || plan.intent === "claim_verification";
         let investigation = null;
-        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory || moderatorPrivateQuestion)) || chaseChange) {
+        if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory || needsSpecialistEvidence || moderatorPrivateQuestion)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
           try {
             investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction, game, changeQuestion });
@@ -973,7 +981,9 @@ const server = http.createServer(async (req, res) => {
         let finishReason = null, fellThrough = null;
         const genStart = Date.now();
         let firstTokenMs = null;
-        const mechanicsAnswerContract = queryAliases.canonicalAnswer(retrievalQuestion);
+        const mechanicsAnswerContract = queryAliases.deliveryContract(question, retrievalQuestion, { contextual: contextualFollowup });
+        const domainGuidance = queryAliases.guidance(contractQuestion);
+        const capabilityContract = capabilities.contract(plan);
         try {
           if (mechanicsAnswerContract) {
             raw = mechanicsAnswerContract;
@@ -988,7 +998,8 @@ const server = http.createServer(async (req, res) => {
                 + (historyBlock ? `\n\n${historyBlock}` : "")
                 + (liveBlock ? `\n\n${liveBlock}` : "")
                 + (investigation ? `\n\n${investigation.text}` : "")
-                + (queryAliases.guidance(retrievalQuestion) ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${queryAliases.guidance(retrievalQuestion)}` : "")
+                + (domainGuidance ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${domainGuidance}` : "")
+                + (capabilityContract ? `\n\n${capabilityContract}` : "")
                 // "Where do I find this" is answered from the real menu map, not guessed.
                 + (navBlock ? `\n\n${navBlock}` : ""),
               // Deep answers are for exploring a system across several turns, so
@@ -1054,7 +1065,7 @@ const server = http.createServer(async (req, res) => {
         const evidenceForCheck = [
           matchedCorrections.length ? corrections.block(matchedCorrections) : "",
           hits?.context, historyBlock, liveBlock, investigation?.text,
-          queryAliases.guidance(retrievalQuestion),
+          domainGuidance, capabilityContract,
         ].filter(Boolean).join("\n\n");
         let answerRepaired = false;
         let canonicalContractApplied = false;
@@ -1072,11 +1083,11 @@ const server = http.createServer(async (req, res) => {
           mechanicsContractApplied = true;
           answerRepaired = true;
         }
-        const answerRequirement = answerRepair.requirementFor(retrievalQuestion, evidenceForCheck);
+        const answerRequirement = answerRepair.requirementFor(contractQuestion, evidenceForCheck);
         if (!canonicalContractApplied && answerRepair.shouldRepair({ answer: noConflict, hasLiveData: useMcp, evidence: evidenceForCheck, requirement: answerRequirement })) {
           status("Rechecking the answer against the live evidence…");
           try {
-            const repaired = await answerRepair.repair({ question: retrievalQuestion, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement });
+            const repaired = await answerRepair.repair({ question: contractQuestion, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement });
             if (repaired?.text) {
               noFu = repaired.text;
               answerRepaired = true;
@@ -1097,7 +1108,7 @@ const server = http.createServer(async (req, res) => {
         const citations = cited.citations;
         const guarded = answerGuard.enforce({
           answer: cited.text, datasets: liveVisualizations, plan,
-          visualizationsEnabled: visualizations, question, privacyQuestion: retrievalQuestion,
+          visualizationsEnabled: visualizations, question, privacyQuestion: contractQuestion,
           privacyGuardEnabled: !moderatorAccess,
           trustedStaticAnswer: mechanicsContractApplied,
         });

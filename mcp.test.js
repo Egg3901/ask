@@ -68,6 +68,34 @@ test("requires live retrieval for explicit public candidate map requests", () =>
   assert.equal(mcp.requiresLive("Diagram how Senate elections work"), false);
 });
 
+test("routes Scenario Lab only to the bounded read-only worldsim projection", async () => {
+  const calls = [];
+  const question = "What happens to iron if demand rises 5% per turn for 12 turns?";
+  const intelligence = await mcp.liveIntelligence(
+    question,
+    {},
+    async (name, args, server) => {
+      calls.push({ name, args, server });
+      return JSON.stringify({
+        scenario: args,
+        startInflation: 1,
+        endInflation: 1.1,
+        inflationTrajectory: [{ turn: 1, inflationIndex: 1.01 }],
+        commodities: [{ commodity: "iron", startPrice: 2, endPrice: 2.5, changePct: 25 }],
+      });
+    },
+    askPlan.create(question),
+  );
+
+  assert.deepEqual(calls, [{
+    name: "sim_economy_whatif",
+    args: { turns: 12, demandPct: 5, supplyPct: 0, commodity: "iron" },
+    server: "worldsim",
+  }]);
+  assert.match(intelligence.answerContract, /directional projection/i);
+  assert.equal(intelligence.visualizations[0].recommended, "line");
+});
+
 test("uses canonical live map data for world and country geographic questions", async () => {
   const calls = [];
   const fakeCall = async (name, args) => {

@@ -42,6 +42,15 @@ test("offers live and mechanics visualization prompts in their own library topic
   assert.ok(visualizations.some((question) => question.text.includes("GBP/USD")));
   assert.ok(visualizations.some((question) => question.text.includes("Ada")));
   assert.ok(visualizations.some((question) => !question.live && question.text.startsWith("Diagram how")));
+  assert.ok(visualizations.some((question) => question.text.startsWith("Chart what happens to iron")));
+});
+
+test("makes the new specialist capabilities discoverable", () => {
+  const questions = starters.catalog(fullContext).map((question) => question.text);
+  assert.ok(questions.some((question) => question.startsWith("Verify this claim")));
+  assert.ok(questions.some((question) => question.startsWith("Run a causal autopsy")));
+  assert.ok(questions.some((question) => question.startsWith("How do army logistics")));
+  assert.ok(questions.some((question) => question.startsWith("What happens to iron prices")));
 });
 
 test("prioritizes corporation questions and removes current-state prompts without live quota", () => {

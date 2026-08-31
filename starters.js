@@ -23,6 +23,7 @@ const QUESTIONS = [
   { id: "basics-country-move", category: "basics", text: "Can a character change country, and what carries over?" },
   { id: "basics-turn-processing", category: "basics", text: "Why can a turn take longer than usual to process?" },
   { id: "basics-live-vs-rules", category: "basics", text: "What can Ask learn from code versus live game data?" },
+  { id: "basics-verify-claim", category: "basics", text: "Verify this claim: a sector finishes retooling in one turn." },
 
   { id: "economy-gdp", category: "economy", text: "How is GDP growth calculated each turn?" },
   { id: "economy-inflation", category: "economy", text: "How is inflation recalculated each turn?" },
@@ -39,6 +40,8 @@ const QUESTIONS = [
   { id: "economy-live-world", category: "economy", live: true, text: "What are the three most important signals in the live world economy right now?" },
   { id: "economy-live-fx-gbp-usd", category: "economy", live: true, text: "What is happening to GBP/USD in game, and which live pressures best explain the move?" },
   { id: "economy-live-shortages", category: "economy", live: true, text: "Which resources have the largest live shortages or surpluses right now?" },
+  { id: "economy-causal-autopsy", category: "economy", live: true, text: "Run a causal autopsy on why US inflation is high right now." },
+  { id: "economy-scenario-iron", category: "economy", live: true, text: "What happens to iron prices if demand rises 5% per turn for 12 turns?" },
 
   { id: "politics-bill", category: "politics", text: "How does a bill move from draft to law?" },
   { id: "politics-cloture", category: "politics", text: "How does cloture work?" },
@@ -90,6 +93,7 @@ const QUESTIONS = [
   { id: "world-migration", category: "world", text: "What drives immigration and emigration?" },
   { id: "world-organizations", category: "world", text: "What powers do international organizations have?" },
   { id: "world-supply", category: "world", text: "How do global supply and trade shocks reach players?" },
+  { id: "world-army-logistics", category: "world", text: "How do army logistics and front supply work?" },
 
   { id: "visualize-tinky-peers", category: "visualizations", live: true, text: "Compare Tinky Corporation with its public peers on revenue and revenue per stake. Visualize the clearest difference." },
   { id: "visualize-country-growth", category: "visualizations", live: true, text: "Compare live GDP growth and unemployment across countries. Visualize the clearest differences." },
@@ -99,6 +103,7 @@ const QUESTIONS = [
   { id: "visualize-gbp-usd", category: "visualizations", live: true, text: "Show the live GBP/USD exchange rate over the last 20 turns and visualize the trend." },
   { id: "visualize-public-media", category: "visualizations", live: true, text: "Rank public media corporations by live Anchor-normalized revenue. Visualize the target and its nearest meaningful peers." },
   { id: "visualize-market-balance", category: "visualizations", live: true, text: "Visualize the biggest live commodity shortages and surpluses, then explain the clearest imbalance." },
+  { id: "visualize-scenario-iron", category: "visualizations", live: true, text: "Chart what happens to iron prices if demand rises 5% per turn for 12 turns." },
   { id: "visualize-world-unemployment-map", category: "visualizations", live: true, text: "Show a world map of live unemployment rates. Color higher unemployment as worse and explain the clearest regional pattern." },
   { id: "visualize-world-growth-map", category: "visualizations", live: true, text: "Map live GDP growth across countries and highlight where growth is strongest and weakest." },
   { id: "visualize-italy-approval-map", category: "visualizations", live: true, text: "Show a regional map of live government approval across Italy using the game map colors." },

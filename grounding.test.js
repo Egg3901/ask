@@ -35,6 +35,32 @@ test("preserves mechanic phrases for a vague navigation follow-up", () => {
   );
 });
 
+test("a complete new topic does not inherit mechanics from the previous answer", () => {
+  const history = [
+    { role: "user", content: "How does close air support affect a battle?" },
+    { role: "assistant", content: "CAS is separate from air superiority." },
+  ];
+  const question = "how do army logistics work in game?";
+  assert.equal(grounding.needsConversationContext(question), false);
+  assert.equal(grounding.restoreContextTerms(question, history, question), question);
+});
+
+test("the server applies topic-pivot and literal-contract boundaries", () => {
+  const source = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
+  assert.match(source, /const contextualFollowup = isFollowup && grounding\.needsConversationContext\(question\)/);
+  assert.match(source, /if \(contextualFollowup\)/);
+  assert.match(source, /queryAliases\.deliveryContract\(question, retrievalQuestion, \{ contextual: contextualFollowup \}\)/);
+  assert.doesNotMatch(source, /queryAliases\.canonicalAnswer\(retrievalQuestion\)/);
+});
+
+test("explicit verification and elliptical follow-ups still inherit context", () => {
+  assert.equal(grounding.needsConversationContext("verify the previous answer"), true);
+  assert.equal(grounding.needsConversationContext("what about the UK?"), true);
+  assert.equal(grounding.needsConversationContext("and if supply falls?"), true);
+  assert.equal(grounding.needsConversationContext("How can I increase the scores?"), true);
+  assert.equal(grounding.needsConversationContext("Could you explain more?"), true);
+});
+
 test("no ungrounded claims means no note at all", () => {
   assert.equal(grounding.note([]), "");
   assert.equal(grounding.note(null), "");

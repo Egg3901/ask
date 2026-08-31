@@ -57,6 +57,17 @@ const CONDENSE_SYSTEM = `You rewrite a follow-up question into one standalone se
 
 The follow-up only makes sense inside the conversation ("what about the UK?", "and if I lose?"). Combine it with the conversation so the query names the actual systems, entities, and mechanics being asked about. Reply with ONLY the query text, under 30 words.`;
 
+// Being later in a thread does not make a complete new question a semantic
+// follow-up. Condensing every turn let old mechanics leak into topic pivots.
+const CONTEXT_REFERENCE = /^(?:and|also|but|so|then)\b|^(?:can|could) you (?:explain|expand|elaborate|show|clarify)\b|\b(?:what|how) about\b|\b(?:the |your )?(?:previous|prior|last|earlier) (?:answer|claim|part|point|response)\b|\b(?:that|this|those|these|it) (?:answer|claim|part|point|mechanic|system|number|result|work|happen|mean)\b|\b(?:the|those|these) (?:scores?|numbers?|ones?|values?|options?|tabs?)\b|\b(?:verify|fact-check|audit|check) (?:that|this|it|the previous|the prior|the last|your answer)\b/i;
+
+function needsConversationContext(question) {
+  const text = String(question || "").trim();
+  if (!text) return false;
+  return CONTEXT_REFERENCE.test(text)
+    || (text.length < 100 && /^(?:why|where|when|who|which one|can it|does it|is it|are they)\b/i.test(text));
+}
+
 const CONTEXT_TERM_STOP = new Set(["What", "How", "Where", "When", "Why", "Which", "Available", "The", "This", "That"]);
 const CONTEXT_PHRASES = [
   "blockade",
@@ -82,7 +93,9 @@ function restoreContextTerms(query, historyTurns, question) {
   const standalone = base.length >= 8 && base.length <= 300 ? base : String(question || "").trim();
   if (!standalone) return null;
   const thread = (historyTurns || []).map(turn => String(turn?.content || turn?.question || "")).join("\n");
-  const phrases = CONTEXT_PHRASES.filter(phrase => new RegExp(`\\b${phrase.replace(/ /g, "\\s+")}\\b`, "i").test(thread));
+  const phrases = needsConversationContext(question)
+    ? CONTEXT_PHRASES.filter(phrase => new RegExp(`\\b${phrase.replace(/ /g, "\\s+")}\\b`, "i").test(thread))
+    : [];
   const missing = [...namedContextTerms(historyTurns, question), ...phrases]
     .filter(term => !standalone.toLowerCase().includes(term.toLowerCase()));
   return missing.length ? `${standalone}: ${[...new Set(missing)].join(", ")}`.slice(0, 300) : standalone;
@@ -95,6 +108,7 @@ function restoreContextTerms(query, historyTurns, question) {
  * question.
  */
 async function condense(historyTurns, question) {
+  if (!needsConversationContext(question)) return String(question || "").trim() || null;
   const thread = (historyTurns || [])
     .map(t => `Q: ${String(t.content || t.question || "").slice(0, 300)}`)
     .join("\n");
@@ -174,4 +188,4 @@ function note(claims) {
   return `\n\n> **Grounding check:** the game code I read does not confirm: ${claims.map(c => c.trim().replace(/\.$/, "")).join("; ")}. Treat those parts as general reasoning, not confirmed game rules.`;
 }
 
-module.exports = { decompose, check, note, condense, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };
+module.exports = { decompose, check, note, condense, needsConversationContext, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };

@@ -2,6 +2,26 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.9.0 - 2026-08-31
+
+### Added
+- Ask now understands army logistics as its own mechanic, including front
+  throughput, formation demand, overextension, supply bands, combat effects,
+  and what a Logistics Command does and does not control.
+- Claim Verifier checks a previous answer claim by claim and labels each point
+  supported, contradicted, or unresolved before giving a corrected answer.
+- Causal Autopsy traces a reported outcome across live state, game rules, and
+  recently shipped changes, including alternatives the evidence rules out.
+- Scenario Lab runs bounded, read-only economy projections against live prices.
+  It reports the intervention, horizon, outcome, and a clear warning that the
+  result is directional rather than the canonical turn engine.
+
+### Fixed
+- A complete new question in an existing conversation is now treated as a topic
+  pivot. Old mechanics are inherited only by questions that actually refer back
+  to the previous turn, preventing an army-logistics question from receiving a
+  close-air-support answer.
+
 ## 1.8.0 - 2026-08-29
 
 ### Added
