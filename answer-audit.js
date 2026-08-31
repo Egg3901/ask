@@ -106,6 +106,11 @@ function maybeAudit({ answerId = null, question, answer, hadLive = false, issues
         confidence: verdict.confidence, note: verdict.note,
         model: "helper-chain",
       });
+      // The sampler judging an answer as not-answered is a later-discovered
+      // failure: credit the question back and tell the player in-game.
+      if (verdict.answered === false) {
+        try { require("./notify").creditBack(answerId, "sampler judged the answer as not answering", "refund"); } catch { /* advisory */ }
+      }
       if (verdict.answered === false) {
         console.warn(`[ask] audit FLAG answerId=${answerId ?? "?"} refused=${verdict.refused} live=${hadLive ? 1 : 0} note=${JSON.stringify(verdict.note)}`);
         // Seed a staff-review draft, unless the grader judged it a correct

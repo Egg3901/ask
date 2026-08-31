@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.15.0 - 2026-08-31
+
+### Added
+- Flagged answers are free: when a quality check finds problems with an answer, on the spot or in a later audit, the question is credited back to your daily allowance. Inline flags say so under the answer; later discoveries (a failed grounding audit, a staff correction, the answer sampler) also notify you in-game with a link back to Ask.
+- Watch alerts now arrive as in-game notifications too, not only with your next answer.
+
 ## 1.14.0 - 2026-08-31
 
 ### Added

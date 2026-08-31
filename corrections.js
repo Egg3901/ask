@@ -47,6 +47,12 @@ async function add({ question, correction, sourceAnswerId = null, addedBy = null
   if (q.length < 8 || c.length < 8) throw new Error("question and correction are both required");
   const vec = norm(await retrieve.embedQuery(q));
   const r = S.insert.run(q, c, Buffer.from(vec.buffer), sourceAnswerId, addedBy, Date.now());
+  // The player who surfaced the wrong answer gets their question back and an
+  // in-game note that it was corrected. Lazy require: corrections loads early
+  // and notify pulls store.
+  if (sourceAnswerId != null) {
+    try { require("./notify").creditBack(Number(sourceAnswerId), "correction added", "correction"); } catch { /* advisory */ }
+  }
   recordEvalCandidate({ question: q, truth: c, addedBy });
   return { id: r.lastInsertRowid };
 }

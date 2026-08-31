@@ -134,6 +134,18 @@ CREATE TABLE IF NOT EXISTS watches(
 CREATE INDEX IF NOT EXISTS idx_watches_user ON watches(user_key, active);
 CREATE INDEX IF NOT EXISTS idx_watches_active ON watches(active, last_checked);
 
+CREATE TABLE IF NOT EXISTS notify_queue(
+  id INTEGER PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  url TEXT,
+  created INTEGER NOT NULL,
+  sent_at INTEGER,
+  attempts INTEGER DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_notify_pending ON notify_queue(sent_at, attempts);
+
 CREATE TABLE IF NOT EXISTS watch_events(
   id INTEGER PRIMARY KEY,
   watch_id INTEGER NOT NULL,
@@ -172,6 +184,7 @@ try { db.exec("ALTER TABLE asks ADD COLUMN feedback_rating TEXT"); } catch { /* 
 try { db.exec("ALTER TABLE asks ADD COLUMN feedback_reason TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN feedback_ts INTEGER"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN feedback_source TEXT"); } catch { /* already migrated */ }
+try { db.exec("ALTER TABLE asks ADD COLUMN refunded INTEGER DEFAULT 0"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN plan TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN validation TEXT"); } catch { /* already migrated */ }
 try { db.exec("ALTER TABLE asks ADD COLUMN evidence TEXT"); } catch { /* already migrated */ }
@@ -485,6 +498,35 @@ function replayCandidates(sinceMs, limit = 40) {
       };
     });
   } catch { return []; }
+}
+
+// ── Credits and in-game notifications ───────────────────────────────────────
+// When a quality check later flags an answer, or staff correct one, the
+// question is credited back and an in-game notification is queued for the
+// game to deliver. Refunds are idempotent per answer.
+function refundAnswer(answerId, reason = "") {
+  const changed = db.prepare("UPDATE asks SET cost=0, used_mcp=0, refunded=1 WHERE id=? AND refunded=0 AND cached=0").run(Number(answerId)).changes > 0;
+  if (changed) {
+    try { console.log(`[credit] answer ${answerId} refunded: ${String(reason).slice(0, 120)}`); } catch {}
+  }
+  return changed;
+}
+function answerOwner(answerId) {
+  try { return db.prepare("SELECT user_key, question FROM asks WHERE id=?").get(Number(answerId)) || null; } catch { return null; }
+}
+function queueNotify({ userKey, kind, title, body, url = null }) {
+  if (!userKey || !title) return null;
+  return Number(db.prepare("INSERT INTO notify_queue(user_key,kind,title,body,url,created) VALUES(?,?,?,?,?,?)")
+    .run(String(userKey), String(kind), String(title).slice(0, 120), String(body).slice(0, 500), url ? String(url).slice(0, 300) : null, Date.now()).lastInsertRowid);
+}
+function pendingNotifies(limit = 20) {
+  return db.prepare("SELECT * FROM notify_queue WHERE sent_at IS NULL AND attempts < 10 ORDER BY id LIMIT ?").all(Number(limit) || 20);
+}
+function markNotifySent(id) {
+  db.prepare("UPDATE notify_queue SET sent_at=? WHERE id=?").run(Date.now(), Number(id));
+}
+function bumpNotifyAttempt(id) {
+  db.prepare("UPDATE notify_queue SET attempts=attempts+1 WHERE id=?").run(Number(id));
 }
 
 // ── Watchlists ──────────────────────────────────────────────────────────────
@@ -1108,6 +1150,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, createWatch, listWatches, deleteWatch, deleteAllWatches, activeWatches, updateWatchState, addWatchEvent, takeWatchEvents, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, setEmbedHealth, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+module.exports = { db, S, userKey, usage, record, feedback, refundAnswer, answerOwner, queueNotify, pendingNotifies, markNotifySent, bumpNotifyAttempt, createWatch, listWatches, deleteWatch, deleteAllWatches, activeWatches, updateWatchState, addWatchEvent, takeWatchEvents, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, setEmbedHealth, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
   reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };

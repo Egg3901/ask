@@ -173,7 +173,7 @@ const CHECKERS = { fx: checkFx, war: checkWar, legislation: checkLegislation };
  * gamestate tool caller. Identical tool queries within a tick are deduped so
  * ten USD/GBP watches cost one call.
  */
-async function checkAll({ store, call, log = () => {} }) {
+async function checkAll({ store, call, log = () => {}, notifyFired = null }) {
   const active = store.activeWatches(CHECK_CALL_BUDGET);
   const cache = new Map();
   const cachedCall = (name, args, timeout) => {
@@ -192,6 +192,8 @@ async function checkAll({ store, call, log = () => {} }) {
       store.updateWatchState(watch.id, JSON.stringify(result.state || {}), (result.fired || []).length > 0);
       for (const message of result.fired || []) {
         store.addWatchEvent(watch.id, watch.user_key, message);
+        // In-game delivery too, when the game ingress is wired up.
+        if (notifyFired) { try { notifyFired(watch.user_key, message); } catch { /* next-answer delivery still lands */ } }
         fired++;
       }
     } catch (e) {
