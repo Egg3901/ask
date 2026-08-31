@@ -137,7 +137,7 @@ testEmbedBatchSlicing.test("embedBatch honors an overall deadline across slices"
   const serverSource = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
   // Attribution sits on the delivery path; the deadline and the failure log
   // must both stay.
-  if (!/deadlineMs: 12000/.test(serverSource) || !/attribution embed failed/.test(serverSource)) {
+  if (!/embedEach\(texts, \{ timeoutMs: 4000/.test(serverSource) || !/attribution embed failed/.test(serverSource)) {
     throw new Error("attribution delivery-path budget or logging removed");
   }
 });

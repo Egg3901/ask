@@ -1348,7 +1348,7 @@ const server = http.createServer(async (req, res) => {
                 chunkVectors: retrieve.vectorsFor(hits?.hits || [], game),
                 embedSentences: async texts => {
                   try {
-                    return await retrieve.embedBatch(texts, { timeoutMs: 12000, slice: 8, deadlineMs: 12000 });
+                    return await retrieve.embedEach(texts, { timeoutMs: 4000, concurrency: 4, deadlineMs: 12000 });
                   } catch (e) {
                     console.warn(`[ask] attribution embed failed (${texts.length} sentences): ${String(e.message || e).slice(0, 160)}`);
                     throw e;
@@ -1512,6 +1512,9 @@ const embedHealth = { ok: null, checkedAt: 0, error: null };
 async function checkEmbedding(tag) {
   try {
     await retrieve.embedQuery("embedding health check");
+    // The array-input form of /api/embed has failed on servers where the
+    // single-input form works; check both so the rollup names which half died.
+    await retrieve.embedEach(["array input health check"], { timeoutMs: 8000, deadlineMs: 8000 });
     if (embedHealth.ok === false) console.log(`[ask] embedding RECOVERED (${tag})`);
     embedHealth.ok = true; embedHealth.error = null;
   } catch (e) {

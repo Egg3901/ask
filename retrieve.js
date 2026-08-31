@@ -75,6 +75,40 @@ async function embedQuery(text) {
  * past the serving instance's budget and the whole attribution silently
  * degraded to lexical-only (measured live: semantic=false on long answers).
  */
+/**
+ * Embed several texts through the SAME single-input request shape as
+ * embedQuery, with bounded concurrency. The array-input form of /api/embed
+ * timed out consistently on the serving instance while single-input requests
+ * passed health checks; rather than depend on that server quirk, attribution
+ * uses N known-good requests. Order is preserved.
+ */
+async function embedEach(texts, { timeoutMs = 4000, concurrency = 4, deadlineMs = 12000 } = {}) {
+  if (!texts.length) return [];
+  const deadline = Date.now() + deadlineMs;
+  const out = new Array(texts.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, texts.length) }, async () => {
+    for (;;) {
+      const index = next++;
+      if (index >= texts.length) return;
+      const budget = Math.min(timeoutMs, deadline - Date.now());
+      if (budget < 300) throw new Error("embed deadline exhausted");
+      const r = await fetch(OLLAMA, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: MODEL, input: "search_document: " + texts[index] }),
+        signal: AbortSignal.timeout(budget),
+      });
+      if (!r.ok) throw new Error("embed " + r.status);
+      const d = await r.json();
+      const v = d.embeddings?.[0];
+      if (!Array.isArray(v)) throw new Error("no embedding");
+      out[index] = Float32Array.from(v);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 async function embedBatch(texts, { timeoutMs = 20000, slice = 16, deadlineMs = 0 } = {}) {
   if (!texts.length) return [];
   const deadline = deadlineMs > 0 ? Date.now() + deadlineMs : 0;
@@ -611,4 +645,4 @@ function stats(game = null) {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
-module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, embedBatch, vectorsFor, hasPath };
+module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, embedBatch, embedEach, vectorsFor, hasPath };
