@@ -75,15 +75,20 @@ async function embedQuery(text) {
  * past the serving instance's budget and the whole attribution silently
  * degraded to lexical-only (measured live: semantic=false on long answers).
  */
-async function embedBatch(texts, { timeoutMs = 20000, slice = 16 } = {}) {
+async function embedBatch(texts, { timeoutMs = 20000, slice = 16, deadlineMs = 0 } = {}) {
   if (!texts.length) return [];
+  const deadline = deadlineMs > 0 ? Date.now() + deadlineMs : 0;
   const out = [];
   for (let offset = 0; offset < texts.length; offset += slice) {
+    // An overall deadline wins over the per-request timeout: callers sitting
+    // on the delivery path must not pay per-slice timeouts serially.
+    const budget = deadline ? Math.min(timeoutMs, deadline - Date.now()) : timeoutMs;
+    if (budget < 300) throw new Error("embed deadline exhausted");
     const group = texts.slice(offset, offset + slice);
     const r = await fetch(OLLAMA, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: MODEL, input: group.map(t => "search_document: " + t) }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(budget),
     });
     if (!r.ok) throw new Error("embed " + r.status);
     const d = await r.json();
