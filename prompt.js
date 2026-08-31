@@ -163,6 +163,7 @@ function visualizationRules(enabled, requested = false, limit = null) {
 - Use at most one visualization (a Mermaid chart/diagram or an AHD map), and only when it makes a process, relationship, timeline, comparison, numeric trend, or geographic pattern materially easier to understand than concise prose.
 - Mermaid supports flowcharts, sequence diagrams, state diagrams, timelines, Gantt charts, pie charts, and xychart-beta charts. Use pie or xychart-beta only with real numeric values present in the supplied sources.
 - When the live intelligence includes VISUALIZATION DATA, prefer that display-ready dataset. Preserve its unit and metric exactly. Use xychart-beta for ranked comparisons or time trends, pie only for genuine parts of one total, flowcharts only for causal mechanics, and an AHD map only for geographic values.
+- A bar chart compares entities on one metric at one moment; a line chart shows one metric changing over time. Never swap the two.
 - Choose the display from this playbook:
   - Current snapshot or mixed units: a compact Markdown table with one row per entity and clearly labeled units.
   - One comparable metric across entities: an xychart-beta bar chart, sorted by value and limited to the most relevant peers.

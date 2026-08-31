@@ -30,6 +30,7 @@ const mcp = require("./mcp");
 const history = require("./history");
 const queryAliases = require("./query-aliases");
 const playbooks = require("./playbooks");
+const toolPlaybook = require("./tool-playbook");
 const calc = require("./calc");
 
 // Three effort levels. Deep questions get room to actually chase a thread
@@ -217,6 +218,31 @@ const HISTORY_TOOL_DEFS = [
   },
 ];
 
+// Community evidence tier. The community MCP holds the vectorized Discord
+// corpus (133k player messages): norms, sentiment, feature-history discussion.
+// It is hearsay by construction, so results are labelled as the lowest
+// authority tier before they enter the evidence.
+//
+// Env-gated: on Railway MCP_COMMUNITY_URL is currently NOT set, so this def is
+// never registered there and the feature ships dark. It lights up the moment
+// the env lands, with no code change. Do not register it unconditionally: an
+// offered tool whose transport is missing teaches the scout to distrust defs.
+const COMMUNITY_SEARCH_DEF = {
+  type: "function",
+  function: {
+    name: "community_search",
+    description: "Search real player Discord discussion. Use for questions about player norms, community sentiment, how players typically approach something, or feature history discussions. Player opinion only: never authoritative for how a mechanic works.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to find in player discussion, in natural language." },
+        limit: { type: "integer", description: "How many messages to return. Defaults to 15." },
+      },
+      required: ["query"],
+    },
+  },
+};
+
 const SYSTEM = `You are the research scout for a help system answering player questions about A House Divided, a political and economic strategy game. You do NOT answer the question. You gather the evidence a separate writer will answer from.
 
 Work like an investigator:
@@ -231,6 +257,7 @@ Work like an investigator:
 - Prefer few, well-aimed calls. Stop as soon as the evidence would let a careful writer answer with real numbers and mechanisms.
 - Never do arithmetic in your head. Any derived number the writer will need — a growth rate, a share, a difference, a per-capita figure — goes through the calculate tool so the evidence carries the exact value.
 - A search that finds nothing is itself evidence: it means the game likely does not model that thing. Note it, do not keep rephrasing the same hunt more than once.
+- Community discussion is player hearsay: it may only ever supplement, never establish, a mechanic. Code, docs, and live data always outrank it.
 - When nothing useful is missing, stop calling tools and reply with exactly two lines for the writer:
 ESTABLISHED: <what the gathered evidence shows, one compressed sentence>
 UNKNOWN: <what you searched for and could not find, or "nothing" if the evidence is complete>
@@ -333,6 +360,17 @@ async function execute(name, args, { useLive, context, game, historyDays, privat
       c.body ? `\n${c.body.slice(0, 1200)}` : "", `\nFILES:\n${stat}`,
       c.diff ? `\nWHAT CHANGED:\n${c.diff}` : ""].filter(Boolean).join("\n");
   }
+  if (name === "community_search") {
+    if (!process.env.MCP_COMMUNITY_URL) return "Tool not available for this question.";
+    const out = await mcp.callServer("community", "community_search", {
+      query: String(args.query || ""),
+      ...(Number(args.limit) > 0 ? { limit: Math.min(Number(args.limit), 40) } : {}),
+    }, 20000);
+    if (!out) return "No community discussion found for that query.";
+    // The authority label travels WITH the evidence so the writer sees it even
+    // when this block is the only thing that survives truncation.
+    return `COMMUNITY DISCUSSION (player messages, unverified, lowest authority: never override code, docs, or live data with this):\n${out}`;
+  }
   if (!useLive || !allowedLiveTools(privateAccess).has(name)) return "Tool not available for this question.";
   // The asker may only trace themselves. Their own character is the one in the
   // session; any other target is rewritten to it rather than refused, so the
@@ -363,7 +401,10 @@ async function run({ question, context = null, useLive = false, deep = false, ti
   const caps = capsFor({ deep, tier });
   const isStaff = context?.isAdmin === true || context?.isModerator === true;
   const historyDefs = (await history.available(game)) ? HISTORY_TOOL_DEFS : [];
-  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CALCULATE_DEF, CAPABILITY_DEF, ...historyDefs, ...(useLive ? await liveToolDefs(isStaff) : [])];
+  // community_search exists only when its transport does: see COMMUNITY_SEARCH_DEF.
+  const defs = [SEARCH_CODE_DEF, ...INDEX_BROWSE_DEFS, CALCULATE_DEF, CAPABILITY_DEF, ...historyDefs,
+    ...(process.env.MCP_COMMUNITY_URL ? [COMMUNITY_SEARCH_DEF] : []),
+    ...(useLive ? await liveToolDefs(isStaff) : [])];
   const historyDays = history.sinceDaysFor(question);
   const started = Date.now();
   const resolution = queryAliases.guidance(question);
@@ -384,8 +425,11 @@ async function run({ question, context = null, useLive = false, deep = false, ti
   const staffLine = isStaff
     ? `\n(The asker is STAFF: you MAY trace any named player or corporation they ask about, not only their own.)`
     : "";
+  // One line of judgment per offered tool: when to reach for it, and its trap.
+  // Built from the defs actually offered so a dark tool never gets a line.
+  const toolGuide = toolPlaybook.block(defs.map(def => def.function.name));
   const messages = [
-    { role: "system", content: SYSTEM + (isStaff ? `\n\nPRIVATE MODERATOR ACCESS: This authenticated moderator may inspect private player, corporation, forensic, audit, and hidden records for support or enforcement. Use the available private tools when the question calls for them. The public-data-only restriction above does not apply to this session.` : "") },
+    { role: "system", content: SYSTEM + (toolGuide ? `\n\n${toolGuide}` : "") + (isStaff ? `\n\nPRIVATE MODERATOR ACCESS: This authenticated moderator may inspect private player, corporation, forensic, audit, and hidden records for support or enforcement. Use the available private tools when the question calls for them. The public-data-only restriction above does not apply to this session.` : "") },
     // A cheap scout model reads a conditional instruction in the system prompt
     // as optional and never fires the tool. When the caller already knows this
     // is a change question, say so as an order in the turn it is answering.

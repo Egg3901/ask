@@ -9,10 +9,17 @@ const URLS = {
   gamestate: process.env.MCP_GAMESTATE_URL || "http://127.0.0.1:9730/mcp",
   engine: process.env.MCP_ENGINE_URL || "http://127.0.0.1:9731/mcp",
   worldsim: process.env.MCP_WORLDSIM_URL || "https://mcp.lakesidegames.net/worldsim/mcp",
+  // Community brain (Discord knowledge, 133k player messages). No localhost
+  // default on purpose: it is deliberately absent until the env is set, so a
+  // deployment without MCP_COMMUNITY_URL cannot fall through to another server.
+  community: process.env.MCP_COMMUNITY_URL || "",
 };
 
 async function callServer(server, name, args = {}, timeoutMs = 25000, preserveToolError = false) {
-  const endpoint = URLS[server] || URLS.gamestate;
+  // `??` keeps an unknown server on the gamestate default while an explicitly
+  // empty entry (community without its env) stays empty and refuses the call.
+  const endpoint = URLS[server] ?? URLS.gamestate;
+  if (!endpoint) return null;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -175,6 +182,7 @@ const LIVE_LABELS = {
   trace_approval: "Approval history",
   character_balance_sheet: "Balance sheet",
   character_wealth_history: "Wealth history",
+  community_search: "Community discussion",
   country_groups: "Country groups",
   sim_economy_whatif: "Economy Scenario Lab",
 };

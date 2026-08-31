@@ -663,3 +663,31 @@ test("live sources survive junk input", () => {
     assert.deepEqual(mcp.liveSources(input), []);
   }
 });
+
+// ── Community evidence tier ─────────────────────────────────────────────────
+
+test("a community call without MCP_COMMUNITY_URL refuses instead of hitting gamestate", async () => {
+  // The community entry has no localhost default on purpose: with the env
+  // unset the endpoint is empty and the call must return null without any
+  // network attempt, never fall through to another server.
+  assert.equal(process.env.MCP_COMMUNITY_URL, undefined);
+  const originalFetch = global.fetch;
+  global.fetch = async () => { throw new Error("no network call may happen without the env"); };
+  try {
+    assert.equal(await mcp.callServer("community", "community_search", { query: "x" }, 1000), null);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("the investigator registers community_search only when its transport exists", () => {
+  const source = require("node:fs").readFileSync(require.resolve("./investigate.js"), "utf8");
+  // Def registration is env-gated: on Railway MCP_COMMUNITY_URL is unset today,
+  // so the tool ships dark and lights up when the env lands.
+  assert.match(source, /process\.env\.MCP_COMMUNITY_URL \? \[COMMUNITY_SEARCH_DEF\] : \[\]/);
+  assert.match(source, /if \(!process\.env\.MCP_COMMUNITY_URL\) return "Tool not available for this question\."/);
+  // Results carry the authority label so community hearsay can never pass as data.
+  assert.match(source, /COMMUNITY DISCUSSION \(player messages, unverified, lowest authority: never override code, docs, or live data with this\):/);
+  // And the scout is told the tier's standing: supplement, never establish.
+  assert.match(source, /may only ever supplement, never establish, a mechanic/);
+});
