@@ -33,6 +33,7 @@ const games = require("./games");
 const clarification = require("./clarification");
 const discordAsk = require("./discord-ask");
 const capabilities = require("./capabilities");
+const playbooks = require("./playbooks");
 
 // Where the docs build writes its output. Ask reads only the per-game logo from
 // it, so a missing docs build degrades to a 404 mark, never a broken page.
@@ -686,7 +687,7 @@ const server = http.createServer(async (req, res) => {
         // basis to set, and it keeps the slow tier from being chosen by habit.
         const effortChoice = ent.staff && router.EFFORTS[body.effort] ? body.effort : "auto";
         const specialist = plan.intent === "claim_verification" || plan.intent === "causal_autopsy";
-        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice, specialist });
+        let route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice, specialist });
         // A player can pin the answer model in Settings. Only the whitelist is
         // honoured (never DeepSeek — that stays the invisible backstop), and it
         // keeps the tier's effort/token budget; just the lead model changes, with
@@ -946,6 +947,22 @@ const server = http.createServer(async (req, res) => {
         // stays fast, and a question that was heading for a non-answer gets the
         // one pass that can rescue it.
         const liveMissedTarget = useMcp && !liveTargeted;
+        // Post-evidence escalation. The pre-retrieval score routed on wording
+        // alone; now the searches have actually run, revisit it the way an
+        // operator would. Thin code evidence on a real question, or a live
+        // question the heuristics could not target, means the cheap chain is
+        // about to answer from almost nothing — exactly where flash invents.
+        // Escalating here also hands the scout the pro budget below.
+        const thinRetrieval = question.trim().length >= 40
+          && (!hits || String(hits.context || "").length < 2000);
+        if (route.tier === "flash" && (thinRetrieval || liveMissedTarget)) {
+          const escalated = router.escalate(route, thinRetrieval ? "retrieval came back thin" : "live heuristics missed the target");
+          if (escalated !== route) {
+            route = escalated;
+            status("Evidence is thin — escalating to the reasoning tier…");
+            console.log(`[ask] escalated flash->pro reason=${JSON.stringify(route.escalated)} q=${JSON.stringify(question.slice(0, 80))}`);
+          }
+        }
         // Trend questions get the scout even when the live heuristics hit:
         // the heuristic pass serves snapshots, and a "how has X changed"
         // answer built on a snapshot is exactly the failure the history
@@ -970,9 +987,20 @@ const server = http.createServer(async (req, res) => {
         if ((game.live && (deepAnswer || (useMcp && route.tier !== "flash") || liveMissedTarget || (useMcp && trendish) || needsMechanicEvidence || needsCapabilityInventory || needsSpecialistEvidence || moderatorPrivateQuestion)) || chaseChange) {
           status(chaseChange && !useMcp ? "Scout: reading what changed…" : (useMcp ? "Scout: pulling targeted live data…" : "Scout: following code references…"));
           try {
-            investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, onAction, game, changeQuestion });
+            investigation = await investigate.run({ question, context: session.context, useLive: useMcp, deep: deepAnswer, tier: route.tier, seenPaths: hits?.files || null, onAction, game, changeQuestion });
           } catch { investigation = null; }
           if (investigation?.tools?.length) liveEvidence.tools = [...liveEvidence.tools, ...investigation.tools.map(t => `investigate:${t}`)];
+        }
+        // The scout naming what it could NOT establish is the second
+        // escalation signal: a writer about to bridge a named unknown on the
+        // cheap chain is the measured failure mode.
+        if (route.tier === "flash" && investigation?.assessment && /UNKNOWN:\s*(?!nothing\b)\S/i.test(investigation.assessment)) {
+          const escalated = router.escalate(route, "scout left a named unknown");
+          if (escalated !== route) {
+            route = escalated;
+            status("Key facts are still open — escalating to the reasoning tier…");
+            console.log(`[ask] escalated flash->pro reason="scout unknown" q=${JSON.stringify(question.slice(0, 80))}`);
+          }
         }
 
         // Evidence is assembled; the answer model is about to start streaming.
@@ -987,6 +1015,7 @@ const server = http.createServer(async (req, res) => {
         let firstTokenMs = null;
         const mechanicsAnswerContract = queryAliases.deliveryContract(question, retrievalQuestion, { contextual: contextualFollowup });
         const domainGuidance = queryAliases.guidance(contractQuestion);
+        const methodBrief = playbooks.writerBrief(question);
         const capabilityContract = capabilities.contract(plan);
         try {
           if (mechanicsAnswerContract) {
@@ -1003,6 +1032,7 @@ const server = http.createServer(async (req, res) => {
                 + (liveBlock ? `\n\n${liveBlock}` : "")
                 + (investigation ? `\n\n${investigation.text}` : "")
                 + (domainGuidance ? `\n\nDOMAIN RESOLUTION FOR THIS QUESTION:\n${domainGuidance}` : "")
+                + (methodBrief ? `\n\n${methodBrief}` : "")
                 + (capabilityContract ? `\n\n${capabilityContract}` : "")
                 // "Where do I find this" is answered from the real menu map, not guessed.
                 + (navBlock ? `\n\n${navBlock}` : ""),
@@ -1066,7 +1096,7 @@ const server = http.createServer(async (req, res) => {
         // let the normal citation and safety guards inspect the repaired answer.
         // The web client replaces streamed draft text with the canonical done
         // payload, while Discord only consumes that final payload.
-        const evidenceForCheck = [
+        let evidenceForCheck = [
           matchedCorrections.length ? corrections.block(matchedCorrections) : "",
           hits?.context, historyBlock, liveBlock, investigation?.text,
           domainGuidance, capabilityContract,
@@ -1087,11 +1117,37 @@ const server = http.createServer(async (req, res) => {
           mechanicsContractApplied = true;
           answerRepaired = true;
         }
-        const answerRequirement = answerRepair.requirementFor(contractQuestion, evidenceForCheck);
-        if (!canonicalContractApplied && answerRepair.shouldRepair({ answer: noConflict, hasLiveData: useMcp, evidence: evidenceForCheck, requirement: answerRequirement })) {
-          status("Rechecking the answer against the live evidence…");
+        // Detect the draft's defects BEFORE deciding whether to repair. The
+        // old order computed truncation, bundle narration and missed paths
+        // after the repair decision, so the one closed loop in the pipeline
+        // ignored three defect classes it could have fixed.
+        const draftTruncated = finishReason === "length" || answerGuard.looksTruncated(noConflict);
+        const draftNarrated = answerGuard.detectBundleNarration(noConflict);
+        // Retrieval-miss self-heal: the draft cited a real, indexed file that
+        // retrieval never supplied. The pipeline used to log a MISS and staple
+        // an apology under the answer; the file is one call away. Read it, hand
+        // it to the repair pass, and let the answer be checked against the real
+        // contents instead of recall.
+        let healedPaths = [];
+        if (!canonicalContractApplied) {
           try {
-            const repaired = await answerRepair.repair({ question: contractQuestion, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement });
+            const draftSplit = grounding.classifyPaths(noConflict, evidenceForCheck, retrieve.hasPath);
+            for (const missPath of draftSplit.missed.slice(0, 2)) {
+              const found = retrieve.readIndexedFile(missPath, { maxChars: 9000, game });
+              if (found?.context) {
+                evidenceForCheck += `\n\nHEALED EVIDENCE — the draft cited ${missPath} without reading it; here are its actual indexed contents:\n${found.context}`;
+                healedPaths.push(missPath);
+              }
+            }
+            if (healedPaths.length) status("Reading the files the draft cited but never saw…");
+          } catch { healedPaths = []; }
+        }
+        const answerRequirement = answerRepair.requirementFor(contractQuestion, evidenceForCheck);
+        if (!canonicalContractApplied && answerRepair.shouldRepair({ answer: noConflict, hasLiveData: useMcp, evidence: evidenceForCheck, requirement: answerRequirement, truncated: draftTruncated, narrated: draftNarrated, healedPaths })) {
+          status("Rechecking the answer against the evidence…");
+          try {
+            const issues = answerRepair.issuesFor({ answer: noConflict, hasLiveData: useMcp, truncated: draftTruncated, narrated: draftNarrated, healedPaths });
+            const repaired = await answerRepair.repair({ question: contractQuestion, answer: noConflict, evidence: evidenceForCheck, requirement: answerRequirement, issues });
             if (repaired?.text) {
               noFu = repaired.text;
               answerRepaired = true;
@@ -1132,9 +1188,32 @@ const server = http.createServer(async (req, res) => {
         // exists for exactly the multi-system questions that invite it, and a
         // check that only runs on ~5% of traffic protects nobody. Flash gets
         // the async variant below instead of a synchronous wait.
+        let groundingRevised = false;
         if (!canonicalContractApplied && (deepAnswer || route.tier === "pro") && evidenceForCheck) {
           try {
             groundingNotes = await grounding.check(answer, evidenceForCheck);
+            // Act on the audit instead of stapling it under the answer: one
+            // corrective rewrite, then re-audit. Only a revision that comes
+            // back clean replaces the answer; anything else keeps the original
+            // with the honest caveat, so this can only remove invention.
+            if (groundingNotes.length) {
+              status("Removing claims the code does not support…");
+              const revised = await grounding.revise({ question: contractQuestion, answer, claims: groundingNotes, evidence: evidenceForCheck });
+              if (revised?.text) {
+                const recheck = await grounding.check(revised.text, evidenceForCheck);
+                if (!recheck.length) {
+                  answer = revised.text;
+                  groundingNotes = [];
+                  groundingRevised = true;
+                  if (revised.usage) {
+                    llmUsage = {
+                      prompt_tokens: Number(llmUsage.prompt_tokens || 0) + Number(revised.usage.prompt_tokens || 0),
+                      completion_tokens: Number(llmUsage.completion_tokens || 0) + Number(revised.usage.completion_tokens || 0),
+                    };
+                  }
+                }
+              }
+            }
             answer += grounding.note(groundingNotes);
           } catch { groundingNotes = []; }
         }
@@ -1176,7 +1255,7 @@ const server = http.createServer(async (req, res) => {
         // leaking as an answer, and it is the single most common failure shape.
         const narratedEvidence = answerGuard.detectBundleNarration(answer);
         if (narratedEvidence) console.warn(`[ask] evidence-bundle narration plan=${plan.id} q=${JSON.stringify(question.slice(0, 80))}`);
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : [])], grounding: groundingNotes, inventedPaths, missedPaths };
+        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : []), ...(healedPaths.length ? ["retrieval_miss_healed"] : []), ...(groundingRevised ? ["grounding_revised"] : []), ...(route.escalated ? ["escalated_tier"] : [])], grounding: groundingNotes, inventedPaths, missedPaths };
         const areas = cites.areasFor(hits?.files || []);
 
         if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence) {

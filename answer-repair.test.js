@@ -55,6 +55,47 @@ test("retries a repair that still violates a cross-system answer contract", asyn
   assert.match(out.text, /^Yes\./);
 });
 
+test("repairs truncated, narrated, and heal-cited drafts", () => {
+  assert.equal(repair.shouldRepair({
+    answer: "The bond yield is calculated from",
+    hasLiveData: false,
+    evidence: "bond yield formula excerpt",
+    truncated: true,
+  }), true);
+  assert.equal(repair.shouldRepair({
+    answer: "The supplied source excerpts do not include the yield formula.",
+    hasLiveData: false,
+    evidence: "bond yield formula excerpt",
+    narrated: true,
+  }), true);
+  assert.equal(repair.shouldRepair({
+    answer: "Per src/lib/turn/bondTurn.ts the yield is 4%.",
+    hasLiveData: false,
+    evidence: "bond evidence",
+    healedPaths: ["src/lib/turn/bondTurn.ts"],
+  }), true);
+  // No detected defect and no requirement: leave the answer alone.
+  assert.equal(repair.shouldRepair({
+    answer: "A complete grounded answer.",
+    hasLiveData: false,
+    evidence: "evidence",
+  }), false);
+});
+
+test("issuesFor names each detected defect for the repair model", () => {
+  const issues = repair.issuesFor({
+    answer: "The draft stopped mid",
+    hasLiveData: false,
+    truncated: true,
+    narrated: true,
+    healedPaths: ["src/lib/turn/bondTurn.ts"],
+  });
+  assert.equal(issues.length, 3);
+  assert.match(issues[0], /mid-sentence/);
+  assert.match(issues[1], /evidence bundle/);
+  assert.match(issues[2], /bondTurn\.ts/);
+});
+
 test("requires repair for canonical cross-system and precomputed-table contracts", () => {
   assert.match(repair.requirementFor(
     "In the German Question, how do I increase NATO air superiority?",

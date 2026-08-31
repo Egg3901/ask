@@ -45,9 +45,12 @@ async function call(name, args = {}, timeoutMs = 25000) {
 // Tool inventory, cached. The investigator builds its function-calling defs
 // from the server's own schemas so a gamestate tool change never needs a
 // hand-edited copy here.
-let _tools = null, _toolsAt = 0;
+// Keyed by server: one shared slot handed gamestate's inventory to any
+// caller asking about a different server.
+const _toolCache = new Map();
 async function listTools(server = "gamestate") {
-  if (_tools && Date.now() - _toolsAt < 600000) return _tools;
+  const cached = _toolCache.get(server);
+  if (cached && Date.now() - cached.at < 600000) return cached.tools;
   const endpoint = URLS[server] || URLS.gamestate;
   const response = await fetch(endpoint, {
     method: "POST",
@@ -64,8 +67,8 @@ async function listTools(server = "gamestate") {
   const parsed = JSON.parse(frame ? frame.slice(5).trim() : raw);
   const tools = parsed?.result?.tools;
   if (!Array.isArray(tools)) return null;
-  _tools = tools; _toolsAt = Date.now();
-  return _tools;
+  _toolCache.set(server, { tools, at: Date.now() });
+  return tools;
 }
 
 const WANTS_STATE = /\b(right now|currently|current|my |mine|our |latest|this turn|per turn|a turn|why did|why is|compare|comparison|peer|benchmark|rank|best players?|worst players?|largest public (?:companies|corporations|businesses)|how much do i|how much am i|what happened|valued|valuation|market cap|balance sheet|economy|gdp|inflation|unemployment|exchange rate|forex|currency|public corporations?|stock market|election|poll|supply|demand|map|heatmap|choropleth|regional|active players?|online players?|player counts?|net[\s-]?worth|wealth|savings|income|earnings|holdings|inequality|richest|poorest|wealthiest|campaign funds?|wars?|battle|front line|invasion|casualt(?:y|ies)|cold war|tension)\b/i;

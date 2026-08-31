@@ -94,4 +94,25 @@ function label(model) {
   return models.TIER_LABELS[models.tierOf(model)] || "Flash";
 }
 
-module.exports = { choose, label, MODELS, EFFORTS, CHAINS: models.CHAINS, TIERS: Object.keys(models.CHAINS) };
+/**
+ * Escalate a flash route to pro AFTER the evidence came back thin. The
+ * pre-retrieval score only sees the question's wording; this is the routing
+ * decision an operator would revisit once the searches actually ran. A route
+ * that is already pro or deep is returned unchanged, and a staff-forced
+ * effort choice is respected.
+ */
+function escalate(route, reason) {
+  if (!route || route.tier !== "flash" || route.effortChoice !== "auto") return route;
+  return {
+    ...route,
+    tier: "pro",
+    label: models.TIER_LABELS.pro,
+    chain: models.CHAINS.pro,
+    model: models.CHAINS.pro[0],
+    effort: models.EFFORT.pro,
+    reasons: [...(route.reasons || []), `escalated: ${reason}`],
+    escalated: reason,
+  };
+}
+
+module.exports = { choose, label, escalate, MODELS, EFFORTS, CHAINS: models.CHAINS, TIERS: Object.keys(models.CHAINS) };

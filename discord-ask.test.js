@@ -66,3 +66,14 @@ test("Discord sessions are public player sessions with self-scoped game identity
   assert.match(instructions, /SELECTED PUBLIC SUBJECT: Bob in UK, associated with Beta/);
   assert.match(instructions, /Resolve "they", "them", or "this player"/);
 });
+
+test("a long Discord question is clamped at a word boundary, not rejected", () => {
+  const discordAsk = require("./discord-ask");
+  const long = "why does the bond market ".repeat(40); // ~1000 chars
+  const out = discordAsk.normalizeDiscordAsk({ question: long, discordId: "1" });
+  assert.ok(out.question.length <= discordAsk.MAX_QUESTION);
+  assert.ok(out.question.length > 300);
+  assert.doesNotMatch(out.question, / $/);
+  // Short questions pass through untouched.
+  assert.equal(discordAsk.normalizeDiscordAsk({ question: "how do tariffs work?" }).question, "how do tariffs work?");
+});
