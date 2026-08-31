@@ -25,6 +25,11 @@ function parse(md) {
     if (item) {
       if (!section) { section = { title: "", items: [] }; release.sections.push(section); }
       section.items.push(item[1].trim());
+      continue;
+    }
+    if (/^\s+\S/.test(line) && section?.items.length) {
+      const last = section.items.length - 1;
+      section.items[last] += ` ${line.trim()}`;
     }
   }
   return releases;

@@ -1,0 +1,49 @@
+[
+  {
+    "name": "wealth-history-not-formula",
+    "question": "Show how my own savings and wealth changed over recent turns. Visualize the largest change.",
+    "expected": { "planIntent": "player_wealth", "planLive": "required", "planVisual": "required", "private": false }
+  },
+  {
+    "name": "logistics-unit-not-corporate-freight",
+    "question": "What is an example of a logistics unit for a conflict?",
+    "expected": { "planIntent": "army_logistics", "contractIncludes": ["formation", "Logistics"], "contractExcludes": ["corporation", "freight"], "private": false }
+  },
+  {
+    "name": "live-roster-fair-play-refusal",
+    "question": "What is the current live military roster for the US, UK, RU, and DD?",
+    "expected": { "private": true, "refusalIncludes": ["public", "live military rosters"], "refusalExcludes": ["no roster", "does not have"] }
+  },
+  {
+    "name": "live-roster-no-false-absence",
+    "question": "List the live military roster for RU and DD.",
+    "expected": { "private": true, "refusalIncludes": ["public war record"], "refusalExcludes": ["no roster", "does not have"] }
+  },
+  {
+    "name": "logistics-overextension-not-roster",
+    "question": "Explain logistics mechanics and why supply lines do not seem overextended with rapid advance.",
+    "expected": { "planIntent": "army_logistics", "contractIncludes": ["overextend", "moves back"], "contractExcludes": ["live roster"], "private": false }
+  },
+  {
+    "name": "head-of-government-national-influence",
+    "question": "How much is the head of government National Influence bonus?",
+    "expected": { "contractIncludes": ["2.5", "per turn", "highest"], "guidanceIncludes": ["National Influence"], "private": false }
+  },
+  {
+    "name": "blockade-mechanics-direct-answer",
+    "question": "How do you blockade in game with navies?",
+    "expected": { "contractIncludes": ["Blockade standing order", "next turn"], "private": false }
+  },
+  {
+    "name": "blockade-navigation-direct-answer",
+    "question": "Where does one select the option to blockade in game?",
+    "expected": { "contextual": false, "contractIncludes": ["Naval and air command", "Defence office"], "private": false }
+  },
+  {
+    "name": "logistics-topic-pivot-after-cas",
+    "question": "How do army logistics work in game?",
+    "history": ["What is CAS in game?"],
+    "contaminatedRewrite": "How do army logistics work in game: CAS, close air support, air superiority",
+    "expected": { "planIntent": "army_logistics", "contextual": false, "contractIncludes": ["throughput", "demand", "CUT OFF"], "contractExcludes": ["CAS", "air superiority"], "private": false }
+  }
+]

@@ -34,7 +34,7 @@ const EFFORTS = {
   thorough: { label: "Thorough", hint: "Most reasoning, slowest", tier: "deep" },
 };
 
-function choose({ question = "", length = "standard", style = "standard", useMcp = false, isFollowup = false, visualizations = false, report = false, effort = "auto" } = {}) {
+function choose({ question = "", length = "standard", style = "standard", useMcp = false, isFollowup = false, visualizations = false, report = false, effort = "auto", specialist = false } = {}) {
   const text = String(question).trim();
   let score = 0;
   const reasons = [];
@@ -69,7 +69,7 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
   let tier;
   if (multiPart || report) { tier = "deep"; if (report) reasons.push("report"); }
   else if (visualizations) { tier = "pro"; reasons.push("visualization"); }
-  else if (SPECIALIST.test(text)) { tier = "pro"; reasons.push("specialist evidence synthesis"); }
+  else if (specialist || SPECIALIST.test(text)) { tier = "pro"; reasons.push("specialist evidence synthesis"); }
   else tier = score >= 4 ? "pro" : "flash";
 
   // An explicit effort wins outright. A report still forces deep: it is a

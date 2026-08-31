@@ -2,12 +2,35 @@
 
 const scenarioLab = require("./scenario-lab");
 
+const MODES = {
+  auto: { label: "Ask", hint: "Choose the best answer path" },
+  verify: { label: "Verify", hint: "Test claims against evidence", intent: "claim_verification", id: "claim-verifier" },
+  autopsy: { label: "Autopsy", hint: "Trace a result to its causes", intent: "causal_autopsy", id: "causal-autopsy" },
+  scenario: { label: "Scenario", hint: "Project a bounded economy shock", intent: "scenario_lab", id: "scenario-lab" },
+};
+
 const VERIFY = /\b(?:verify|fact-check|fact check|audit|check)\b[\s\S]{0,100}\b(?:previous|prior|last|earlier|answer|claim|statement|mechanic|true|correct)\b|\b(?:is|was) (?:that|this|the previous answer) (?:true|correct|right)\b/i;
 const CAUSAL = /\b(?:causal autopsy|root cause|causal chain|forensic explanation|trace the cause|trace why|why exactly)\b/i;
-const ARMY_LOGISTICS = /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b/i;
+const ARMY_LOGISTICS = /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,100}\b(?:overextend(?:ed|ing)?|rapid advance|advancing|advance|compression|pocket)\b/i;
 
-function classify(question) {
+function normalizeMode(value) {
+  const mode = String(value || "auto").trim().toLowerCase();
+  return MODES[mode] ? mode : "auto";
+}
+
+function publicModes() {
+  return Object.entries(MODES).map(([id, mode]) => ({ id, label: mode.label, hint: mode.hint }));
+}
+
+function modeIssue(mode, question) {
+  if (normalizeMode(mode) !== "scenario" || scenarioLab.parse(question, { forced: true })) return "";
+  return "Scenario Lab needs a 1 to 60 turn horizon and a demand or supply shock from 1% to 50%. For example: What happens to iron prices if demand rises 5% per turn for 12 turns?";
+}
+
+function classify(question, mode = "auto") {
   const text = String(question || "");
+  const selected = MODES[normalizeMode(mode)];
+  if (selected.intent) return { id: selected.id, intent: selected.intent };
   if (VERIFY.test(text)) return { id: "claim-verifier", intent: "claim_verification" };
   if (scenarioLab.parse(text)) return { id: "scenario-lab", intent: "scenario_lab" };
   if (CAUSAL.test(text)) return { id: "causal-autopsy", intent: "causal_autopsy" };
@@ -40,4 +63,4 @@ function contract(plan) {
   }
 }
 
-module.exports = { classify, contract };
+module.exports = { MODES, normalizeMode, publicModes, modeIssue, classify, contract };

@@ -29,9 +29,9 @@ function commodityIn(text) {
   return COMMODITIES.find(item => new RegExp(`\\b${item.replace(/ /g, "\\s+")}\\b`, "i").test(lower)) || null;
 }
 
-function parse(question) {
+function parse(question, { forced = false } = {}) {
   const text = String(question || "").trim();
-  if (!SCENARIO_WORDS.test(text)) return null;
+  if (!forced && !SCENARIO_WORDS.test(text)) return null;
   const turnMatch = text.match(/\b(?:for|over|across|next)\s+(?:the\s+next\s+)?(\d{1,2})\s+turns?\b/i)
     || text.match(/\b(\d{1,2})[ -]turn\b/i);
   if (!turnMatch) return null;
@@ -95,8 +95,8 @@ function fromToolResult(raw) {
   };
 }
 
-async function retrieve({ question, callTool }) {
-  const args = parse(question);
+async function retrieve({ question, callTool, forced = false }) {
+  const args = parse(question, { forced });
   if (!args) return { text: "", targeted: false, usedTools: [], visualizations: [] };
   const raw = await callTool("sim_economy_whatif", args, "worldsim").catch(() => null);
   const formatted = fromToolResult(raw);

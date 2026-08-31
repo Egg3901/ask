@@ -15,6 +15,7 @@ const models = require("./models");
 const auth = require("./auth");
 const cites = require("./citations");
 const gameRegistry = require("./games");
+const capabilities = require("./capabilities");
 
 // Inline jargon annotation: underline terms that have a doc/wiki page, show a
 // blurb on hover/tap, link to the source. The glossary is the same doc/wiki
@@ -324,12 +325,12 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
   background:transparent;color:var(--text-2);padding:.42rem .72rem;font-size:.7rem;cursor:pointer;transition:all var(--t)}
 .starter-browse:hover{color:var(--text);border-color:var(--border-2);background:var(--glass-2)}
 .starter-browse svg{width:12px;height:12px}
-.starter-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:1px 1px 2px}
+.starter-tabs{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;gap:6px;width:100%;min-width:0;overflow-x:auto;scrollbar-width:none;padding:8px;background:var(--surface);border-bottom:1px solid var(--border)}
 .starter-tabs::-webkit-scrollbar{display:none}
-.starter-tab{flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-full);background:transparent;
-  color:var(--text-3);padding:.34rem .7rem;font-size:.7rem;cursor:pointer;transition:all var(--t)}
+.starter-tab{flex:0 0 auto;border:1px solid var(--border-2);border-radius:var(--r-full);background:var(--bg-1);
+  color:var(--text-2);padding:.34rem .7rem;font-size:.7rem;cursor:pointer;transition:all var(--t)}
 .starter-tab:hover{color:var(--text);border-color:var(--border-2)}
-.starter-tab.active{color:var(--text);background:var(--glass-3);border-color:color-mix(in srgb,var(--accent) 34%,var(--border))}
+.starter-tab.active{color:var(--on-accent);background:var(--accent);border-color:var(--accent)}
 .ask-follow{display:grid;grid-template-columns:1.14fr .86fr;gap:9px}
 .ask-follow .starter-card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 18px;grid-template-rows:auto 1fr;
   align-items:start;gap:7px 12px;width:100%;min-height:72px;padding:14px 15px;border-radius:var(--r-md);
@@ -354,6 +355,11 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
 .ask-composer{flex:0 0 auto;padding:12px clamp(14px,4vw,24px) 18px;
   padding-bottom:max(18px,env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg-0) 22%)}
 .ask-comp-inner{max-width:820px;margin:0 auto}
+.ask-modes{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 4px 7px}
+.ask-modes::-webkit-scrollbar{display:none}
+.ask-mode{flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-full);background:var(--surface);color:var(--text-3);padding:.3rem .68rem;font-size:.68rem;font-weight:600;cursor:pointer}
+.ask-mode:hover{color:var(--text);border-color:var(--border-2)}
+.ask-mode.active{color:var(--text);border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
 /* Gradient hairline: lit from above, falls off toward the bottom edge. */
 .ask-comp-box{position:relative;display:flex;align-items:flex-end;gap:10px;padding:7px 7px 7px 16px;border:1px solid transparent;
   border-radius:28px;background:linear-gradient(var(--surface),var(--surface)) padding-box,var(--edge) border-box;
@@ -429,7 +435,9 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
   .starter-explorer .starter-card:first-child{grid-column:1 / -1;grid-row:auto;min-height:76px;padding:12px;font-size:.8rem}
   .starter-explorer .starter-card:first-child .starter-copy{align-self:start;max-width:none}
   .question-library{grid-template-columns:1fr}.question-library .starter-card:first-child{grid-column:auto}
+  .starter-tabs{width:100%;min-width:0;flex-wrap:nowrap;overflow-x:auto;padding:8px 4px}
   .ask-composer{padding:7px 12px max(9px,env(safe-area-inset-bottom))}
+  .ask-modes{width:100%;min-width:0;padding-bottom:5px}
   .ask-comp-box{border-radius:22px;padding:6px 6px 6px 14px}
   .ask-send{width:38px;height:38px}
   .comp-foot{margin-top:4px;font-size:.65rem}
@@ -1102,6 +1110,9 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
     ["for-you", corp || ch ? "For you" : "Featured"],
     ...Object.entries(starterQuestions.CATEGORIES).map(([key, value]) => [key, value.label]),
   ].map(([key, label], index) => `<button class="starter-tab${index === 0 ? " active" : ""}" type="button" role="tab" aria-selected="${index === 0 ? "true" : "false"}" data-starter-category="${key}">${esc(label)}</button>`).join("");
+  const askModes = capabilities.publicModes().map((mode, index) =>
+    `<button class="ask-mode${index === 0 ? " active" : ""}" type="button" data-ask-mode="${mode.id}" aria-pressed="${index === 0 ? "true" : "false"}" title="${esc(mode.hint)}">${esc(mode.label)}</button>`
+  ).join("");
 
   const segBtns = (obj, group, current) => Object.entries(obj).map(([k, v]) =>
     `<button type="button" class="segbtn${k === current ? " active" : ""}" data-opt="${group}" data-val="${k}">${esc(v.label)}</button>`
@@ -1154,6 +1165,7 @@ function app({ identity, context, entitlement, usage, conversations, model, styl
 
     <button class="jumpbtn" id="jump" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>Jump to latest</button>
     <div class="ask-composer"><div class="ask-comp-inner">
+      <div class="ask-modes" id="askModes" role="toolbar" aria-label="Answer mode">${askModes}</div>
       <form id="f"><div class="ask-comp-box">
         <textarea id="q" rows="1" maxlength="500" placeholder="Ask about any part of the game…"></textarea>
         <button class="ask-send" id="go" type="submit" aria-label="Ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
@@ -1234,12 +1246,12 @@ var f=document.getElementById('f'),q=document.getElementById('q'),go=document.ge
     side=document.getElementById('side'),scrim=document.getElementById('scrim'),settingsPanel=document.getElementById('settingsPanel'),
     starters=document.getElementById('starters'),starterExplorer=document.getElementById('starterExplorer'),
     starterTabs=document.getElementById('starterTabs'),libraryQuestions=document.getElementById('libraryQuestions'),
-    questionPanel=document.getElementById('questionPanel'),liveMode=document.getElementById('liveMode'),
+    questionPanel=document.getElementById('questionPanel'),liveMode=document.getElementById('liveMode'),askModes=document.getElementById('askModes'),
     chartViewer=document.getElementById('chartViewer'),chartStage=document.getElementById('chartStage'),
     chartCanvas=document.getElementById('chartCanvas'),jump=document.getElementById('jump'),
     qcount=document.getElementById('qcount'),fbPanel=document.getElementById('fbPanel');
 var DOC_TITLE=document.title;
-var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you';
+var convId=null,turnsInThread=0,nextCost=1,fuLeft=3,busy=false,starterCategory='for-you',askMode='auto';
 var chartScale=1,chartBaseWidth=900,chartReturnFocus=null;
 var S={style:localStorage.getItem('ask.style')||'standard',length:localStorage.getItem('ask.length')||'standard',effort:localStorage.getItem('ask.effort')||'auto'};
 
@@ -1441,7 +1453,7 @@ questionPanel.addEventListener('click',function(e){if(e.target===questionPanel)c
 function closeSide(){side.classList.remove('open');scrim.classList.remove('open');}
 document.getElementById('menu').onclick=function(){side.classList.add('open');scrim.classList.add('open');};
 scrim.onclick=closeSide;
-document.getElementById('newq').onclick=function(){convId=null;turnsInThread=0;fuLeft=3;paintCost();out.innerHTML='';hero.style.display='';starterExplorer.style.display='';renderExplorer();closeSide();document.title=DOC_TITLE;
+document.getElementById('newq').onclick=function(){convId=null;turnsInThread=0;fuLeft=3;setAskMode('auto');paintCost();out.innerHTML='';hero.style.display='';starterExplorer.style.display='';renderExplorer();closeSide();document.title=DOC_TITLE;
   convs.querySelectorAll('.ask-conv').forEach(function(c){c.classList.remove('active');});q.focus();};
 
 convs.addEventListener('click',function(e){
@@ -1651,10 +1663,18 @@ function fill(turn,target,d){
 function chooseStarter(e){
   var b=e.target.closest('.starter-card'); if(!b)return;
   if(b.dataset.live==='true'&&!live.disabled){live.checked=true;localStorage.setItem('ask.live','true');syncLiveMode();}
-  closeQuestions();q.value=b.dataset.question||'';submit();
+  setAskMode('auto');closeQuestions();q.value=b.dataset.question||'';submit();
 }
 starters.addEventListener('click',chooseStarter);
 libraryQuestions.addEventListener('click',chooseStarter);
+function setAskMode(mode){
+  var button=askModes&&askModes.querySelector('[data-ask-mode="'+mode+'"]');
+  askMode=button?mode:'auto';
+  if(!askModes)return;
+  askModes.querySelectorAll('[data-ask-mode]').forEach(function(item){var active=item.dataset.askMode===askMode;
+    item.classList.toggle('active',active);item.setAttribute('aria-pressed',active?'true':'false');});
+}
+askModes.addEventListener('click',function(e){var button=e.target.closest('[data-ask-mode]');if(button)setAskMode(button.dataset.askMode);});
 q.addEventListener('input',function(){q.style.height='auto';q.style.height=Math.min(q.scrollHeight,160)+'px';go.disabled=q.value.trim().length<5;
   var n=q.value.length;
   if(n>=420){qcount.hidden=false;qcount.textContent=n+' / 500';qcount.classList.toggle('max',n>=500);}
@@ -1772,6 +1792,7 @@ out.addEventListener('click',function(e){
 
 function submit(){
   var text=q.value.trim(); if(text.length<5||busy)return;
+  var mode=askMode;
   busy=true;hero.style.display='none';starterExplorer.style.display='none';go.disabled=true;
   var t=addTurn(text,null);
   // The server narrates each phase over its own status events. This client-side
@@ -1800,7 +1821,7 @@ function submit(){
     else { ctrl.abort(); } };
   fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
     signal:ctrl.signal,
-    body:JSON.stringify({question:text,style:S.style,length:S.length,effort:S.effort,useMcp:live.checked,visualizations:visualizations.checked,convId:convId,game:GAME.id,tz:LOCAL_TZ})})
+    body:JSON.stringify({question:text,style:S.style,length:S.length,effort:S.effort,useMcp:live.checked,visualizations:visualizations.checked,mode:mode,convId:convId,game:GAME.id,tz:LOCAL_TZ})})
   .then(function(r){
     // Non-streaming replies (cache hits, quota refusals) still come back as JSON.
     var ct=r.headers.get('content-type')||'';

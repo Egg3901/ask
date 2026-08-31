@@ -4,6 +4,7 @@
 
 const CATEGORIES = {
   basics: { label: "Basics", icon: "compass" },
+  investigate: { label: "Ask tools", icon: "search" },
   economy: { label: "Economy", icon: "chart" },
   politics: { label: "Politics", icon: "landmark" },
   elections: { label: "Elections", icon: "vote" },
@@ -23,7 +24,7 @@ const QUESTIONS = [
   { id: "basics-country-move", category: "basics", text: "Can a character change country, and what carries over?" },
   { id: "basics-turn-processing", category: "basics", text: "Why can a turn take longer than usual to process?" },
   { id: "basics-live-vs-rules", category: "basics", text: "What can Ask learn from code versus live game data?" },
-  { id: "basics-verify-claim", category: "basics", text: "Verify this claim: a sector finishes retooling in one turn." },
+  { id: "basics-verify-claim", category: "investigate", text: "Verify this claim: a sector finishes retooling in one turn." },
 
   { id: "economy-gdp", category: "economy", text: "How is GDP growth calculated each turn?" },
   { id: "economy-inflation", category: "economy", text: "How is inflation recalculated each turn?" },
@@ -40,8 +41,11 @@ const QUESTIONS = [
   { id: "economy-live-world", category: "economy", live: true, text: "What are the three most important signals in the live world economy right now?" },
   { id: "economy-live-fx-gbp-usd", category: "economy", live: true, text: "What is happening to GBP/USD in game, and which live pressures best explain the move?" },
   { id: "economy-live-shortages", category: "economy", live: true, text: "Which resources have the largest live shortages or surpluses right now?" },
-  { id: "economy-causal-autopsy", category: "economy", live: true, text: "Run a causal autopsy on why US inflation is high right now." },
-  { id: "economy-scenario-iron", category: "economy", live: true, text: "What happens to iron prices if demand rises 5% per turn for 12 turns?" },
+  { id: "economy-causal-autopsy", category: "investigate", live: true, text: "Run a causal autopsy on why US inflation is high right now." },
+  { id: "economy-scenario-iron", category: "investigate", live: true, text: "What happens to iron prices if demand rises 5% per turn for 12 turns?" },
+  { id: "tools-verify-logistics", category: "investigate", text: "Verify this claim: a Logistics Command directly raises a front's supply level." },
+  { id: "tools-corporation-autopsy", category: "investigate", requires: "corporation", live: true, text: "Run a causal autopsy on why my corporation, {corporation}, lost revenue this turn." },
+  { id: "tools-scenario-supply", category: "investigate", live: true, text: "What happens to economy-wide prices if supply falls 3% per turn for 8 turns?" },
 
   { id: "politics-bill", category: "politics", text: "How does a bill move from draft to law?" },
   { id: "politics-cloture", category: "politics", text: "How does cloture work?" },

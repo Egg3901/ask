@@ -20,3 +20,11 @@ test("ordinary game questions stay out of specialist modes", () => {
   assert.equal(capabilities.classify("What is the current US inflation rate?"), null);
   assert.equal(capabilities.classify("How does the Senate work?"), null);
 });
+
+test("visible controls force a validated specialist mode without rewriting the question", () => {
+  assert.equal(capabilities.classify("Check the timing", "verify").intent, "claim_verification");
+  assert.equal(capabilities.classify("Why did prices move?", "autopsy").intent, "causal_autopsy");
+  assert.equal(capabilities.classify("Iron demand rises 5% per turn for 12 turns", "scenario").intent, "scenario_lab");
+  assert.equal(capabilities.normalizeMode("nonsense"), "auto");
+  assert.match(capabilities.modeIssue("scenario", "What happens if I raise taxes?"), /demand or supply shock/i);
+});

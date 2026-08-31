@@ -29,8 +29,14 @@ test("Discord questions are translated into the full Ask request contract", () =
     effort: "auto",
     useMcp: true,
     visualizations: true,
+    mode: "auto",
     convId: "discord-thread-123",
   });
+});
+
+test("Discord accepts only known Ask modes", () => {
+  assert.equal(normalizeDiscordAsk({ question: "Check this claim", mode: "verify" }).mode, "verify");
+  assert.equal(normalizeDiscordAsk({ question: "Check this claim", mode: "anything" }).mode, "auto");
 });
 
 test("Discord sessions are public player sessions with self-scoped game identity", () => {
