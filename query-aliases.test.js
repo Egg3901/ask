@@ -50,7 +50,17 @@ test("corrects ticket 1235 and explains why CAS may not move the displayed perce
   const answer = aliases.canonicalAnswer(question);
   assert.match(answer, /does affect the land war/i);
   assert.match(answer, /ACTIVE/i);
+  assert.match(answer, /effective next turn/i);
+  assert.match(answer, /no multi-turn buildup/i);
   assert.match(answer, /rounded to a whole percentage/i);
+  assert.equal(aliases.answerIssue(question, answer), "");
+});
+
+test("answers ticket 1235's CAS timing follow-up", () => {
+  const question = "So it takes a few turns to show up for air support?";
+  const answer = aliases.canonicalAnswer(question);
+  assert.match(answer, /effective next turn/i);
+  assert.match(answer, /no multi-turn buildup/i);
   assert.equal(aliases.answerIssue(question, answer), "");
 });
 
