@@ -743,6 +743,75 @@ test("reasoning effort is a staff control and length is everyone's", () => {
   assert.match(staff, /effort:S\.effort/);
 });
 
+// ── V2 presentation: trail, sentence marks, evidence drawer, grounding ──────
+function appScripts(html) {
+  return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join("\n");
+}
+
+test("the research trail is kept during generation and disclosed after the answer", () => {
+  const html = render();
+  const scripts = appScripts(html);
+  // Status and action events accumulate instead of vanishing with the loader,
+  // and ride the done payload into the renderer.
+  assert.match(scripts, /trail\.push\(\{t:'status',label:d\.label\}\)/);
+  assert.match(scripts, /trail\.push\(\{t:'action',name:d\.name,label:d\.label\}\)/);
+  assert.match(scripts, /if\(trail\.length\)d\.trail=trail;/);
+  // The timeline element and its disclosure copy, collapsed by default.
+  assert.match(scripts, /<details class="ask-trail" data-trail>/);
+  assert.match(scripts, /How I researched this · '\+tr\.length\+' step/);
+  assert.match(html, /\.ask-trail\{/);
+  assert.match(html, /\.trail-phase\{/);
+  assert.match(html, /\.trail-step\{/);
+});
+
+test("per-sentence citation marks re-split the answer and never break rendering", () => {
+  const scripts = appScripts(render());
+  assert.match(scripts, /function renderCiteSups\(target,d\)/);
+  assert.match(scripts, /function splitSentences\(answer\)/);
+  // Only semantic attribution qualifies, at the server's support threshold.
+  assert.match(scripts, /att\.semantic/);
+  assert.match(scripts, /row\.score>=0\.52/);
+  // Count mismatch skips silently; only the server's 40-sentence cap may differ.
+  assert.match(scripts, /rows\.length===40&&raw\.length>40/);
+  // Wrapped so a surprise can never take the answer down with it.
+  assert.match(scripts, /try\{renderCiteSups\(target,d\);\}catch\(e\)\{\}/);
+  assert.match(scripts, /sup\.className='cite-sup'/);
+  assert.match(scripts, /data-cite-ref/);
+});
+
+test("the evidence drawer names everything the answer read from the done payload", () => {
+  const html = render();
+  const scripts = appScripts(html);
+  assert.match(scripts, /<details class="evidence" data-evidence>/);
+  assert.match(scripts, /'Read '\+cs\.length\+' source'/);
+  assert.match(scripts, /' live read'/);
+  assert.match(html, /\.evidence>summary\{/);
+});
+
+test("a grounding chip sits beside the model name, but never on a canonical contract", () => {
+  const html = render();
+  const scripts = appScripts(html);
+  assert.match(scripts, /flag flag-ground/);
+  assert.match(scripts, /'grounded '\+Math\.round\(\(att0\.coverage\|\|0\)\*100\)\+'%'/);
+  assert.match(scripts, /att0\.total>=4/);
+  assert.match(scripts, /canonical_answer_contract/);
+  assert.match(scripts, /matched to the sources it actually read/);
+  assert.match(html, /\.flag\.flag-ground\{/);
+});
+
+test("tables compact large raw integers and mark cells that lead with a signed percentage", () => {
+  const scripts = appScripts(render());
+  assert.match(scripts, /function fmtCell\(c\)/);
+  assert.ok(scripts.includes("▲ ") && scripts.includes("▼ "), "delta markers present");
+  assert.match(scripts, /\{7,\}/, "only integers over 6 digits are reformatted");
+  // The report page's own renderer gets the same conservative pass.
+  const report = page.reportView({
+    created: Date.now(), title: "T", question: "Q", model: "m",
+    body: "| metric | value | change |\n|---|---|---|\n| output | 1234567 | +3.2% |",
+  });
+  assert.match(report, /function fmtCell\(c\)/);
+});
+
 test("live data and visualizations are on by default, and an explicit off still wins", () => {
   const html = render();
   // Defaulting off meant the two most interesting things Ask does were invisible

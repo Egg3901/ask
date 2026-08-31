@@ -40,11 +40,21 @@ function inl(s){return s
   .replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>')
   .replace(/(^|[^*])\\*([^*\\n]+)\\*(?!\\*)/g,'$1<em>$2</em>')
   .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');}
+// Light table polish: big raw integers get thousands separators, and a cell
+// that already leads with a signed percentage gets a direction marker. Nothing
+// else is touched, so units, ranges and prose cells render as written.
+function fmtCell(c){
+  var s=String(c).trim();
+  if(/^[+-]?\\d{7,}$/.test(s))return s.replace(/\\B(?=(\\d{3})+$)/g,',');
+  var m=s.match(/^([+-])\\d[\\d.,]*%/);
+  if(m)return (m[1]==='+'?'▲ ':'▼ ')+s;
+  return c;
+}
 function tbl(block){var lines=block.split('\\n').filter(function(l){return l.trim();});
   if(lines.length<2||!/\\|/.test(lines[0])||!/^\\s*\\|?[\\s:|-]+$/.test(lines[1]))return null;
   var cx=function(l){return l.replace(/^\\s*\\||\\|\\s*$/g,'').split('|').map(function(c){return c.trim();});};
   var h=cx(lines[0]),r=lines.slice(2).filter(function(l){return /\\|/.test(l);}).map(cx);
-  return '<div class="tbl-wrap"><table class="md-table"><thead><tr>'+h.map(function(x){return '<th>'+inl(x)+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return '<tr>'+row.map(function(c){return '<td>'+inl(c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';}
+  return '<div class="tbl-wrap"><table class="md-table"><thead><tr>'+h.map(function(x){return '<th>'+inl(x)+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return '<tr>'+row.map(function(c){return '<td>'+inl(fmtCell(c))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';}
 function md(t){t=esc(t||'');var parts=t.split(/\`\`\`/),o='';
   for(var i=0;i<parts.length;i++){
     if(i%2===1){var seg=parts[i],nl=seg.indexOf('\\n'),lang=nl>0?seg.slice(0,nl).trim().toLowerCase():'',code=nl>0?seg.slice(nl+1):seg;
@@ -798,6 +808,38 @@ body.doc .lander,body.doc .gate{height:auto;min-height:100dvh;overflow:visible}
   border:1px solid var(--border);border-radius:var(--r-full);padding:.05rem .4rem;flex-shrink:0}
 .srckind.code{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
 .srckind.wiki{color:var(--amber,#f59e0b);border-color:color-mix(in srgb,var(--amber,#f59e0b) 30%,transparent)}
+.srcrow.flash{background:var(--glass-2)}
+/* research trail: how the answer was put together, folded away by default */
+.ask-trail{margin-top:12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--glass-1);overflow:hidden}
+.ask-trail>summary{cursor:pointer;list-style:none;padding:.5rem .7rem;font-size:.75rem;color:var(--text-2);display:flex;align-items:center;gap:7px}
+.ask-trail>summary::-webkit-details-marker{display:none}
+.ask-trail>summary:hover{color:var(--text);background:var(--glass-2)}
+.ask-trail[open]>summary{border-bottom:1px solid var(--border)}
+.ask-trail .chev{transition:transform var(--t)}
+.ask-trail[open] .chev{transform:rotate(90deg)}
+.ask-trail>summary .chev{width:13px;height:13px;color:var(--accent)}
+.trail-list{padding:.4rem .7rem .55rem;display:flex;flex-direction:column;gap:4px}
+.trail-phase{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-top:6px}
+.trail-phase:first-child{margin-top:0}
+.trail-step{display:flex;align-items:center;gap:7px;font-size:.76rem;color:var(--text-2);margin-left:10px;min-width:0}
+.trail-step svg{width:12px;height:12px;flex:0 0 auto;color:var(--text-3)}
+.trail-step .trail-lbl{font-family:var(--mono);font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* per-sentence citation marks */
+.cite-sup{font-size:.66em;line-height:0;margin-left:1px;vertical-align:super}
+.cite-sup a{color:var(--text-3);text-decoration:none;font-variant-numeric:tabular-nums}
+.cite-sup a:hover{color:var(--text)}
+/* evidence drawer: everything this answer read, in one compact row */
+.evidence{margin-top:10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--glass-1);overflow:hidden}
+.evidence>summary{cursor:pointer;list-style:none;padding:.5rem .7rem;font-size:.75rem;color:var(--text-2);display:flex;align-items:center;gap:7px}
+.evidence>summary::-webkit-details-marker{display:none}
+.evidence>summary:hover{color:var(--text);background:var(--glass-2)}
+.evidence[open]>summary{border-bottom:1px solid var(--border)}
+.evidence .chev{transition:transform var(--t)}
+.evidence[open] .chev{transform:rotate(90deg)}
+.evidence>summary .chev{width:13px;height:13px;color:var(--accent)}
+.ev-live{display:flex;flex-wrap:wrap;gap:6px;padding:.5rem .7rem;font-size:.72rem;border-top:1px solid var(--border)}
+/* grounding chip, styled like the model chip */
+.ask-ans-head .flag.flag-ground{border-color:transparent;color:var(--text-3);opacity:.72;text-transform:none;letter-spacing:0;padding-left:2px;font-variant-numeric:tabular-nums;cursor:help}
 /* suggested follow-ups */
 .sugg{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .sugg .fchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font);font-size:.78rem;padding:.38rem .7rem;
@@ -1529,11 +1571,21 @@ function inl(s){return s
   .replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>')
   .replace(/(^|[^*])\\*([^*\\n]+)\\*(?!\\*)/g,'$1<em>$2</em>')
   .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');}
+// Light table polish: big raw integers get thousands separators, and a cell
+// that already leads with a signed percentage gets a direction marker. Nothing
+// else is touched, so units, ranges and prose cells render as written.
+function fmtCell(c){
+  var s=String(c).trim();
+  if(/^[+-]?\\d{7,}$/.test(s))return s.replace(/\\B(?=(\\d{3})+$)/g,',');
+  var m=s.match(/^([+-])\\d[\\d.,]*%/);
+  if(m)return (m[1]==='+'?'▲ ':'▼ ')+s;
+  return c;
+}
 function tbl(block){var lines=block.split('\\n').filter(function(l){return l.trim();});
   if(lines.length<2||!/\\|/.test(lines[0])||!/^\\s*\\|?[\\s:|-]+$/.test(lines[1]))return null;
   var cx=function(l){return l.replace(/^\\s*\\||\\|\\s*$/g,'').split('|').map(function(c){return c.trim();});};
   var h=cx(lines[0]),r=lines.slice(2).filter(function(l){return /\\|/.test(l);}).map(cx);
-  return '<div class="tbl-wrap"><table class="md-table"><thead><tr>'+h.map(function(x){return '<th>'+inl(x)+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return '<tr>'+row.map(function(c){return '<td>'+inl(c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';}
+  return '<div class="tbl-wrap"><table class="md-table"><thead><tr>'+h.map(function(x){return '<th>'+inl(x)+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return '<tr>'+row.map(function(c){return '<td>'+inl(fmtCell(c))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';}
 function md(t){
   t=esc(t||'');
   var parts=t.split(/\`\`\`/),o='';
@@ -1559,6 +1611,92 @@ function md(t){
     }}
   return o;
 }
+// Per-sentence citation marks. Attribution ships as {score,cites} per prose
+// sentence IN ORDER, so the answer is re-split here with the same rules the
+// server used (skip code fences, tables, headings, blockquotes, short lines);
+// if the counts do not line up, nothing is marked.
+function splitSentences(answer){
+  var out=[],inFence=false,lines=String(answer||'').split('\\n');
+  for(var li=0;li<lines.length;li++){
+    var trimmed=lines[li].trim();
+    if(/^\`\`\`/.test(trimmed)){inFence=!inFence;continue;}
+    if(inFence)continue;
+    if(!trimmed||/^\\|/.test(trimmed)||/^#{1,6}\\s/.test(trimmed)||/^>/.test(trimmed))continue;
+    var prose=trimmed.replace(/^[-*]\\s+/,'').replace(/^\\d+[.)]\\s+/,'');
+    var parts=prose.split(/([.!?])\\s+(?=[A-Z0-9\`*_"'([])/);
+    for(var pi=0;pi<parts.length;pi+=2){
+      var sentence=((parts[pi]||'')+(parts[pi+1]||'')).trim();
+      if(sentence.length<35||sentence.length>600)continue;
+      out.push(sentence);
+      if(out.length>=60)return out;
+    }
+  }
+  return out;
+}
+// What a sentence looks like after the inline markdown pass, so it can be
+// found again in rendered text nodes.
+function plainSentence(s){return s
+  .replace(/\`([^\`]+)\`/g,'$1')
+  .replace(/\\*\\*([^*]+)\\*\\*/g,'$1')
+  .replace(/(^|[^*])\\*([^*\\n]+)\\*(?!\\*)/g,'$1$2')
+  .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g,'$1');}
+// Map per-sentence attribution onto the rendered answer as small superscript
+// numbers that point at the matching row in the sources panel. Purely
+// presentational: any mismatch or surprise skips quietly.
+function renderCiteSups(target,d){
+  var v=d&&d.validation,att=v&&v.attribution;
+  if(!att||!att.semantic||!att.sentences||!att.sentences.length)return;
+  var raw=splitSentences(d.answer||''),rows=att.sentences;
+  // The server caps the shipped list at 40 sentences; a longer local split can
+  // still align as a prefix. Anything else means the split diverged: mark nothing.
+  if(raw.length!==rows.length&&!(rows.length===40&&raw.length>40))return;
+  var cs=d.citations||[];
+  function matchCite(cite){
+    var p=String(cite||'').split('#')[0];if(!p)return null;
+    for(var i=0;i<cs.length;i++){if(cs[i].path===p)return {n:i+1,c:cs[i]};}
+    for(var j=0;j<cs.length;j++){if(cs[j].url&&cs[j].url.indexOf('/'+p)>=0)return {n:j+1,c:cs[j]};}
+    return null;
+  }
+  var nodes=[],full='';
+  (function walk(el){
+    for(var n=el.firstChild;n;n=n.nextSibling){
+      if(n.nodeType===3){nodes.push({node:n,start:full.length});full+=n.nodeValue;}
+      else if(n.nodeType===1){
+        if(/^(PRE|CODE|TABLE|BLOCKQUOTE|H1|H2|H3|H4|H5|H6|SUP|SVG|DETAILS)$/i.test(n.tagName))continue;
+        if(/srcs|srcpanel|livesrc|sugg|ask-meta|ask-trail|evidence|conflict|livehint|ask-viz-note|codeblock/.test(String(n.className||'')))continue;
+        walk(n);
+      }
+    }
+  })(target);
+  var cursor=0;
+  for(var i=0;i<rows.length&&i<raw.length;i++){
+    var row=rows[i];
+    if(!row||!row.cites||!row.cites.length||!(row.score>=0.52))continue;
+    var hit=null;
+    for(var k=0;k<row.cites.length&&!hit;k++)hit=matchCite(row.cites[k]);
+    if(!hit)continue;
+    var tail=plainSentence(raw[i]).slice(-48);
+    if(!tail)continue;
+    var at=full.indexOf(tail,cursor);
+    if(at<0)continue;
+    var end=at+tail.length;cursor=end;
+    for(var ni=0;ni<nodes.length;ni++){
+      var rec=nodes[ni];
+      if(end>rec.start&&end<=rec.start+rec.node.nodeValue.length){
+        var off=end-rec.start;
+        var sup=document.createElement('sup');sup.className='cite-sup';
+        sup.innerHTML='<a href="#" data-cite-ref="'+esc(String(hit.c.path||''))+'" title="'+esc(hit.c.label||'')+'">'+hit.n+'</a>';
+        if(off<rec.node.nodeValue.length){
+          var rest=rec.node.splitText(off);
+          nodes.splice(ni+1,0,{node:rest,start:rec.start+off});
+          rec.node.parentNode.insertBefore(sup,rest);
+        }else if(rec.node.nextSibling){rec.node.parentNode.insertBefore(sup,rec.node.nextSibling);}
+        else{rec.node.parentNode.appendChild(sup);}
+        break;
+      }
+    }
+  }
+}
 var ICO={copy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
          share:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>',
          up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10v12M15 5l-1 5h6a2 2 0 012 2l-2 7a3 3 0 01-3 2H7V10l5-8a3 3 0 013 3z"/></svg>',
@@ -1582,6 +1720,22 @@ function addTurn(question,res){
 }
 function fill(turn,target,d){
   setFlags(turn,d);
+  // Grounding chip beside the model name: the share of sentences matched to
+  // sources actually read. Only shown when there is enough of an answer to
+  // measure, and never for a canonical contract, which bypasses generation.
+  try{
+    var att0=d.validation&&d.validation.attribution,iss0=(d.validation&&d.validation.issues)||[];
+    if(att0&&att0.total>=4&&iss0.indexOf('canonical_answer_contract')<0){
+      var hd0=turn.querySelector('.ask-ans-head');
+      if(hd0&&!hd0.querySelector('.flag-ground')){
+        var gch=document.createElement('span');gch.className='flag flag-ground';
+        gch.textContent='grounded '+Math.round((att0.coverage||0)*100)+'%';
+        gch.title='Share of sentences in this answer matched to the sources it actually read.';
+        var fm0=hd0.querySelector('.flag-model');
+        if(fm0&&fm0.nextSibling)hd0.insertBefore(gch,fm0.nextSibling);else hd0.appendChild(gch);
+      }
+    }
+  }catch(e){}
   var h=md(d.answer);
   // The question asked for a chart that could not be drawn. The model is told to
   // say so itself; this note carries the number, which the model has no business
@@ -1599,6 +1753,16 @@ function fill(turn,target,d){
       lv.map(function(l){return '<span class="livechip">'+esc(l.label)+'</span>';}).join('')+
       '<span class="livesrc-t">as of this answer</span></div>';
   }
+  // How the answer was researched: the status and action stream, kept instead
+  // of vanishing with the loading line, disclosed above the citations.
+  var tr=(d.trail||[]);
+  if(tr.length){
+    h+='<details class="ask-trail" data-trail><summary>'+ICO.chev+'How I researched this · '+tr.length+' step'+(tr.length===1?'':'s')+'</summary><div class="trail-list">'+
+      tr.map(function(s){return s.t==='action'
+        ?'<div class="trail-step">'+actionIcon(s.name)+'<span class="trail-lbl">'+esc(s.label||'')+'</span></div>'
+        :'<div class="trail-phase">'+esc(s.label||'')+'</div>';}).join('')+
+      '</div></details>';
+  }
   var cs=(d.citations||[]);
   if(cs.length){
     // Compact chips stay inline; the full list with kinds folds away so a long
@@ -1608,7 +1772,7 @@ function fill(turn,target,d){
         (ICO[c.kind]||'')+esc(c.label)+'</a>';}).join('')+'</div>';
     h+='<details class="srcpanel"><summary>'+ICO.chev+'Sources used ('+cs.length+')</summary>'+
       cs.map(function(c){
-        return '<div class="srcrow"><span class="srckind '+esc(c.kind)+'">'+esc(c.kind)+'</span>'+
+        return '<div class="srcrow"'+(c.path?' data-path="'+esc(c.path)+'"':'')+'><span class="srckind '+esc(c.kind)+'">'+esc(c.kind)+'</span>'+
           '<a href="'+esc(c.url)+'" target="_blank" rel="noopener">'+esc(c.label)+'</a></div>';
       }).join('')+'</details>';
   }
@@ -1620,6 +1784,15 @@ function fill(turn,target,d){
   (d.areas||[]).forEach(function(a){meta+='<span class="area">'+ICO.docs+esc(a)+'</span>';});
   if(d.cached)meta+='<span class="cachedtag">from cache</span>';
   if(d.usedMcp)meta+='<span class="cachedtag">live data</span>';
+  // Evidence drawer: one compact footer row naming everything this answer
+  // read, files and live state together. All from the payload already here.
+  if(cs.length||lv.length){
+    h+='<details class="evidence" data-evidence><summary>'+ICO.chev+'Read '+cs.length+' source'+(cs.length===1?'':'s')+
+      (lv.length?' · '+lv.length+' live read'+(lv.length===1?'':'s'):'')+'</summary>'+
+      cs.map(function(c){return '<div class="srcrow"'+(c.path?' data-path="'+esc(c.path)+'"':'')+'><span class="srckind '+esc(c.kind)+'">'+esc(c.kind)+'</span><a href="'+esc(c.url)+'" target="_blank" rel="noopener">'+esc(c.label)+'</a></div>';}).join('')+
+      (lv.length?'<div class="ev-live">'+lv.map(function(l){return '<span class="livechip">'+esc(l.label)+'</span>';}).join('')+'</div>':'')+
+      '</details>';
+  }
   if((d.followups||[]).length){
     h+='<div class="sugg"><span class="sugg-lbl">Ask next</span>'+
        d.followups.map(function(f){return '<button class="fchip" type="button" data-sugg>'+
@@ -1635,6 +1808,7 @@ function fill(turn,target,d){
   target.innerHTML=h+(meta?'<div class="ask-meta">'+meta+'</div>':'');
   renderMermaidIn(target);
   renderMapsIn(target);
+  try{renderCiteSups(target,d);}catch(e){}
   if(window.annotateJargon)try{window.annotateJargon(target);}catch(e){}
   // Answer toolbar lives in the header row so it does not move as text streams.
   var head=turn.querySelector('.ask-ans-head');
@@ -1796,6 +1970,18 @@ out.addEventListener('click',function(e){
   var ar=e.target.closest('.ask-load-row.has-actions');
   if(ar){ var tg=ar.querySelector('.ask-actions-toggle'), ul=ar.parentNode.querySelector('.ask-actions');
     if(tg&&ul){ ul.hidden=!ul.hidden; tg.textContent=(ul.hidden?'▸':'▾')+tg.textContent.slice(1); } return; }
+  // A citation superscript opens the sources panel and flashes its row.
+  var cr=e.target.closest('[data-cite-ref]');
+  if(cr){e.preventDefault();
+    var ctn=cr.closest('.ask-turn'),pn=ctn&&ctn.querySelector('.srcpanel');
+    if(pn){pn.open=true;
+      pn.querySelectorAll('.srcrow').forEach(function(rw){
+        if(rw.dataset.path!==cr.dataset.citeRef)return;
+        rw.scrollIntoView({block:'nearest'});rw.classList.add('flash');
+        setTimeout(function(){rw.classList.remove('flash');},1200);
+      });
+    }
+    return;}
   var lh=e.target.closest('[data-livehint]');
   if(lh){ var tn=lh.closest('.ask-turn'); var qq=tn&&tn.querySelector('.qt');
     if(qq){ live.checked=true;localStorage.setItem('ask.live','true');syncLiveMode();q.value=qq.textContent.trim();submit(); } return; }
@@ -1820,7 +2006,7 @@ function submit(){
   var loadingTimer=setInterval(function(){if(serverStatus)return;stage=(stage+1)%stages.length;setLoading(t.target,stages[stage]);},2200);
   t.target.innerHTML=loadingHtml(stages[0]);
   q.value='';q.style.height='auto';qcount.hidden=true;body.scrollTop=body.scrollHeight;
-  var acc='', meta0=null, ctrl=new AbortController(),hasDelta=false,terminal=false,actions=[];
+  var acc='', meta0=null, ctrl=new AbortController(),hasDelta=false,terminal=false,actions=[],trail=[];
   var stopped=false;
   // While generating, the send button IS the stop button: red, square glyph.
   var sendSvg=go.innerHTML;
@@ -1888,12 +2074,15 @@ function submit(){
           if(ev==='meta'){ meta0=d; if(!convId)convId=d.convId;
             setFlags(t.turn,d);
             if(!hasDelta&&d.status){serverStatus=true;setLoading(t.target,d.status);} }
-          else if(ev==='status'){ if(!hasDelta&&d.label){serverStatus=true;setLoading(t.target,d.label);} }
-          else if(ev==='action'){ if(!hasDelta&&d.label){actions.push(d);renderActions(t.target,actions);} }
+          else if(ev==='status'){ if(d.label&&trail.length<80)trail.push({t:'status',label:d.label});
+            if(!hasDelta&&d.label){serverStatus=true;setLoading(t.target,d.label);} }
+          else if(ev==='action'){ if(d.label&&trail.length<80)trail.push({t:'action',name:d.name,label:d.label});
+            if(!hasDelta&&d.label){actions.push(d);renderActions(t.target,actions);} }
           else if(ev==='delta'){ if(!hasDelta){hasDelta=true;clearInterval(loadingTimer);} acc+=d; scheduleRender(); }
           else if(ev==='error'){ terminal=true;clearInterval(loadingTimer);cancelRender();t.target.innerHTML='<div class="ask-err">'+esc(d.error)+'</div>'; }
           else if(ev==='done'){
             terminal=true;clearInterval(loadingTimer);cancelRender();
+            if(trail.length)d.trail=trail;
             fill(t.turn,t.target,d);
             if(d.usage)paintQuota(d.usage);
             turnsInThread++;
@@ -2046,13 +2235,20 @@ function reportView(report) {
   <script>${String.raw`(function(){
   var el=document.getElementById('report-body');
   function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+  function fmtCell(c){
+    var s=String(c).trim();
+    if(/^[+-]?\d{7,}$/.test(s))return s.replace(/\B(?=(\d{3})+$)/g,',');
+    var m=s.match(/^([+-])\d[\d.,]*%/);
+    if(m)return (m[1]==='+'?'▲ ':'▼ ')+s;
+    return c;
+  }
   function table(block){
     var lines=block.trim().split('\n');
     if(lines.length<2||!/^\s*\|/.test(lines[0])||!/^\s*\|[\s:|-]+\|\s*$/.test(lines[1]))return null;
     var cells=function(line){return line.replace(/^\s*\||\|\s*$/g,'').split('|').map(function(c){return c.trim();});};
     var head=cells(lines[0]),rows=lines.slice(2).filter(function(l){return /\|/.test(l);}).map(cells);
     return '<div style="overflow:auto"><table class="console-table"><thead><tr>'+head.map(function(h){return '<th>'+inline(h)+'</th>';}).join('')+
-      '</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+inline(c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+      '</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+inline(fmtCell(c))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
   }
   function inline(s){return s.replace(/\`+([^\`]+)\`+/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');}
   function md(t){
