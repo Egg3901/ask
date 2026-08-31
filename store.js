@@ -360,6 +360,12 @@ function servingStats(sinceMs) {
 // One self-contained health snapshot, consumed by the console and the weekly
 // Discord digest. Reads the corrections table directly (this module owns the
 // db handle) to avoid a circular require with corrections.js.
+// Server-injected embedding health; the digest reports it so a dead embedder
+// shows up in the console and the weekly Discord digest instead of hiding
+// behind the keyword fallback.
+let _embedHealth = null;
+function setEmbedHealth(ref) { _embedHealth = ref; }
+
 function digest(sinceMs) {
   const since = Number(sinceMs) || 0;
   let answers = { total: 0, live: 0, down: 0, up: 0 };
@@ -397,6 +403,7 @@ function digest(sinceMs) {
     retrievalMisses: retrievalMisses(since, 10),
     models: servingStats(since),
     corrections: { active: activeCorrections, draftsPending: drafts },
+    embedding: _embedHealth ? { ok: _embedHealth.ok, error: _embedHealth.error, checkedAt: _embedHealth.checkedAt } : null,
     docConflictsOpen: conflictsOpen,
     // The actual open conflicts, not just the count. This table spent weeks as
     // a write-only find pipeline: answers caught genuine wiki errors and
@@ -1037,6 +1044,6 @@ function putReport({ token, userKey, username, answerId, title, question, body, 
 function getReport(token) { return S.getReport.get(token) || null; }
 function userReports(key) { return S.userReports.all(key); }
 
-module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
+module.exports = { db, S, userKey, usage, record, feedback, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, setEmbedHealth, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
   reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };

@@ -40,6 +40,9 @@ function format(h) {
   lines.push(`QA sampler: ${a.total || 0} graded, ${a.not_answered || 0} judged unanswered, ${a.refused || 0} refusals`);
   const c = h.corrections || {};
   lines.push(`Corrections: ${c.active || 0} active, **${c.draftsPending || 0} drafts waiting for review**`);
+  if (h.embedding && h.embedding.ok === false) {
+    lines.push(`**EMBEDDING DEAD** (${h.embedding.error || "unknown"}): vector retrieval degraded to keyword-only`);
+  }
   if (h.docConflictsOpen) {
     lines.push(`**Doc conflicts open: ${h.docConflictsOpen}** (wiki/docs contradicting the code)`);
     for (const conflict of (h.docConflicts || []).slice(0, 3)) {

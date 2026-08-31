@@ -1503,6 +1503,28 @@ try {
   process.exit(1);
 }
 
+// Embedding health, checked at boot and kept fresh for the health rollup. The
+// embedder failing does not break Ask (FTS and exact search carry retrieval),
+// which is exactly why it went unnoticed for two days when the model vanished
+// from the serving instance: every /api/embed 404'd and nothing said so.
+// Silence is not success; this makes the degradation loud and visible.
+const embedHealth = { ok: null, checkedAt: 0, error: null };
+async function checkEmbedding(tag) {
+  try {
+    await retrieve.embedQuery("embedding health check");
+    if (embedHealth.ok === false) console.log(`[ask] embedding RECOVERED (${tag})`);
+    embedHealth.ok = true; embedHealth.error = null;
+  } catch (e) {
+    const reason = String(e.message || e).slice(0, 120);
+    if (embedHealth.ok !== false) console.error(`[ask] EMBEDDING DEAD (${tag}): ${reason} — vector retrieval degraded to keyword-only`);
+    embedHealth.ok = false; embedHealth.error = reason;
+  }
+  embedHealth.checkedAt = Date.now();
+}
+checkEmbedding("boot");
+setInterval(() => checkEmbedding("periodic"), 10 * 60 * 1000).unref();
+store.setEmbedHealth?.(embedHealth);
+
 // Default to loopback so the box stays behind Caddy; Railway sets HOST=0.0.0.0 for public ingress.
 const BIND_HOST = process.env.HOST || "127.0.0.1";
 server.listen(PORT, BIND_HOST, () => console.log(`ask-site listening on ${BIND_HOST}:${PORT}`));

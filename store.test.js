@@ -454,3 +454,13 @@ test("replay candidates capture downvoted and flagged answers with their defects
   const inventedId = recordAnswer({ question: "invented path answer", validation: JSON.stringify({ issues: [], inventedPaths: ["src/lib/madeUp.ts"] }) });
   assert.ok(store.replayCandidates(Date.now() - 60000).some(c => c.answerId === inventedId));
 });
+
+test("the digest carries embedding health when the server injects it", () => {
+  const health = { ok: false, error: "embed 404", checkedAt: Date.now() };
+  store.setEmbedHealth(health);
+  const digest = store.digest(Date.now() - 60000);
+  assert.equal(digest.embedding.ok, false);
+  assert.equal(digest.embedding.error, "embed 404");
+  store.setEmbedHealth(null);
+  assert.equal(store.digest(Date.now() - 60000).embedding, null);
+});
