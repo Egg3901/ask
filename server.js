@@ -32,6 +32,7 @@ const ogImage = require("./og-image");
 const games = require("./games");
 const clarification = require("./clarification");
 const discordAsk = require("./discord-ask");
+const watches = require("./watches");
 const capabilities = require("./capabilities");
 const playbooks = require("./playbooks");
 const attribution = require("./attribution");
@@ -764,6 +765,12 @@ const server = http.createServer(async (req, res) => {
         }
         if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
           const cachedModel = hit.model || router.MODELS.flash;
+          // Watch alerts ride along on cached answers too; the cache row
+          // itself stays clean because delivery happens after the read.
+          try {
+            const cachedWatchEvents = store.takeWatchEvents(key);
+            if (cachedWatchEvents.length) hit.answer = watches.renderEvents(cachedWatchEvents) + hit.answer;
+          } catch { /* alerts must never break delivery */ }
           const answerId = store.record({ user_key: key, username: session.identity.username || null, conv_id: convId,
             question, answer: hit.answer, areas: hit.areas, citations: hit.citations,
             used_mcp: 0, cached: 1, cost: 0, followup: 0, tokens_in: 0, tokens_out: 0,
@@ -855,6 +862,55 @@ const server = http.createServer(async (req, res) => {
         // search guess one produced a confident answer about an unrelated
         // privatization vote. Clarification is deterministic, free, and saved
         // in the thread so the player's next turn has real context.
+        // Watch commands are deterministic and free: parse, act on the store,
+        // answer without a model call or quota spend. Same short-circuit shape
+        // as clarification below.
+        const watchCommand = game.live ? watches.command(question) : null;
+        if (watchCommand) {
+          let watchAnswer;
+          if (watchCommand.action === "list") {
+            watchAnswer = watches.renderList(store.listWatches(key));
+          } else if (watchCommand.action === "delete") {
+            if (watchCommand.all) {
+              const removed = store.deleteAllWatches(key);
+              watchAnswer = removed ? `Removed ${removed} watch${removed === 1 ? "" : "es"}.` : "You had no active watches.";
+            } else if (watchCommand.id != null) {
+              watchAnswer = store.deleteWatch(key, watchCommand.id) ? `Watch #${watchCommand.id} removed.` : `No active watch #${watchCommand.id} of yours.`;
+            } else {
+              watchAnswer = `Say which one: "delete watch #id", or "delete all watches".\n\n${watches.renderList(store.listWatches(key))}`;
+            }
+          } else if (watchCommand.action === "reject") {
+            watchAnswer = watchCommand.reason;
+          } else {
+            const cap = moderatorAccess ? watches.MAX_WATCHES_STAFF : watches.MAX_WATCHES_PLAYER;
+            const created = store.createWatch(key, watchCommand.kind, watchCommand.params, cap);
+            watchAnswer = created.error
+              ? created.error
+              : `Watching: **${watches.describe({ kind: watchCommand.kind, params: watchCommand.params, id: created.id })}** (watch #${created.id}).\nI check about every 10 minutes; when it fires, the alert arrives with your next answer. "my watches" lists them.`;
+          }
+          clearInterval(ping);
+          send("delta", watchAnswer);
+          const watchValidation = { plan: "watch-command", issues: [], grounding: [], inventedPaths: [], missedPaths: [] };
+          const watchAnswerId = store.record({
+            user_key: key, username: session.identity.username || null, conv_id: convId,
+            question, answer: watchAnswer, areas: "[]", citations: "[]",
+            used_mcp: 0, cached: 0, cost: 0, followup,
+            tokens_in: 0, tokens_out: 0, model: "ask-watch",
+            plan: JSON.stringify({ id: "watch-command", intent: "watch_command" }), validation: JSON.stringify(watchValidation), evidence: "{}",
+            ttft_ms: 0, total_ms: 0, fell_through: null, ts: Date.now(),
+            private: moderatorAccess,
+          });
+          send("done", {
+            convId, answerId: watchAnswerId, answer: watchAnswer, areas: [], citations: [], cached: false,
+            usedMcp: false, cost: 0, followup, followupsLeft, followups: [], vizBlocked,
+            vizLimit: vizLimitReason === "quota" ? Number(ent.viz || 0) : 0,
+            reportUrl: null, liveSources: [], model: "Ask", modelId: "ask-watch",
+            modelName: "Ask", provider: "lakeside", providerName: "Lakeside", conflicts: [], usage: store.usage(key, ent), liveHint: null, validation: watchValidation,
+          });
+          try { res.end(); } catch {}
+          return;
+        }
+
         const clarificationAnswer = clarification.answer(question, isFollowup);
         if (clarificationAnswer) {
           clearInterval(ping);
@@ -1368,6 +1424,13 @@ const server = http.createServer(async (req, res) => {
         if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence && !insufficiency) {
           store.S.putCache.run(ckey, answer, JSON.stringify(areas), JSON.stringify(citations), servedModel, Date.now());
         }
+        // Fired watch alerts ride along exactly once, placed after the shared
+        // cache write above so another player's cache hit never carries them.
+        try {
+          const watchEvents = store.takeWatchEvents(key);
+          if (watchEvents.length) answer = watches.renderEvents(watchEvents) + answer;
+        } catch { /* alerts must never break delivery */ }
+
         // Did this answer actually read the running world? liveEvidence.tools is
         // appended to by the heuristic live pass and by the scout, and holds
         // code-search calls too, so the live-read test is the cleaned list.
@@ -1524,6 +1587,17 @@ async function checkEmbedding(tag) {
   }
   embedHealth.checkedAt = Date.now();
 }
+// Watchlist checker: one bounded tick every ten minutes over every active
+// watch, deduped per identical tool query, fail-open per watch. Only runs
+// where a live game backs the tools.
+if (games.resolve("ahd").live) {
+  const watchTick = () => watches.checkAll({ store, call: mcp.call, log: line => console.warn(line) })
+    .then(({ checked, fired }) => { if (fired) console.log(`[watch] tick checked=${checked} fired=${fired}`); })
+    .catch(e => console.warn("[watch] tick failed:", String(e.message || e).slice(0, 120)));
+  setTimeout(watchTick, 90 * 1000).unref();
+  setInterval(watchTick, 10 * 60 * 1000).unref();
+}
+
 checkEmbedding("boot");
 // Four minutes, deliberately inside ollama's five-minute keep_alive: the
 // check doubles as a keep-warm, so attribution's sentence batches never pay

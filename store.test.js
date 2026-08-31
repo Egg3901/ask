@@ -464,3 +464,19 @@ test("the digest carries embedding health when the server injects it", () => {
   store.setEmbedHealth(null);
   assert.equal(store.digest(Date.now() - 60000).embedding, null);
 });
+
+test("watch CRUD enforces the cap and delivers events exactly once", () => {
+  for (let i = 0; i < 5; i++) {
+    assert.ok(store.createWatch("ahd:watcher", "fx", { base: "USD", quote: "GBP", above: 1 }, 5).id);
+  }
+  assert.match(store.createWatch("ahd:watcher", "fx", {}, 5).error, /limit 5/);
+  const list = store.listWatches("ahd:watcher");
+  assert.equal(list.length, 5);
+  store.addWatchEvent(list[0].id, "ahd:watcher", "USD/GBP crossed above 1");
+  const events = store.takeWatchEvents("ahd:watcher");
+  assert.equal(events.length, 1);
+  assert.equal(store.takeWatchEvents("ahd:watcher").length, 0);
+  assert.ok(store.deleteWatch("ahd:watcher", list[0].id));
+  assert.equal(store.deleteAllWatches("ahd:watcher"), 4);
+  assert.equal(store.listWatches("ahd:watcher").length, 0);
+});
