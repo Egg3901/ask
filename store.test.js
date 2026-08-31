@@ -411,3 +411,13 @@ test("a downvote can evict every cached variant of the question", () => {
   assert.equal(store.evictCacheByQuestion("what is 100_ mobilization"), 0);
   assert.equal(store.evictCacheByQuestion("What is 100% mobilization?"), 1);
 });
+
+test("the health digest names open doc conflicts instead of only counting them", () => {
+  store.recordConflicts([{ source: "wiki", page: "Cloture", claim: "needs 60 votes", actual: "3/5 of votes cast", evidence: "billLifecycle.ts" }], { question: "q", user_key: "ahd:user-1" });
+  const digest = store.digest(Date.now() - 86400000);
+  assert.ok(digest.docConflictsOpen >= 1);
+  const named = digest.docConflicts.find(c => c.claim.includes("60 votes"));
+  assert.ok(named);
+  assert.equal(named.actual, "3/5 of votes cast");
+  assert.equal(named.source, "wiki");
+});
