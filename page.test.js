@@ -40,6 +40,33 @@ test("keeps every output and display preference in one settings sheet", () => {
   assert.match(panel, /data-opt="length"/);
 });
 
+test("question-library categories stay visible while samples scroll", () => {
+  const html = render();
+  const tabs = html.match(/<div class="starter-tabs" id="starterTabs"[\s\S]*?<\/div>/)?.[0] || "";
+
+  assert.match(tabs, /data-starter-category="for-you"/);
+  assert.match(tabs, /data-starter-category="investigate"/);
+  assert.match(html, /\.starter-tabs\{[^}]*position:sticky;[^}]*top:0;[^}]*z-index:/);
+  assert.match(html, /@media\(max-width:560px\)\{[\s\S]*?\.starter-tabs\{[^}]*width:100%;[^}]*overflow-x:auto/);
+});
+
+test("visible specialist mode controls send an explicit validated mode", () => {
+  const html = render();
+
+  for (const mode of ["auto", "verify", "autopsy", "scenario"]) {
+    assert.match(html, new RegExp(`data-ask-mode="${mode}"`));
+  }
+  assert.match(html, /mode:mode/);
+  assert.match(html, /function setAskMode\(mode\)/);
+});
+
+test("changelog bullets keep wrapped Markdown continuation lines", () => {
+  const html = page.changelogPage();
+
+  assert.match(html, /what a Logistics Command does and does not control\./);
+  assert.match(html, /live state, game rules, and recently shipped changes/);
+});
+
 test("visualizations are on by default and constrained by the prompt", () => {
   const html = render();
   const off = prompt.build();

@@ -82,7 +82,7 @@ function containsPrivateMilitaryIntelligence(answer, question = "") {
 function asksForPrivateMilitaryIntelligence(question) {
   const text = String(question || "");
   if (PUBLIC_NUCLEAR_RECORD.test(text)) return false;
-  return PRIVATE_MILITARY_QUESTION.test(text);
+  return FORCE_INVENTORY.test(text) || PRIVATE_MILITARY_QUESTION.test(text);
 }
 
 function protectPublicAnswer(answer, question = "") {

@@ -53,6 +53,17 @@ test("makes the new specialist capabilities discoverable", () => {
   assert.ok(questions.some((question) => question.startsWith("What happens to iron prices")));
 });
 
+test("groups strong specialist test questions under Ask tools", () => {
+  const tools = starters.catalog(fullContext).filter((question) => question.category === "investigate");
+
+  assert.ok(tools.length >= 6);
+  assert.ok(tools.some((question) => question.text.startsWith("Verify this claim")));
+  assert.ok(tools.some((question) => question.text.startsWith("Run a causal autopsy")));
+  assert.ok(tools.some((question) => question.text.startsWith("What happens to iron prices")));
+  assert.ok(tools.some((question) => question.text.includes("my corporation")));
+  assert.ok(tools.some((question) => question.text.includes("supply falls")));
+});
+
 test("prioritizes corporation questions and removes current-state prompts without live quota", () => {
   const withLive = starters.select(starters.catalog(fullContext));
   const withoutLive = starters.catalog(fullContext, { liveAvailable: false });

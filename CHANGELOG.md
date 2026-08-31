@@ -2,6 +2,20 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.10.0 - 2026-08-31
+
+### Added
+- The composer now has visible Ask, Verify, Autopsy, and Scenario modes. A selected specialist mode is sent as an explicit request contract, so players do not need to know magic prompt wording.
+- The question library has an Ask tools category with strong test questions for claim verification, causal analysis, live corporation diagnosis, and bounded economy scenarios.
+- Nine anonymized player-reported failures now run as a permanent replay suite, covering wealth history, military privacy, logistics, National Influence, blockade help, and clean topic pivots.
+
+### Fixed
+- Question-library categories now stay visible while the samples scroll, use stronger contrast, and scroll horizontally on narrow mobile screens.
+- Wrapped changelog bullets now keep their continuation lines instead of ending in the middle of a sentence.
+- Requests for current military rosters now receive the fair-play refusal before streaming, without falsely claiming that a country has no roster.
+- A complete short navigation question that names its mechanic, such as where to select Blockade, no longer inherits an unrelated previous answer.
+- Army logistics recognizes questions about overextension and answers logistics-unit examples directly. The head-of-government National Influence answer now includes the 2.5 per-turn position bonus and its non-stacking rule.
+
 ## 1.9.0 - 2026-08-31
 
 ### Added

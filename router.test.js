@@ -109,6 +109,12 @@ test("deep tier is reserved for multi-part responses and reports; nothing else",
   assert.ok(viz.reasons.includes("visualization"));
 });
 
+test("a mode-selected evidence synthesis gets the pro reasoning tier", () => {
+  const route = router.choose({ question: "Check the timing", specialist: true });
+  assert.equal(route.tier, "pro");
+  assert.ok(route.reasons.includes("specialist evidence synthesis"));
+});
+
 test("exposes a stable display label for stored model ids", () => {
   assert.equal(router.label("deepseek-v4-flash"), "Flash");
   assert.equal(router.label("deepseek-v4-pro"), "Pro");
@@ -136,6 +142,13 @@ test("threads the selected model through streaming metadata and persistence", ()
 test("server cannot route an explicit candidate map request through code-only mode", () => {
   const server = fs.readFileSync(require.resolve("./server"), "utf8");
   assert.match(server, /plan\.live === "required" \|\| mcp\.requiresLive\(question\)/);
+});
+
+test("server validates and preserves the selected Ask mode", () => {
+  const server = fs.readFileSync(require.resolve("./server"), "utf8");
+  assert.match(server, /capabilities\.normalizeMode\(body\.mode\)/);
+  assert.match(server, /capabilities\.modeIssue\(askMode, question\)/);
+  assert.match(server, /askPlan\.create\(question, session\.context, askMode\)/);
 });
 
 test("deep answers get a wider evidence window and more of the thread", () => {

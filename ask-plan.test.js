@@ -145,3 +145,9 @@ test("creates explicit contracts for the five new Ask capabilities", () => {
   assert.equal(scenario.live, "required");
   assert.equal(scenario.visual, "required");
 });
+
+test("visible modes force specialist plans without magic wording", () => {
+  assert.equal(plan.create("Check the timing", {}, "verify").intent, "claim_verification");
+  assert.equal(plan.create("Why did prices move?", {}, "autopsy").intent, "causal_autopsy");
+  assert.equal(plan.create("Iron demand rises 5% per turn for 12 turns", {}, "scenario").intent, "scenario_lab");
+});

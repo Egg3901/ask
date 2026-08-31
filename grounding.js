@@ -60,12 +60,16 @@ The follow-up only makes sense inside the conversation ("what about the UK?", "a
 // Being later in a thread does not make a complete new question a semantic
 // follow-up. Condensing every turn let old mechanics leak into topic pivots.
 const CONTEXT_REFERENCE = /^(?:and|also|but|so|then)\b|^(?:can|could) you (?:explain|expand|elaborate|show|clarify)\b|\b(?:what|how) about\b|\b(?:the |your )?(?:previous|prior|last|earlier) (?:answer|claim|part|point|response)\b|\b(?:that|this|those|these|it) (?:answer|claim|part|point|mechanic|system|number|result|work|happen|mean)\b|\b(?:the|those|these) (?:scores?|numbers?|ones?|values?|options?|tabs?)\b|\b(?:verify|fact-check|audit|check) (?:that|this|it|the previous|the prior|the last|your answer)\b/i;
+const STANDALONE_TOPIC = /\b(?:blockad(?:e|ing|ed)?|logistics|supply|close air support|CAS|air superiority|battle|war|election|inflation|GDP|corporation|company|tax|government|debt|trade|market|bill|cabinet|party|campaign|commodity|unemployment|exchange rate|currency|sanction|migration|referendum)\b/i;
 
 function needsConversationContext(question) {
   const text = String(question || "").trim();
   if (!text) return false;
-  return CONTEXT_REFERENCE.test(text)
-    || (text.length < 100 && /^(?:why|where|when|who|which one|can it|does it|is it|are they)\b/i.test(text));
+  const genericPointer = /\bthe (?:scores?|numbers?|ones?|values?|options?|tabs?)\b/i.test(text);
+  const reference = CONTEXT_REFERENCE.test(text);
+  if (reference && genericPointer && STANDALONE_TOPIC.test(text)) return false;
+  return reference
+    || (text.length < 100 && /^(?:why|where|when|who|which one|can it|does it|is it|are they)\b/i.test(text) && !STANDALONE_TOPIC.test(text));
 }
 
 const CONTEXT_TERM_STOP = new Set(["What", "How", "Where", "When", "Why", "Which", "Available", "The", "This", "That"]);

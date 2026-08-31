@@ -23,10 +23,11 @@ const ESTIMATION = /\b(?:how much would|how much does it cost|what would it cost
 const VISUAL = /\b(?:visuali[sz](?:e|ation)|chart|graph|diagram|plot|map|heatmap|choropleth)\b/i;
 const SHOWCASE_VISUAL = /(?=[\s\S]*\b(?:visuali[sz](?:e|ation)|chart|graph|plot|map)\b)(?=[\s\S]*\b(?:interesting|surprising|insightful|showcase|anything|something)\b)/i;
 
-function create(question, context = {}) {
+function create(question, context = {}, mode = "auto") {
   const text = String(question || "").trim();
   const explicitVisual = VISUAL.test(text);
-  const capability = capabilities.classify(text);
+  const requestedMode = capabilities.normalizeMode(mode);
+  const capability = capabilities.classify(text, requestedMode);
   const candidateMap = MAP.test(text) && CANDIDATES.test(text) && OFFICE.test(text);
   const map = MAP.test(text);
   const fx = FX.test(text);
@@ -39,26 +40,26 @@ function create(question, context = {}) {
     id: capability.id, intent: capability.intent, live: "required",
     display: { kind: "trend", metric: "inflation_index", canonical: true },
     visual: explicitVisual ? "required" : "none", suppressGenericCountryEconomy: true,
-    status: "Running a live-calibrated directional scenario…", context,
+    status: "Running a live-calibrated directional scenario…", requestedMode, context,
   };
   if (capability?.intent === "causal_autopsy") return {
     id: capability.id, intent: capability.intent,
     live: /\b(?:current|currently|right now|my|our|this turn|recent)\b/i.test(text) ? "required" : "preferred",
     display: { kind: "prose", metric: null, canonical: false },
     visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: false,
-    status: "Tracing live state through rules and shipped changes…", context,
+    status: "Tracing live state through rules and shipped changes…", requestedMode, context,
   };
   if (capability?.intent === "claim_verification") return {
     id: capability.id, intent: capability.intent, live: "preferred",
     display: { kind: "prose", metric: null, canonical: false },
     visual: "none", suppressGenericCountryEconomy: false,
-    status: "Verifying each claim against the game…", context,
+    status: "Verifying each claim against the game…", requestedMode, context,
   };
   if (capability?.intent === "army_logistics") return {
     id: capability.id, intent: capability.intent, live: "none",
     display: { kind: "prose", metric: null, canonical: false },
     visual: "none", suppressGenericCountryEconomy: true,
-    status: "Reading the battlefield supply rules…", context,
+    status: "Reading the battlefield supply rules…", requestedMode, context,
   };
 
   if (candidateMap) return {

@@ -23,7 +23,7 @@ function airSuperiorityIssue(answer, { requireCrisis = false } = {}) {
 
 const RULES = [
   {
-    match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b/i,
+    match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,100}\b(?:overextend(?:ed|ing)?|rapid advance|advancing|advance|compression|pocket)\b/i,
     queries: [
       "src/lib/military/battle.ts supplyState throughput demand SUPPLIED STRAINED SHORTAGE CUT OFF",
       "src/lib/military/occupation.ts derivedSupply overextensionPenalty compressionPenalty",
@@ -40,6 +40,21 @@ const RULES = [
       if (!/SUPPLIED/.test(text) || !/STRAINED/.test(text) || !/SHORTAGE/.test(text) || !/CUT OFF/.test(text)) return "The answer must name the four player-facing supply bands.";
       if (!/combat|effectiveness/i.test(text) || !/attrition/i.test(text)) return "The answer must connect low supply to combat effectiveness and attrition.";
       if (!/does not directly read|not directly|separate/i.test(text) || !/Logistics Command/i.test(text)) return "The answer must distinguish the Logistics Command label from the current battle-supply inputs.";
+      return "";
+    },
+  },
+  {
+    match: /\b(?:head of government|prime minister|premier|chancellor|president)\b[\s\S]{0,100}\b(?:National Influence|NPI)\b|\b(?:National Influence|NPI)\b[\s\S]{0,100}\b(?:head of government|prime minister|premier|chancellor|president)\b/i,
+    queries: [
+      "src/lib/actions/officeBonusRegistry.ts OFFICE_NI_BONUS_OVERRIDES resolveOfficeNiBonus",
+      "src/lib/turn/actionRefresh.ts positionNiBonus calculateNationalInfluenceGain",
+      "src/lib/seeds/wiki/content/electionsPlayerGuide.ts National Influence head of government",
+    ],
+    guidance: "A national head of government receives a 2.5 National Influence bonus per turn. The turn also adds local political influence divided by 100, capped at 1.0, so the combined position and local gain is 2.5 to 3.5 per turn. Position bonuses do not stack: use the highest qualifying office bonus. Keep separate bonuses, such as a central bank chair bonus, separate unless the question asks for them.",
+    answerIssue(answer) {
+      const text = String(answer || "");
+      if (!/2\.5/.test(text) || !/per turn/i.test(text)) return "The answer must state the head of government's 2.5 National Influence bonus per turn.";
+      if (!/highest/i.test(text) || !/stack/i.test(text)) return "The answer must explain that position bonuses use the highest qualifying value rather than stacking.";
       return "";
     },
   },
@@ -280,8 +295,12 @@ function answerIssue(question, answer) {
 // outside these narrow contracts still use the normal retrieval and model path.
 const CANONICAL_ANSWERS = [
   {
-    match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b/i,
-    text: "Army logistics is the supply calculation at each front. Each side has one shared supply pool. Demand is the formations' upkeep burden. Throughput starts with the front's infrastructure, then gains from logistics-trait formations, air-mobile support, generals trained in supply, national logistics doctrine, and formations actually serving behind or supporting the line. Extra rear units stop helping once the logistical tail is larger than the force it feeds. The game turns throughput divided by demand into a 0 to 100 supply level: 85+ is SUPPLIED, 55 to 84 is STRAINED, 30 to 54 is SHORTAGE, and below 30 is CUT OFF. Lower supply directly reduces combat effectiveness and raises attrition. Front position matters too. An advance gradually overextends the winner; being compressed into a pocket hurts the loser more. This is derived from the current line, so supply recovers if the front moves back. A Logistics Command is the organizational structure intended for multi-region and overseas sustainment, but the current battle formula does not directly read the command type or its Normal, High, or Emergency supply-priority label. It reads the formations, usable rear and support depth, generals, doctrine, infrastructure, demand, and territorial position.",
+    match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,100}\b(?:overextend(?:ed|ing)?|rapid advance|advancing|advance|compression|pocket)\b/i,
+    text: "Army logistics is the supply calculation at each front. A player-facing logistics unit is a formation with the Logistics trait, or a rear or support formation assigned to feed the front. Each side has one shared supply pool. Demand is the formations' upkeep burden. Throughput starts with the front's infrastructure, then gains from logistics-trait formations, air-mobile support, generals trained in supply, national logistics doctrine, and formations actually serving behind or supporting the line. Extra rear units stop helping once the logistical tail is larger than the force it feeds. The game turns throughput divided by demand into a 0 to 100 supply level: 85+ is SUPPLIED, 55 to 84 is STRAINED, 30 to 54 is SHORTAGE, and below 30 is CUT OFF. Lower supply directly reduces combat effectiveness and raises attrition. Front position matters too. An advance gradually overextends the winner; being compressed into a pocket hurts the loser more. This is derived from the current line, so supply recovers if the front moves back. A Logistics Command is the organizational structure intended for multi-region and overseas sustainment, but the current battle formula does not directly read the command type or its Normal, High, or Emergency supply-priority label. It reads the formations, usable rear and support depth, generals, doctrine, infrastructure, demand, and territorial position.",
+  },
+  {
+    match: /\b(?:head of government|prime minister|premier|chancellor|president)\b[\s\S]{0,100}\b(?:National Influence|NPI)\b|\b(?:National Influence|NPI)\b[\s\S]{0,100}\b(?:head of government|prime minister|premier|chancellor|president)\b/i,
+    text: "A national head of government gets a 2.5 National Influence bonus per turn. Each turn also adds local political influence divided by 100, capped at 1.0, so the combined gain from the position and local influence is 2.5 to 3.5 per turn. Position bonuses use the highest qualifying office value rather than stacking with one another.",
   },
   {
     match: /\b(?:retool(?:ing|ed)?|production method(?:s)?[\s\S]{0,80}(?:change|switch|transition|take|long)|(?:change|switch|transition)[\s\S]{0,80}(?:production method|operating strateg(?:y|ies)))\b/i,

@@ -1,6 +1,7 @@
 "use strict";
 
 const auth = require("./auth");
+const capabilities = require("./capabilities");
 
 const LENGTHS = { concise: "concise", standard: "standard", detailed: "deep", deep: "deep" };
 
@@ -22,6 +23,7 @@ function normalizeDiscordAsk(body = {}) {
     effort: "auto",
     useMcp: true,
     visualizations: true,
+    mode: capabilities.normalizeMode(body.mode),
   };
   if (convId) out.convId = convId;
   return out;

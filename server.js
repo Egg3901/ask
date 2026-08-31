@@ -593,6 +593,9 @@ const server = http.createServer(async (req, res) => {
         const question = String(body.question || "").trim();
         if (question.length < 5) return json(res, 400, { error: "Please ask a slightly longer question." });
         if (question.length > MAX_Q) return json(res, 400, { error: `Keep questions under ${MAX_Q} characters.` });
+        const askMode = capabilities.normalizeMode(body.mode);
+        const askModeIssue = capabilities.modeIssue(askMode, question);
+        if (askModeIssue) return json(res, 400, { error: askModeIssue });
 
         // Which game this question is about. The picker decides unless the
         // question names a different game outright (see games.forQuestion).
@@ -625,7 +628,7 @@ const server = http.createServer(async (req, res) => {
           : vizAllowed ? null
           : vizEntitled ? "quota" : "tier";
 
-        let plan = askPlan.create(question, session.context);
+        let plan = askPlan.create(question, session.context, askMode);
         if (!vizAllowed && plan.visual !== "none") {
           // The plan drives answer-guard, which injects a canonical map for a map
           // plan regardless of the request toggle. Downgrade it here or the guard
@@ -682,7 +685,8 @@ const server = http.createServer(async (req, res) => {
         // question, which is a better signal than a dropdown the asker has no
         // basis to set, and it keeps the slow tier from being chosen by habit.
         const effortChoice = ent.staff && router.EFFORTS[body.effort] ? body.effort : "auto";
-        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice });
+        const specialist = plan.intent === "claim_verification" || plan.intent === "causal_autopsy";
+        const route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice, specialist });
         // A player can pin the answer model in Settings. Only the whitelist is
         // honoured (never DeepSeek — that stays the invisible backstop), and it
         // keeps the tier's effort/token budget; just the lead model changes, with

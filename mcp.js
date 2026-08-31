@@ -116,7 +116,7 @@ async function liveIntelligence(question, context, callTool = null, plan = null,
     ? (name, args, server, pte) => { try { onAction(name, args); } catch {} return base(name, args, server, pte); }
     : base;
   if (plan?.intent === "scenario_lab") {
-    return scenarioLab.retrieve({ question, callTool: adapter });
+    return scenarioLab.retrieve({ question, callTool: adapter, forced: plan.requestedMode === "scenario" });
   }
   return intelligence.retrieve({ question, context, callTool: adapter, plan });
 }
