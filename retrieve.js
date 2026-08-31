@@ -15,6 +15,12 @@ const games = require("./games");
 const DB_PATH = process.env.RAG_DB || "/root/projects/LSGD-ops-dash/rag/index.db";
 const OLLAMA = process.env.OLLAMA_EMBED_URL || "http://127.0.0.1:11434/api/embed";
 const MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+// Optional bearer for a gated remote embedder (the box proxy). Local ollama
+// ignores it.
+const EMBED_HEADERS = {
+  "Content-Type": "application/json",
+  ...(process.env.OLLAMA_EMBED_KEY ? { Authorization: `Bearer ${process.env.OLLAMA_EMBED_KEY}` } : {}),
+};
 const TOP_K = Number(process.env.RAG_TOP_K || 8);
 const MAX_CHARS = Number(process.env.RAG_MAX_CHARS || 22000);
 
@@ -57,7 +63,7 @@ function open(st) {
 
 async function embedQuery(text) {
   const r = await fetch(OLLAMA, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: EMBED_HEADERS,
     // nomic requires a task prefix; documents were indexed as search_document.
     body: JSON.stringify({ model: MODEL, input: "search_query: " + text }),
     signal: AbortSignal.timeout(30000),
@@ -94,7 +100,7 @@ async function embedEach(texts, { timeoutMs = 4000, concurrency = 4, deadlineMs 
       const budget = Math.min(timeoutMs, deadline - Date.now());
       if (budget < 300) throw new Error("embed deadline exhausted");
       const r = await fetch(OLLAMA, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: EMBED_HEADERS,
         body: JSON.stringify({ model: MODEL, input: "search_document: " + texts[index] }),
         signal: AbortSignal.timeout(budget),
       });
@@ -120,7 +126,7 @@ async function embedBatch(texts, { timeoutMs = 20000, slice = 16, deadlineMs = 0
     if (budget < 300) throw new Error("embed deadline exhausted");
     const group = texts.slice(offset, offset + slice);
     const r = await fetch(OLLAMA, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: EMBED_HEADERS,
       body: JSON.stringify({ model: MODEL, input: group.map(t => "search_document: " + t) }),
       signal: AbortSignal.timeout(budget),
     });
