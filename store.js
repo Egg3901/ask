@@ -398,6 +398,15 @@ function digest(sinceMs) {
     models: servingStats(since),
     corrections: { active: activeCorrections, draftsPending: drafts },
     docConflictsOpen: conflictsOpen,
+    // The actual open conflicts, not just the count. This table spent weeks as
+    // a write-only find pipeline: answers caught genuine wiki errors and
+    // nothing ever read them. Compact rows so the digest can name them.
+    docConflicts: conflicts("open", 5).map(c => ({
+      source: c.source, page: c.page || null,
+      claim: String(c.claim || "").slice(0, 140),
+      actual: String(c.actual || "").slice(0, 140),
+      seen: c.seen,
+    })),
   };
 }
 
