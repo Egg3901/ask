@@ -2,6 +2,15 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.10.1 - 2026-08-31
+
+### Changed
+- The composer now puts its answer modes inside one quieter input surface, with a brief explanation that updates when Ask, Verify, Autopsy, or Scenario is selected.
+- The question library opens on Ask tools, so the new specialist test questions are visible immediately.
+
+### Fixed
+- Question-library categories now occupy their own row above a separate scrolling question list, preventing the category labels from being clipped on mobile.
+
 ## 1.10.0 - 2026-08-31
 
 ### Added

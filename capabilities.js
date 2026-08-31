@@ -4,9 +4,9 @@ const scenarioLab = require("./scenario-lab");
 
 const MODES = {
   auto: { label: "Ask", hint: "Choose the best answer path" },
-  verify: { label: "Verify", hint: "Test claims against evidence", intent: "claim_verification", id: "claim-verifier" },
-  autopsy: { label: "Autopsy", hint: "Trace a result to its causes", intent: "causal_autopsy", id: "causal-autopsy" },
-  scenario: { label: "Scenario", hint: "Project a bounded economy shock", intent: "scenario_lab", id: "scenario-lab" },
+  verify: { label: "Verify", hint: "Test each claim against game evidence", intent: "claim_verification", id: "claim-verifier" },
+  autopsy: { label: "Autopsy", hint: "Trace a live result through rules and recent changes", intent: "causal_autopsy", id: "causal-autopsy" },
+  scenario: { label: "Scenario", hint: "Project a bounded demand or supply shock", intent: "scenario_lab", id: "scenario-lab" },
 };
 
 const VERIFY = /\b(?:verify|fact-check|fact check|audit|check)\b[\s\S]{0,100}\b(?:previous|prior|last|earlier|answer|claim|statement|mechanic|true|correct)\b|\b(?:is|was) (?:that|this|the previous answer) (?:true|correct|right)\b/i;
