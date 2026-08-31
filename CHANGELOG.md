@@ -5,6 +5,11 @@ All notable changes to Ask. Newest first.
 ## 1.13.0 - 2026-08-31
 
 ### Added
+- The research scout now carries a tool playbook: one line per tool saying when to reach for it and the trap that burns people, so tool choice no longer depends on inferring judgment from bare schemas.
+- Bar charts for categorical comparisons: datasets comparing entities on one metric now chart as bars instead of falling back to tables, and single-series datasets keyed by their metric name chart correctly.
+- Groundwork for a community evidence tier (player Discord discussion as lowest-authority supplemental evidence), dark until its data source is configured.
+
+### Added
 - How I researched this: the research phases and tool calls Ask streams while it works are now kept, and every finished answer carries a collapsed timeline of those steps above its sources.
 - Per-sentence citation marks: when Ask can match a sentence to a source it actually read, that sentence gets a small superscript number. Tapping it opens the sources panel and highlights the file behind the claim.
 - An evidence drawer in the answer footer sums up everything an answer read, files and live game data together, in one compact row.

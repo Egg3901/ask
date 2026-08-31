@@ -79,6 +79,11 @@ function recommend(dataset, question = "") {
   const series = numericSeries(rows);
   if (series.length > 1 && !series.includes("value")) return "grouped_bar";
   if (rows.length > 1 && rows.every(row => /^(?:T\d+|\d{4}(?:-\d{2})?(?:-\d{2})?)$/i.test(String(row.label || "")))) return "line";
+  // A categorical comparison (entities compared on one metric) is a bar chart
+  // even when the series is keyed by its metric name rather than `value`. Time
+  // labels already routed to line above; the 3-12 band keeps a two-row dataset
+  // in a table and a long tail out of an unreadable chart.
+  if (series.length === 1 && rows.length >= 3 && rows.length <= 12) return "bar";
   if (series.includes("value")) return "bar";
   return "table";
 }
@@ -112,7 +117,13 @@ function pie(dataset) {
 function xyChart(dataset, kind) {
   const inputRows = chartableRows(dataset).slice(0, 12);
   const labels = inputRows.map(row => shortLabel(row.label));
-  const fields = kind === "grouped_bar" ? numericSeries(inputRows).filter(key => key !== "value") : ["value"];
+  // A single-series dataset usually carries its number in `value`, but a
+  // categorical comparison keyed by its metric name (gdpGrowth, population)
+  // charts from that lone series instead of silently failing the value lookup.
+  const numeric = numericSeries(inputRows);
+  const fields = kind === "grouped_bar"
+    ? numeric.filter(key => key !== "value")
+    : (numeric.includes("value") || !numeric.length ? ["value"] : [numeric[0]]);
   if (!labels.length || !fields.length) return null;
   const series = fields.map(field => ({
     field,

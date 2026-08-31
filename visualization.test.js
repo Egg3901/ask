@@ -139,6 +139,69 @@ test("an explicit chart request is not answered with a map", () => {
   assert.equal(visualization.recommend(regions, "chart me a map of net worth"), "map");
 });
 
+test("a categorical comparison on one metric renders as a bar chart", () => {
+  // The series is keyed by its metric name, not `value`: before the bar rule
+  // this clean entities-on-one-metric comparison fell through to a table.
+  const dataset = {
+    title: "GDP growth by country",
+    metric: "gdpGrowth",
+    unit: "%",
+    rows: [
+      { label: "US", gdpGrowth: 2.1 },
+      { label: "UK", gdpGrowth: 1.4 },
+      { label: "France", gdpGrowth: 0.9 },
+      { label: "Italy", gdpGrowth: 0.4 },
+    ],
+  };
+  assert.equal(visualization.recommend(dataset), "bar");
+  const answer = visualization.chart(dataset);
+  assert.match(answer, /xychart-beta/);
+  assert.match(answer, /bar \[2\.1, 1\.4, 0\.9, 0\.4\]/);
+  assert.match(answer, /GDP growth \(%\)/);
+});
+
+test("time-shaped labels beat the categorical bar rule and stay a line", () => {
+  const dataset = {
+    metric: "gdpGrowth",
+    rows: [
+      { label: "T10", gdpGrowth: 1.1 },
+      { label: "T11", gdpGrowth: 1.5 },
+      { label: "T12", gdpGrowth: 1.9 },
+    ],
+  };
+  assert.equal(visualization.recommend(dataset), "line");
+  assert.match(visualization.chart(dataset), /line \[1\.1, 1\.5, 1\.9\]/);
+});
+
+test("too few or too many categories fall back to a table, not a bar", () => {
+  const row = index => ({ label: `Entity ${index}`, population: index + 1 });
+  const two = { metric: "population", rows: [row(1), row(2)] };
+  const thirteen = { metric: "population", rows: Array.from({ length: 13 }, (_, i) => row(i)) };
+  assert.equal(visualization.recommend(two), "table");
+  assert.equal(visualization.recommend(thirteen), "table");
+});
+
+test("the guard ships an unplanned categorical comparison as a bar chart", () => {
+  const guard = require("./answer-guard");
+  const dataset = {
+    title: "Unemployment by state",
+    metric: "unemploymentRate",
+    unit: "%",
+    rows: [
+      { label: "California", unemploymentRate: 5.2 },
+      { label: "Texas", unemploymentRate: 4.1 },
+      { label: "Ohio", unemploymentRate: 6.3 },
+    ],
+  };
+  const out = guard.enforce({
+    answer: "Ohio runs hottest.", datasets: [dataset], plan: null,
+    visualizationsEnabled: true, question: "compare unemployment across these states",
+  });
+  assert.match(out.answer, /xychart-beta/);
+  assert.match(out.answer, /bar \[5\.2, 4\.1, 6\.3\]/);
+  assert.match(out.answer, /Ohio runs hottest\.$/);
+});
+
 test("the guard passes the question through so the request can win", () => {
   const guard = require("./answer-guard");
   const askPlan = require("./ask-plan");
