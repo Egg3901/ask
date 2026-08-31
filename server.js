@@ -1338,9 +1338,22 @@ const server = http.createServer(async (req, res) => {
             }
             const chunks = [...(hits?.hits || []).filter(h => h.text), ...pseudo];
             if (chunks.length) {
+              // Semantic scoring gets a hard overall budget: attribution sits
+              // between the last delta and `done`, so a slow embedder must
+              // degrade to the fast lexical fallback, never stall delivery.
+              // The failure reason is logged because this exact path failed
+              // silently in production (semantic=false on every long answer)
+              // and the catch-all hid why.
               attributionReport = await attribution.attribute(answer, chunks, {
                 chunkVectors: retrieve.vectorsFor(hits?.hits || [], game),
-                embedSentences: texts => retrieve.embedBatch(texts, { timeoutMs: 20000 }),
+                embedSentences: async texts => {
+                  try {
+                    return await retrieve.embedBatch(texts, { timeoutMs: 8000, slice: 8, deadlineMs: 8000 });
+                  } catch (e) {
+                    console.warn(`[ask] attribution embed failed (${texts.length} sentences): ${String(e.message || e).slice(0, 160)}`);
+                    throw e;
+                  }
+                },
               });
             }
           } catch { attributionReport = null; }

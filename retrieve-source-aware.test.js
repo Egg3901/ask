@@ -128,3 +128,16 @@ testEmbedBatchSlicing.test("embedBatch slices long sentence lists into small req
     throw new Error("embedBatch no longer slices its input");
   }
 });
+
+testEmbedBatchSlicing.test("embedBatch honors an overall deadline across slices", () => {
+  const source = require("node:fs").readFileSync(require.resolve("./retrieve.js"), "utf8");
+  if (!/deadline \? Math\.min\(timeoutMs, deadline - Date\.now\(\)\)/.test(source)) {
+    throw new Error("embedBatch lost its overall deadline");
+  }
+  const serverSource = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
+  // Attribution sits on the delivery path; the deadline and the failure log
+  // must both stay.
+  if (!/deadlineMs: 8000/.test(serverSource) || !/attribution embed failed/.test(serverSource)) {
+    throw new Error("attribution delivery-path budget or logging removed");
+  }
+});
