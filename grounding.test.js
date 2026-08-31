@@ -282,3 +282,18 @@ test("revise refuses to replace an answer with a stub and fails open", async () 
   });
   assert.equal(noClaims, null);
 });
+
+test("sufficiency fails open and only trusts an affirmative missing signal", async () => {
+  const grounding = require("./grounding");
+  const insufficient = await grounding.sufficiency("q", "evidence", {
+    complete: async () => '{"sufficient": false, "missing": "the actual FX conversion formula"}',
+  });
+  assert.equal(insufficient.sufficient, false);
+  assert.match(insufficient.missing, /FX conversion formula/);
+  const good = await grounding.sufficiency("q", "evidence", { complete: async () => '{"sufficient": true}' });
+  assert.equal(good.sufficient, true);
+  const dead = await grounding.sufficiency("q", "evidence", { complete: async () => null });
+  assert.equal(dead.sufficient, true);
+  const garbage = await grounding.sufficiency("q", "evidence", { complete: async () => "not json at all" });
+  assert.equal(garbage.sufficient, true);
+});

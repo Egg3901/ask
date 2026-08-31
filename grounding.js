@@ -53,6 +53,39 @@ async function check(answer, context) {
   } catch { return []; }
 }
 
+const SUFFICIENCY_SYSTEM = `You audit the evidence gathered for a question about the strategy game A House Divided, BEFORE any answer is written.
+
+Judge only: does the evidence actually contain what a careful writer needs to answer this question with real values and mechanisms? Models given insufficient context answer plausibly from memory instead of abstaining, which for a game means invented mechanics.
+
+Reply with ONLY a JSON object:
+{"sufficient": true} when the evidence covers the question, or
+{"sufficient": false, "missing": "<one sentence naming exactly what the evidence does not contain>"} when it does not.
+Partial coverage with a clearly answerable core counts as sufficient.`;
+
+/**
+ * Pre-generation sufficiency gate. Fails open to sufficient: a dead helper
+ * must never block answering, only the affirmative "this is missing" signal
+ * changes behavior downstream.
+ */
+async function sufficiency(question, evidence, { complete = llm.complete } = {}) {
+  const raw = await complete({
+    system: SUFFICIENCY_SYSTEM,
+    question: `QUESTION:\n${String(question || "").slice(0, 1500)}\n\nEVIDENCE:\n${String(evidence || "").slice(0, 60000)}`,
+    maxTokens: 200,
+    timeoutMs: 20000,
+  });
+  if (!raw) return { sufficient: true };
+  const m = String(raw).match(/\{[\s\S]*\}/);
+  if (!m) return { sufficient: true };
+  try {
+    const out = JSON.parse(m[0]);
+    if (out.sufficient === false && typeof out.missing === "string" && out.missing.trim()) {
+      return { sufficient: false, missing: out.missing.trim().slice(0, 300) };
+    }
+    return { sufficient: true };
+  } catch { return { sufficient: true }; }
+}
+
 const REVISE_SYSTEM = `You revise an answer from a grounded game assistant. An audit found specific claims about game mechanics that the supplied evidence does not support.
 
 Rewrite the answer so it no longer asserts those claims:
@@ -220,4 +253,4 @@ function note(claims) {
   return `\n\n> **Grounding check:** the game code I read does not confirm: ${claims.map(c => c.trim().replace(/\.$/, "")).join("; ")}. Treat those parts as general reasoning, not confirmed game rules.`;
 }
 
-module.exports = { decompose, check, revise, note, condense, needsConversationContext, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };
+module.exports = { decompose, check, revise, sufficiency, note, condense, needsConversationContext, namedContextTerms, restoreContextTerms, inventedPaths, pathNote, classifyPaths, missedPathNote };

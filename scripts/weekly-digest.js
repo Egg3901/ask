@@ -40,7 +40,12 @@ function format(h) {
   lines.push(`QA sampler: ${a.total || 0} graded, ${a.not_answered || 0} judged unanswered, ${a.refused || 0} refusals`);
   const c = h.corrections || {};
   lines.push(`Corrections: ${c.active || 0} active, **${c.draftsPending || 0} drafts waiting for review**`);
-  if (h.docConflictsOpen) lines.push(`Doc conflicts open: ${h.docConflictsOpen}`);
+  if (h.docConflictsOpen) {
+    lines.push(`**Doc conflicts open: ${h.docConflictsOpen}** (wiki/docs contradicting the code)`);
+    for (const conflict of (h.docConflicts || []).slice(0, 3)) {
+      lines.push(`· [${conflict.source}${conflict.page ? ` ${conflict.page}` : ""}] says "${conflict.claim}" but code says "${conflict.actual}" (seen ×${conflict.seen})`);
+    }
+  }
   const issues = (h.issues || []).slice(0, 4).map(i => `${i.issue} ×${i.n}`).join(", ");
   if (issues) lines.push(`Guard trips: ${issues}`);
   const misses = (h.retrievalMisses || []).slice(0, 5);

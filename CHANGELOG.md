@@ -12,6 +12,11 @@ All notable changes to Ask. Newest first.
 
 ### Changed
 - Tables are easier to scan: large raw numbers get thousands separators, and cells that lead with a signed percentage get an up or down marker.
+## 1.12.0 - 2026-08-31
+
+### Added
+- A sufficient-context gate on the reasoning tiers: before writing, a cheap audit names what the gathered evidence does not contain, and the answer is directed to say so plainly instead of improvising. Flagged answers never enter the shared cache.
+- Per-sentence answer attribution: every prose sentence is scored against the exact evidence chunks the model read, deterministically, with live-data blocks counted so live answers are not miscounted as unsupported. Coverage lands in telemetry and the console; fast-tier answers with very low coverage get an honest support note.
 
 ## 1.11.1 - 2026-08-31
 
