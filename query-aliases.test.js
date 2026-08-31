@@ -64,6 +64,18 @@ test("answers ticket 1235's CAS timing follow-up", () => {
   assert.equal(aliases.answerIssue(question, answer), "");
 });
 
+test("normalizes ticket 1235's air-force wording to close air support", () => {
+  const question =
+    "If there's no air force modifier that helps, why does it show air force support elsewhere on the command screen?";
+  assert.match(aliases.normalizePlayerWording(question), /air support/i);
+  const out = aliases.expand(question);
+  assert.ok(out.some(query => /frontSupport.*casWeightFor/i.test(query)));
+  const answer = aliases.canonicalAnswer(question);
+  assert.match(answer, /does affect the land war/i);
+  assert.doesNotMatch(answer, /two separate systems|never read as an input/i);
+  assert.equal(aliases.answerIssue(question, answer), "");
+});
+
 test("explains ticket 1234 battle odds and front movement from the canonical resolver", () => {
   const question = "How does this battle odds/front bar change, and why did a costly defeat only move it 2%?";
   const out = aliases.expand(question);
