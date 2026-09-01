@@ -40,6 +40,11 @@ const PROVIDERS = [
   },
   { name: "OpenCode Zen", host: "opencode.ai", note: "" },
   { name: "CommandCode", host: "api.commandcode.ai", note: "" },
+  {
+    name: "Meta Model API",
+    host: "api.meta.ai",
+    note: "on its contributor tier, Meta may use the question text and the answer to train its models",
+  },
 ];
 
 const PRIVACY = {
