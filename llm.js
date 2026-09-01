@@ -24,6 +24,9 @@ const KEYS = {
   // Command Code provider API (OpenAI-compat). Carries the free MiniMax lane
   // (GMICloud) through 2026-09-05.
   commandcode: () => process.env.COMMANDCODE_API_KEY || "",
+  // Meta Model API (Muse Spark). Direct first-party endpoint; the contributor
+  // slug bills at the data-sharing tier's near-zero rates.
+  meta: () => process.env.META_MODEL_API_KEY || "",
 };
 const URLS = {
   openrouter: () => process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions",
@@ -33,6 +36,7 @@ const URLS = {
   opencode: () => process.env.OPENCODE_URL || "https://opencode.ai/zen/v1/chat/completions",
   opencodego: () => process.env.OPENCODE_GO_URL || "https://opencode.ai/zen/go/v1/chat/completions",
   commandcode: () => process.env.COMMANDCODE_URL || "https://api.commandcode.ai/provider/v1/chat/completions",
+  meta: () => process.env.META_MODEL_URL || "https://api.meta.ai/v1/chat/completions",
 };
 
 // Railway service references are normally configured as a base URL. Ollama's

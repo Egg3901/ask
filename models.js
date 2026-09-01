@@ -40,6 +40,25 @@ const CATALOG = {
     efforts: null,
     note: "Out of the default chains since 2026-08-23: 25-58s to first token live, and it spends most of its budget on hidden reasoning (3222 completion tokens for 545 characters of answer). Kept for display of historic rows.",
   },
+  "muse-spark-1.2-contributor": {
+    display: "Muse Spark",
+    provider: "meta", tier: "flash", score: null, ttftP50Ms: 2200,
+    // Same model as meta/muse-spark-1.2-contributor below but on the
+    // first-party Meta Model API (api.meta.ai) with the owner's key, so the
+    // chain does not depend on OpenRouter's routing of the slug. Reasoning is
+    // mandatory on Muse Spark; "minimal" keeps hidden reasoning to ~130-200
+    // tokens and ~2s to first token, same behaviour measured on the direct
+    // endpoint 2026-09-01. Contributor tier: Meta may train on prompts and
+    // outputs ($0.10/M in, $0.20/M out).
+    efforts: ["minimal"],
+    note: "Muse Spark 1.2 contributor tier, direct Meta Model API. Owner-directed default lead from 2026-09-01. Inert until META_MODEL_API_KEY is set; the chain skips it instantly without a key.",
+  },
+  "muse-spark-1.2": {
+    display: "Muse Spark",
+    provider: "meta", tier: "flash", score: null, ttftP50Ms: 2200,
+    efforts: ["minimal"],
+    note: "Muse Spark 1.2 standard tier on the direct Meta Model API ($1.25/M in, $4.25/M out, no training on data). Named fallback for the contributor slug.",
+  },
   "meta/muse-spark-1.2-contributor": {
     display: "Muse Spark",
     provider: "openrouter", tier: "flash", score: null, ttftP50Ms: 2200,
@@ -234,10 +253,11 @@ const RETIRED = {
 // The model picker was removed 2026-08-27: every request rides the tier chain
 // (free pool rotation + paid backstop). Auto is the only behavior.
 
-const PROVIDER_HOME = { deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai", ollama: "https://ollama.com" };
+const PROVIDER_HOME = { meta: "https://developer.meta.com/ai/models/muse-spark/", deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai", ollama: "https://ollama.com" };
 const PROVIDER_LABELS = {
   ollama: "Ollama Cloud",
   commandcode: "Command Code",
+  meta: "Meta Model API",
   deepseek: "DeepSeek API",
   google: "Google AI",
   openrouter: "OpenRouter",
