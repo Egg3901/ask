@@ -27,6 +27,9 @@ const KEYS = {
   // Meta Model API (Muse Spark). Direct first-party endpoint; the contributor
   // slug bills at the data-sharing tier's near-zero rates.
   meta: () => process.env.META_MODEL_API_KEY || "",
+  // Muse bridge: the muse CLI on Lakeside's own server, answering on the
+  // owner's Muse subscription rather than a metered API. Bearer set by the box.
+  muse: () => process.env.MUSE_BRIDGE_KEY || "",
 };
 const URLS = {
   openrouter: () => process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions",
@@ -37,6 +40,7 @@ const URLS = {
   opencodego: () => process.env.OPENCODE_GO_URL || "https://opencode.ai/zen/go/v1/chat/completions",
   commandcode: () => process.env.COMMANDCODE_URL || "https://api.commandcode.ai/provider/v1/chat/completions",
   meta: () => process.env.META_MODEL_URL || "https://api.meta.ai/v1/chat/completions",
+  muse: () => process.env.MUSE_BRIDGE_URL || "https://mcp.lakesidegames.net/muse/v1/chat/completions",
 };
 
 // Railway service references are normally configured as a base URL. Ollama's

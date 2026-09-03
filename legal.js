@@ -45,6 +45,11 @@ const PROVIDERS = [
     host: "api.meta.ai",
     note: "on its contributor tier, Meta may use the question text and the answer to train its models",
   },
+  {
+    name: "Muse bridge (Lakeside)",
+    host: "mcp.lakesidegames.net",
+    note: "Lakeside's own server, which passes the question to Muse Spark on Meta's contributor tier, where Meta may use the question text and the answer to train its models",
+  },
 ];
 
 const PRIVACY = {
