@@ -31,6 +31,7 @@ const STUDIO_TERMS = "https://lakesidegames.net/terms/";
  * routing catalog so this list can be diffed against models.js by eye.
  */
 const PROVIDERS = [
+  { name: "Nous Portal", host: "inference-api.nousresearch.com", note: "a model gateway that passes the request to the selected provider" },
   { name: "DeepSeek", host: "api.deepseek.com", note: "operated from China" },
   { name: "Google Gemini", host: "generativelanguage.googleapis.com", note: "" },
   {

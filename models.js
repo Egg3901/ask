@@ -10,6 +10,12 @@
 //            prompts are not representative: ox-alpha answers a 109-token
 //            prompt in 2.3s and the real one in 45s.
 const CATALOG = {
+  "openai/gpt-5.6-luna": {
+    display: "GPT-5.6 Luna Max",
+    provider: "nous", tier: "deep", score: null, ttftP50Ms: 7447,
+    efforts: ["max"],
+    note: "GPT-5.6 Luna through Nous Portal at max reasoning effort. Owner-selected Deep lead after a targeted contingent-election smoke. Requires NOUS_API_KEY.",
+  },
   "minimax/minimax-m3-free": {
     display: "MiniMax M3",
     provider: "commandcode", tier: "flash", score: null, ttftP50Ms: null,
@@ -265,8 +271,9 @@ const RETIRED = {
 // The model picker was removed 2026-08-27: every request rides the tier chain
 // (free pool rotation + paid backstop). Auto is the only behavior.
 
-const PROVIDER_HOME = { meta: "https://developer.meta.com/ai/models/muse-spark/", deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", commandcode: "https://commandcode.ai", ollama: "https://ollama.com" };
+const PROVIDER_HOME = { meta: "https://developer.meta.com/ai/models/muse-spark/", deepseek: "https://www.deepseek.com", openrouter: "https://openrouter.ai", google: "https://ai.google.dev", nous: "https://portal.nousresearch.com", commandcode: "https://commandcode.ai", ollama: "https://ollama.com" };
 const PROVIDER_LABELS = {
+  nous: "Nous Portal",
   ollama: "Ollama Cloud",
   commandcode: "Command Code",
   meta: "Meta Model API",

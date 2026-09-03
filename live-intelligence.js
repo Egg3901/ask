@@ -510,6 +510,7 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
   const usedTools = [];
   const candidateMapRequested = plan?.intent === "candidate_roster" || mapMetric(text, "country") === "candidate_roster";
   const aggregateMapRequested = MAP_WORDS.test(text) && Boolean(geoAggregateMetric(text));
+  const contingentElectionRequested = plan?.intent === "contingent_election";
   // A "which corporations should I buy" question needs the same live exchange
   // ranking a leaderboard question does. Without it the answer is a lecture on
   // how to read the stock list instead of named companies with figures.
@@ -796,7 +797,20 @@ ${cap(sector, 5000)}`);
       if (viz) visualizations.push(viz);
     }
   }
-  if (ELECTION_WORDS.test(text)) {
+  if (contingentElectionRequested) {
+    const [race, presidential, house] = await Promise.all([
+      call("trace_race", { election: "president", country: "US" }),
+      call("map_snapshot", { scope: "country", country: "US", metric: "presidential" }),
+      call("map_snapshot", { scope: "country", country: "US", metric: "house" }),
+    ]);
+    if (race) parts.push(`ACTIVE PRESIDENTIAL RACE:\n${cap(race, 7000)}`);
+    if (presidential) parts.push(`CURRENT ELECTORAL COLLEGE:\n${cap(presidential, 9000)}`);
+    if (house) parts.push(`HOUSE DELEGATION CONTROL:\n${cap(house, 9000)}`);
+    parts.push(`CONTINGENT PROJECTION CONTRACT:
+Lead with the candidate favored by the live evidence, but distinguish a projection from a guaranteed result. A contingent presidential election considers the top three Electoral College candidates and gives each state delegation one vote. Use the House map as a party-line baseline only: individual representatives may cross party lines based on ideology, and tied delegations abstain. Name the unresolved delegations or threshold gap that prevents certainty.`);
+    parts.push("ERA-SPECIFIC RULE: Never assume the real-world 50-state delegation count or a 26-vote threshold. Use only the delegation count and majority rule established by the game evidence. If that threshold is absent, do not invent one.");
+  }
+  if (ELECTION_WORDS.test(text) && !contingentElectionRequested) {
     const elections = await call("elections");
     if (elections) {
       parts.push(`CURRENT ELECTIONS:\n${cap(elections, 4000)}`);

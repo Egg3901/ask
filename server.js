@@ -737,7 +737,7 @@ const server = http.createServer(async (req, res) => {
         // basis to set, and it keeps the slow tier from being chosen by habit.
         const effortChoice = ent.staff && router.EFFORTS[body.effort] ? body.effort : "auto";
         const specialist = plan.intent === "claim_verification" || plan.intent === "causal_autopsy";
-        let route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice, specialist });
+        let route = router.choose({ question, length, style, useMcp: wantMcp, isFollowup, visualizations, report: reportRequested, effort: effortChoice, specialist, deepReasoning: plan.reasoning === "deep" });
         // A player can pin the answer model in Settings. Only the whitelist is
         // honoured (never DeepSeek — that stays the invisible backstop), and it
         // keeps the tier's effort/token budget; just the lead model changes, with
