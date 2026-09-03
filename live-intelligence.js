@@ -162,9 +162,16 @@ function namedCorporations(question) {
     if (names.length) return [...new Set(names)].slice(0, 5);
   }
   const peerMatch = text.match(
-    /\b(?:compare|comparison of)\s+(.+?)\s+(?:with|to|against|versus|vs\.?)\s+(?:its|their)\s+(?:public\s+)?peers\b/i,
+    /\b(?:compare|comparison of)\s+(.+?)\s+(?:with|to|against|versus|vs\.?)\s+(?:its|their)\s+(?:(?:closest|nearest|main|direct|biggest|largest|top|public|private|sector)\s+)*peers\b/i,
   );
   if (peerMatch) return splitCorporationNames(peerMatch[1]);
+  // The name can come first: "How does Value Mart compare with its closest
+  // public peers", "where does Tinky corp stand against its peers". Adjectives
+  // between "its" and "peers" are common and must not break the match.
+  const subjectPeerMatch = text.match(
+    /\b(?:how|where)\s+(?:does|do|is|are|did|has|have)\s+(.+?)\s+(?:compare|stack up|stand|rank|measure up|fare|do|perform)(?:\s+(?:with|to|against|versus|vs\.?|relative to|among|next to))?\s+(?:its|their|the)\s+(?:(?:closest|nearest|main|direct|biggest|largest|top|public|private|sector|other)\s+)*(?:peers|rivals|competitors|competition)\b/i,
+  );
+  if (subjectPeerMatch) return splitCorporationNames(subjectPeerMatch[1]);
 
   const patterns = [
     /\bwhy\s+(?:is|are)\s+(.+?)\s+(?:valued|worth|performing|doing)\b/i,
