@@ -275,8 +275,27 @@ async function resolveCorporation(name, callTool) {
     const pick = publicTied.length === 1 ? publicTied[0] : tied.length > 1 ? null : top;
 
     if (!pick) {
+      // The same name registered in several countries ("Value Mart" in Italy
+      // and in Finland) is not a wording ambiguity the player can resolve by
+      // rephrasing: trace each one and label it by country, so the writer
+      // reports on both instead of declaring the company does not exist.
+      const sameName = tied.every(r => comparableCorporationName(r.name) === comparableCorporationName(tied[0].name));
+      if (sameName) {
+        const traced = await Promise.all(tied.slice(0, 3).map(async r => {
+          const result = await callTool("trace_corp", { corporation: r.id || r.name }, "gamestate").catch(() => null);
+          const data = payload(result);
+          return result && !data?.error ? { label: `${r.name} (${r.countryId || "unknown country"})`, result, data } : null;
+        }));
+        const ok = traced.filter(Boolean);
+        if (ok.length) {
+          const resolved = `${tied[0].name}, ${ok.length} corporations of that name: ${ok.map(t => t.label).join(" and ")}`;
+          const result = ok.map(t => `--- ${t.label} ---\n${t.result}`).join("\n");
+          return { requested: name, resolved, result, data: { multiple: ok.map(t => t.data) } };
+        }
+      }
       return {
-        requested: name, resolved: null, ambiguous: tied.map(r => r.name),
+        requested: name, resolved: null,
+        ambiguous: [...new Set(tied.map(r => `${r.name}${r.countryId ? ` (${r.countryId})` : ""}`))],
         result: null, data: null,
       };
     }
@@ -686,6 +705,12 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
       else if (trace.ambiguous?.length) {
         parts.push(`AMBIGUOUS CORPORATION NAME: "${trace.requested}" matches several corporations equally well: ${trace.ambiguous.join(", ")}. Ask the player which one they mean. Do NOT report figures for any of them.`);
       }
+    }
+    // A peer question about a named corporation needs a baseline to compare
+    // against; the canonical market-cap leaderboard is the one the game shows.
+    if (PEER_WORDS.test(text) && !explicitSector && traces.some(trace => trace.result)) {
+      const ranking = await call("corporation_rankings", { limit: 15 });
+      if (ranking) parts.push(`PUBLIC CORPORATION MARKET CAP LEADERBOARD (peer baseline, anchor currency):\n${cap(ranking, 4500)}`);
     }
     if (explicitSector) {
       const resolved = traces.filter(trace => trace.result && !trace.data?.error);
