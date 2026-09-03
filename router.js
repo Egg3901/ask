@@ -34,7 +34,7 @@ const EFFORTS = {
   thorough: { label: "Thorough", hint: "Most reasoning, slowest", tier: "deep" },
 };
 
-function choose({ question = "", length = "standard", style = "standard", useMcp = false, isFollowup = false, visualizations = false, report = false, effort = "auto", specialist = false } = {}) {
+function choose({ question = "", length = "standard", style = "standard", useMcp = false, isFollowup = false, visualizations = false, report = false, effort = "auto", specialist = false, deepReasoning = false } = {}) {
   const text = String(question).trim();
   let score = 0;
   const reasons = [];
@@ -67,7 +67,8 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
   // length toggle just makes the answer longer — it still scores up to pro (Mimo)
   // rather than dragging every long answer onto the slow model.
   let tier;
-  if (multiPart || report) { tier = "deep"; if (report) reasons.push("report"); }
+  if (deepReasoning) { tier = "deep"; reasons.push("deep evidence synthesis"); }
+  else if (multiPart || report) { tier = "deep"; if (report) reasons.push("report"); }
   else if (visualizations) { tier = "pro"; reasons.push("visualization"); }
   else if (specialist || SPECIALIST.test(text)) { tier = "pro"; reasons.push("specialist evidence synthesis"); }
   else tier = score >= 4 ? "pro" : "flash";
@@ -75,7 +76,7 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
   // An explicit effort wins outright. A report still forces deep: it is a
   // multi-section deliverable, and "quick" cannot produce one.
   const forced = EFFORTS[effort]?.tier;
-  if (forced && !report) { tier = forced; reasons.push(`${effort} requested`); }
+  if (forced && !report && !deepReasoning) { tier = forced; reasons.push(`${effort} requested`); }
 
   return {
     tier,

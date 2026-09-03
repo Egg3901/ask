@@ -22,6 +22,7 @@ const FISCAL = /\b(?:budget|deficit|surplus|fiscal|debt[\s-]?to[\s-]?gdp|nationa
 const ESTIMATION = /\b(?:how much would|how much does it cost|what would it cost|how expensive|how long until|how long would|how many turns|what would happen if|what happens if|what would .{0,40} do to)\b/i;
 const VISUAL = /\b(?:visuali[sz](?:e|ation)|chart|graph|diagram|plot|map|heatmap|choropleth)\b/i;
 const SHOWCASE_VISUAL = /(?=[\s\S]*\b(?:visuali[sz](?:e|ation)|chart|graph|plot|map)\b)(?=[\s\S]*\b(?:interesting|surprising|insightful|showcase|anything|something)\b)/i;
+const CONTINGENT_PRESIDENTIAL = /^(?=[\s\S]*\bpresident(?:ial)?\b)(?=[\s\S]*\bcontingen(?:t|cy)\b)[\s\S]*$/i;
 
 function create(question, context = {}, mode = "auto") {
   const text = String(question || "").trim();
@@ -75,11 +76,17 @@ function create(question, context = {}, mode = "auto") {
     status: "Catching you up on what moved while you were away…", requestedMode, context,
   };
 
+  if (CONTINGENT_PRESIDENTIAL.test(text)) return {
+    id: "contingent-presidential-election", intent: "contingent_election", live: "required", reasoning: "deep",
+    display: { kind: "comparison", metric: "contingent_projection", canonical: false },
+    visual: explicitVisual ? "optional" : "none", suppressGenericCountryEconomy: true,
+    status: "Projecting the contingent ballot from the live presidential race and House delegations...", requestedMode, context,
+  };
+
   // Post-race debrief: the asker wants to understand a resolved contest they
   // were in ("why did I lose my senate race"). Post-hoc analysis of the
-  // asker's own race is squarely fair play; forecasting a LIVE contested race
-  // is not, and the playbook forbids it. Live is required because the debrief
-  // is built from the actual tally (trace_race), not vibes.
+  // asker's own race is squarely fair play. Live is required because the
+  // debrief is built from the actual tally (trace_race), not vibes.
   const electionDebrief = /\b(?:why (?:did|have) (?:i|we|my)\b.{0,60}\b(?:lo(?:se|st)|w[io]n)|what (?:cost|lost) (?:me|us)\b|debrief\b.{0,40}\b(?:race|election|campaign)|post[- ]?mortem\b.{0,40}\b(?:race|election)|(?:lost|won) (?:my|our|the) (?:seat|race|election|primary)\b.{0,30}\bwhy)/i.test(text)
     && /\b(?:race|election|seat|primary|campaign|runoff|governor|senat|house|president|mayor|deputy)\b/i.test(text);
   if (electionDebrief) return {
