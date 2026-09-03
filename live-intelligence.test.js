@@ -24,3 +24,31 @@ test("peer comparisons name the corporation whichever side of the verb it sits",
 test("a generic peer question without a name still names nothing", () => {
   assert.deepEqual(live.namedCorporations("How do public peers compare on market cap?"), []);
 });
+
+test("a name registered in several countries is traced per country, not declared missing", async () => {
+  const calls = [];
+  const callTool = async (tool, args) => {
+    calls.push([tool, args]);
+    if (tool === "entity_search") return JSON.stringify({ results: [
+      { type: "corporation", id: "it1", name: "Value Mart", score: 1, countryId: "IT", public: true },
+      { type: "corporation", id: "fi1", name: "Value Mart", score: 1, countryId: "FI", public: true },
+    ] });
+    if (tool === "trace_corp") return JSON.stringify({ corporation: { name: "Value Mart", countryId: args.corporation === "it1" ? "IT" : "FI" } });
+    return null;
+  };
+  const trace = await live.resolveCorporation("Value Mart", callTool);
+  assert.equal(trace.ambiguous, undefined);
+  assert.match(trace.resolved, /2 corporations of that name/);
+  assert.match(trace.result, /Value Mart \(IT\)/);
+  assert.match(trace.result, /Value Mart \(FI\)/);
+  assert.equal(calls.filter(([tool]) => tool === "trace_corp").length, 2);
+});
+
+test("genuinely different tied names stay ambiguous and carry their countries", async () => {
+  const callTool = async (tool) => tool === "entity_search" ? JSON.stringify({ results: [
+    { type: "corporation", id: "a", name: "Prime Mart", score: 0.8, countryId: "US", public: true },
+    { type: "corporation", id: "b", name: "Prima Mart", score: 0.79, countryId: "AT", public: true },
+  ] }) : null;
+  const trace = await live.resolveCorporation("Prim Mart", callTool);
+  assert.deepEqual(trace.ambiguous, ["Prime Mart (US)", "Prima Mart (AT)"]);
+});
