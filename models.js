@@ -40,6 +40,18 @@ const CATALOG = {
     efforts: null,
     note: "Out of the default chains since 2026-08-23: 25-58s to first token live, and it spends most of its budget on hidden reasoning (3222 completion tokens for 545 characters of answer). Kept for display of historic rows.",
   },
+  "muse-spark-1.3-contributor": {
+    display: "Muse Spark 1.3",
+    provider: "muse", tier: "flash", score: null, ttftP50Ms: 3000,
+    // Muse Spark 1.3 through the Muse bridge on the Lakeside box: the muse CLI
+    // runs each request on the owner's subscription (no API key, no per-token
+    // bill). Reasoning is mandatory on Spark; the bridge maps none/minimal to
+    // low. Measured 2026-09-03 on the bridge: about 2.5s to first text on a
+    // short prompt, one request per muse process, four in parallel. Inert
+    // without MUSE_BRIDGE_KEY.
+    efforts: ["low", "medium", "high"],
+    note: "Muse Spark 1.3 contributor tier via the Lakeside Muse bridge (owner subscription). Owner-directed default lead from 2026-09-03. Inert until MUSE_BRIDGE_KEY is set; the chain skips it instantly without a key.",
+  },
   "muse-spark-1.2-contributor": {
     display: "Muse Spark",
     provider: "meta", tier: "flash", score: null, ttftP50Ms: 2200,
@@ -258,6 +270,7 @@ const PROVIDER_LABELS = {
   ollama: "Ollama Cloud",
   commandcode: "Command Code",
   meta: "Meta Model API",
+  muse: "Muse bridge (Lakeside)",
   deepseek: "DeepSeek API",
   google: "Google AI",
   openrouter: "OpenRouter",
