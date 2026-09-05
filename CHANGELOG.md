@@ -2,6 +2,13 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.15.2 - 2026-09-05
+
+### Fixed
+- Questions about how a class of military asset works are answered instead of refused. "What is the benefit of aircraft carriers vs screening ships and submarines?", "what do the different types of ships do for navies?" and "how do army logistics work?" are rules questions: they name no country and ask for nothing live, so the answer is mechanics, not somebody's roster. The guard was reading any sentence that put a number next to a ship or a unit as force intelligence.
+- Ship and airframe classes (carriers, destroyers, cruisers, frigates, battleships, corvettes, bombers, fighters) are now part of what the guard actually recognizes, so a real roster line about them is caught where it was previously invisible.
+- Naming a country still stops an answer: a live count, a country code, or "currently" alongside a named force is refused whatever the question was.
+
 ## 1.15.1 - 2026-09-05
 
 ### Fixed
