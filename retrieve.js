@@ -159,8 +159,13 @@ function vectorsFor(evidence, game = null) {
  * Returns { context, files, count } or null when the index is unavailable, so
  * callers can fall back to the old path rather than answer with nothing.
  */
-async function search(question, { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question), game = null } = {}) {
+async function search(question, { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question), game = null, fusion } = {}) {
   const st = stateFor(game);
+  if (fusionMode(fusion) === "v2") {
+    const top = await collectV2(question, claimType, st);
+    if (!top) return null;
+    return finishV2(top, topK, claimType, maxChars, st, 1);
+  }
   const top = await collect(question, claimType, st);
   if (!top) return null;
   return finish(top, topK, claimType, maxChars, st);
@@ -175,10 +180,11 @@ async function search(question, { topK = TOP_K, maxChars = MAX_CHARS, claimType 
  * evidence was not there. Candidates from each sub-query are merged (max score
  * wins on duplicates) and the shared char budget is spent on the union.
  */
-async function searchMulti(question, subQueries = [], { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question), game = null } = {}) {
+async function searchMulti(question, subQueries = [], { topK = TOP_K, maxChars = MAX_CHARS, claimType = inferClaimType(question), game = null, fusion } = {}) {
   const st = stateFor(game);
   const queries = [question, ...subQueries.map(q => String(q || "").trim()).filter(Boolean).slice(0, 4)];
-  if (queries.length === 1) return search(question, { topK, maxChars, claimType, game });
+  if (queries.length === 1) return search(question, { topK, maxChars, claimType, game, fusion });
+  if (fusionMode(fusion) === "v2") return searchMultiV2(queries, claimType, st, topK, maxChars);
   const lists = await Promise.all(queries.map(q => collect(q, claimType, st).catch(() => null)));
   const byKey = new Map();
   for (const list of lists) {
@@ -196,6 +202,16 @@ async function searchMulti(question, subQueries = [], { topK = TOP_K, maxChars =
 
 /** Ranked candidate chunks for one query string. null when the index is unavailable. */
 async function collect(question, claimType, st) {
+  const parts = await candidatesLegacy(question, claimType, st);
+  return parts ? parts.fused : null;
+}
+
+/**
+ * The legacy fusion, with its per-retriever lists exposed for __debug. With
+ * `debug` off this does exactly the work collect() always did; the dense
+ * snapshot is only taken when a caller asks to see it.
+ */
+async function candidatesLegacy(question, claimType, st, { debug = false } = {}) {
   const h = open(st);
   if (!h || !st.ready) return null;
 
@@ -241,7 +257,9 @@ async function collect(question, claimType, st) {
   // appearing in a handful of chunks carries little semantic signal, while
   // keyword matching finds it instantly. Running both and merging covers the
   // two failure modes — vectors handle paraphrase, keywords handle precision.
-  for (const r of keywordHits(h, question, st.sourceAware)) {
+  const dense = debug ? top.map(t => ({ ...t })) : null;
+  const lexical = keywordHits(h, question, st.sourceAware);
+  for (const r of lexical) {
     const k = r.path + "#" + r.ord;
     if (seen.has(k)) {
       const ex = top.find(t => t.path === r.path && t.ord === r.ord);
@@ -253,7 +271,7 @@ async function collect(question, claimType, st) {
   }
 
   top.sort((a, b) => b.score - a.score);
-  return top;
+  return { dense, lexical, fused: top };
 }
 
 // ── vector cache ──────────────────────────────────────────────────────────────
@@ -513,6 +531,436 @@ function mergeEvidence(primary, exact) {
   };
 }
 
+// ── hybrid fusion v2 ──────────────────────────────────────────────────────────
+// Selected per call with RAG_FUSION=v2, or { fusion: "v2" } in the search
+// options. Unset means the legacy fusion above, unchanged.
+//
+// What legacy gets wrong, measured 2026-09-05: the dense score is a weighted
+// cosine, the keyword pass discards its BM25 magnitude for a flat boost, the
+// dual-hit bonus is an unnormalised +0.35, sub-queries merge by MAX so one of
+// them can consume the whole budget, and the only diversity control is a
+// 2-per-file cap. v2 keeps both retrievers' raw scores, min-max normalises
+// each within the query, sums them under a dense/lexical weight, keeps the
+// AUTHORITY multiplier, floors exact identifier hits, merges sub-queries by
+// reciprocal rank fusion with a one-per-query quota at budget fill, picks the
+// shortlist with MMR over the vectors already in memory, and trims the
+// byte-identical overlap between adjacent chunks of one file. Knobs and the
+// reasoning are in docs/retrieval-fusion-v2.md.
+
+function fusionMode(override) {
+  const mode = override != null && override !== "" ? String(override) : (process.env.RAG_FUSION || "legacy");
+  return mode === "v2" ? "v2" : "legacy";
+}
+
+function envNumber(name, fallback) {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+const clamp01 = v => Math.min(1, Math.max(0, v));
+
+/** Read per call so an eval harness can sweep knobs without reloading the module. */
+function fusionConfig() {
+  return {
+    denseW: clamp01(envNumber("RAG_FUSION_DENSE_W", 0.6)),
+    denseWIdent: clamp01(envNumber("RAG_FUSION_DENSE_W_IDENT", 0.4)),
+    rrfK: Math.max(1, envNumber("RAG_FUSION_RRF_K", 60)),
+    mmrLambda: clamp01(envNumber("RAG_FUSION_MMR_LAMBDA", 0.7)),
+    lexLimit: Math.max(1, Math.floor(envNumber("RAG_FUSION_LEX_LIMIT", 24))),
+    floor: 5,        // exact identifier hits stay inside the top-5 window
+    // A chunk "belongs" to a query when it is in that query's top-3. Looser
+    // membership let a consensus chunk sitting ninth in a sub-query's list
+    // mark that sub-query as covered while its own best hit never got in.
+    originN: 3,
+    minOverlap: 32,  // shorter shared spans are coincidence, not chunker overlap
+  };
+}
+
+// Identifier-shaped questions: ALL_CAPS_WITH_UNDERSCORES, camelCase, or a
+// path/like/this.ts. The player named a symbol, so the lexical side gets the
+// larger weight. Plain acronyms (GDP, FOMC) are prose and do not qualify.
+const IDENT_SHAPES = [
+  /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/,
+  /\b[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*\b/,
+  /\b[\w-]+(?:\/[\w.-]+)+\.[a-z]{1,4}\b|\b[\w-]+\.(?:ts|tsx|js|jsx|json|md)\b/,
+];
+function identifierShaped(question) {
+  const q = String(question || "");
+  return IDENT_SHAPES.some(re => re.test(q));
+}
+
+/**
+ * Min-max to [0,1] over one retriever's candidate list for this query. A flat
+ * list (one candidate, or all tied) scores 1: being found counts, and the
+ * absent side of a dual hit already contributes 0.
+ */
+function minMax(values) {
+  let lo = Infinity, hi = -Infinity;
+  for (const v of values) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const range = hi - lo;
+  return values.map(v => (range > 0 ? (v - lo) / range : 1));
+}
+
+/** FTS5 hits with their BM25 value kept (negated, so higher is better) and an exact-identifier flag. */
+function lexicalHits(h, question, sourceAware, cfg) {
+  const { ids, words } = termsIn(question);
+  const byKey = new Map();
+  const sourceProjection = sourceAware
+    ? "c.source_kind source,c.repository,c.revision"
+    : "'code' source,'' repository,'' revision";
+  const run = (expr, limit, exact) => {
+    try {
+      const rows = h.prepare(
+        `SELECT c.path,c.ord,c.text,${sourceProjection},bm25(chunks_fts) rank FROM chunks_fts f JOIN chunks c ON c.id=f.rowid
+         WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?`).all(expr, limit);
+      for (const r of rows) {
+        const key = r.path + "#" + r.ord;
+        const raw = -Number(r.rank);
+        const prev = byKey.get(key);
+        if (prev) { prev.raw = Math.max(prev.raw, raw); prev.exact = prev.exact || exact; continue; }
+        byKey.set(key, {
+          path: r.path, ord: r.ord, text: r.text, source: r.source, repository: r.repository, revision: r.revision,
+          raw, exact,
+        });
+      }
+    } catch { /* FTS is an enhancement; a bad expression must not break search */ }
+  };
+  for (const id of ids) run(`"${id}"`, 5, true);
+  if (words.length) run(words.map(w => `"${w}"`).join(" OR "), cfg.lexLimit, false);
+  return [...byKey.values()];
+}
+
+/**
+ * Exact identifier hits never rank below the top-`floor` window. The window
+ * holds the best `floor` exact hits plus the best remaining candidates, in
+ * score order; everything else follows in score order. More exact hits than
+ * the window can hold compete normally for the rest.
+ */
+function applyFloor(sorted, floor) {
+  const size = Math.min(floor, sorted.length);
+  const exact = sorted.filter(c => c.exact).slice(0, size);
+  if (!exact.length) return sorted;
+  const window = new Set(exact);
+  for (const c of sorted) {
+    if (window.size >= size) break;
+    if (!c.exact) window.add(c);
+  }
+  return [...sorted.filter(c => window.has(c)), ...sorted.filter(c => !window.has(c))];
+}
+
+/** Mark which query found each chunk (top-originN only), for the quota at budget fill. */
+function tagRanks(list, queryIndex, originN) {
+  list.forEach((c, i) => {
+    c.ranks = c.ranks || {};
+    if (i < originN) c.ranks[queryIndex] = i;
+  });
+  return list;
+}
+
+/** v2 candidates for one query. null when the index is unavailable. */
+async function collectV2(question, claimType, st, { debug = false } = {}) {
+  const h = open(st);
+  if (!h || !st.ready) return null;
+
+  let qv;
+  try { qv = await embedQuery(question); } catch { return null; }
+
+  const M = matrix(st);
+  if (!M || M.n === 0) return null;
+  if (M.dims !== qv.length) return null;
+
+  const cfg = fusionConfig();
+  const wDense = identifierShaped(question) ? cfg.denseWIdent : cfg.denseW;
+  const wLex = 1 - wDense;
+
+  // Same sweep as legacy. The candidate cut is still on the weighted score:
+  // an upweighted constants chunk just below the raw cutoff must survive to
+  // be normalised at all.
+  const { data, dims, n, meta } = M;
+  const cosine = new Float32Array(n);
+  const weighted = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const off = i * dims;
+    let dot = 0;
+    for (let j = 0; j < dims; j++) dot += qv[j] * data[off + j];
+    cosine[i] = dot;
+    weighted[i] = dot * weightFor(meta[i].path, meta[i].source, claimType, st.sourceAware);
+  }
+  const KEEP = Math.min(n, 200);
+  const sorted = Float32Array.prototype.slice.call(weighted).sort();
+  const cutoff = sorted[Math.max(0, n - KEEP)];
+  const dense = [];
+  for (let i = 0; i < n && dense.length < KEEP * 2; i++) {
+    if (weighted[i] < cutoff) continue;
+    dense.push({ ...meta[i], cosine: cosine[i], authority: weightFor(meta[i].path, meta[i].source, claimType, st.sourceAware) });
+  }
+  const denseNorm = minMax(dense.map(d => d.cosine));
+  dense.forEach((d, i) => { d.norm = denseNorm[i]; });
+
+  const lexical = lexicalHits(h, question, st.sourceAware, cfg);
+  const lexNorm = minMax(lexical.map(l => l.raw));
+  lexical.forEach((l, i) => { l.norm = lexNorm[i]; });
+
+  // CombSUM: a chunk both retrievers found gets both normalised scores; a
+  // chunk one side missed contributes 0 there. Authority multiplies the sum.
+  const byKey = new Map();
+  for (const d of dense) {
+    byKey.set(d.path + "#" + d.ord, {
+      path: d.path, ord: d.ord, text: d.text, source: d.source, repository: d.repository, revision: d.revision,
+      authority: d.authority, dense: d.norm, lexical: 0, exact: false,
+    });
+  }
+  for (const l of lexical) {
+    const key = l.path + "#" + l.ord;
+    const ex = byKey.get(key);
+    if (ex) { ex.lexical = l.norm; ex.exact = ex.exact || l.exact; continue; }
+    byKey.set(key, {
+      path: l.path, ord: l.ord, text: l.text, source: l.source, repository: l.repository, revision: l.revision,
+      authority: weightFor(l.path, l.source, claimType, st.sourceAware), dense: 0, lexical: l.norm, exact: l.exact,
+    });
+  }
+  const fused = [...byKey.values()];
+  for (const c of fused) c.score = c.authority * (wDense * c.dense + wLex * c.lexical);
+  fused.sort((a, b) => b.score - a.score);
+  const ranked = tagRanks(applyFloor(fused, cfg.floor), 0, cfg.originN);
+  return debug ? { dense, lexical, fused: ranked, weights: { dense: wDense, lexical: wLex } } : ranked;
+}
+
+/**
+ * Reciprocal rank fusion across per-query candidate lists. Consensus across
+ * sub-queries is what MAX-merge could not see; a chunk three sub-queries each
+ * rank tenth now beats one that a single sub-query ranked first. Scores are
+ * rescaled so the best is 1, which keeps the MMR relevance term on the same
+ * footing as the single-query path. The exact flag survives the merge.
+ */
+function rrfMerge(lists, k, originN) {
+  const byKey = new Map();
+  lists.forEach((list, qi) => {
+    if (!list) return;
+    list.forEach((c, i) => {
+      const key = c.path + "#" + c.ord;
+      let e = byKey.get(key);
+      if (!e) {
+        e = {
+          path: c.path, ord: c.ord, text: c.text, source: c.source, repository: c.repository, revision: c.revision,
+          authority: c.authority, score: 0, rrf: 0, exact: false, ranks: {},
+        };
+        byKey.set(key, e);
+      }
+      e.rrf += 1 / (k + i + 1);
+      e.exact = e.exact || Boolean(c.exact);
+      if (i < originN) e.ranks[qi] = i;
+    });
+  });
+  const merged = [...byKey.values()].sort((a, b) => b.rrf - a.rrf);
+  const top = merged.length ? merged[0].rrf : 1;
+  for (const c of merged) c.score = c.rrf / top;
+  return merged;
+}
+
+async function searchMultiV2(queries, claimType, st, topK, maxChars) {
+  const cfg = fusionConfig();
+  const lists = await Promise.all(queries.map(q => collectV2(q, claimType, st).catch(() => null)));
+  if (!lists.some(Boolean)) return null;
+  const merged = applyFloor(rrfMerge(lists, cfg.rrfK, cfg.originN), cfg.floor);
+  return finishV2(merged, topK, claimType, maxChars, st, queries.length);
+}
+
+function dot(a, b) {
+  let s = 0;
+  for (let j = 0; j < a.length; j++) s += a[j] * b[j];
+  return s;
+}
+
+/** Stored vector for a candidate, from the matrix already in memory. null when the chunk is not in it. */
+function vectorFor(st, c) {
+  const M = st.mat;
+  if (!M) return null;
+  if (!M.index) {
+    M.index = new Map();
+    for (let i = 0; i < M.n; i++) M.index.set(M.meta[i].path + "#" + M.meta[i].ord, i);
+  }
+  const i = M.index.get(c.path + "#" + c.ord);
+  return i == null ? null : M.data.subarray(i * M.dims, (i + 1) * M.dims);
+}
+
+/**
+ * Which chunks go to the budget walk, and in what order. The budget binds on
+ * nearly every question (6000-char chunks against a 22000-char window), so
+ * walk order is the real selection: it is a priority ladder, not a sort.
+ *   1. exact identifier hits inside the floor window: the player named it;
+ *   2. the best unrepresented chunk for each query, question first, so every
+ *      sub-query contributes one chunk before any contributes a second;
+ *   3. MMR over the fused shortlist for the rest: relevance minus the
+ *      nearest already-picked chunk, so two overlapping chunks of one file do
+ *      not both spend the budget when a second file would add more.
+ */
+function selectV2(scored, topK, queryCount, cfg, st, vectors = null) {
+  const picked = [];
+  const pickedSet = new Set();
+  const take = c => { picked.push(c); pickedSet.add(c); };
+
+  for (const c of scored.slice(0, cfg.floor)) if (c.exact && picked.length < topK) take(c);
+
+  for (let q = 0; q < queryCount && picked.length < topK; q++) {
+    if (picked.some(c => c.ranks && c.ranks[q] != null)) continue;
+    let best = null;
+    for (const c of scored) {
+      if (pickedSet.has(c) || !c.ranks || c.ranks[q] == null) continue;
+      if (!best || c.ranks[q] < best.ranks[q]) best = c;
+    }
+    if (best) take(best);
+  }
+
+  const shortlist = scored.slice(0, Math.max(topK * 5, 40));
+  let top = 0;
+  for (const c of shortlist) if (c.score > top) top = c.score;
+  const rel = c => (top > 0 ? c.score / top : 0);
+  const vec = vectors || (c => vectorFor(st, c));
+  const pool = shortlist.filter(c => !pickedSet.has(c)).map(c => ({ c, v: vec(c), maxSim: 0 }));
+  const bump = p => {
+    const pv = vec(p);
+    if (!pv) return;
+    for (const entry of pool) if (entry.v) entry.maxSim = Math.max(entry.maxSim, dot(entry.v, pv));
+  };
+  for (const p of picked) bump(p);
+  while (picked.length < topK && pool.length) {
+    let best = 0, bestScore = -Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const s = cfg.mmrLambda * rel(pool[i].c) - (1 - cfg.mmrLambda) * pool[i].maxSim;
+      if (s > bestScore) { bestScore = s; best = i; }
+    }
+    const [chosen] = pool.splice(best, 1);
+    take(chosen.c);
+    bump(chosen.c);
+  }
+  return picked;
+}
+
+// The chunker prefixes each chunk with a "[kind] path (part n/N)" line and
+// overlaps consecutive bodies by 400 chars. The dedupe compares bodies with
+// that line excluded and cuts the shared span from whichever block the model
+// reads second, so the text stays contiguous in reading order.
+const CHUNK_HEADER = /^\[[a-z]+\] [^\n]*\n/;
+function splitHeader(text) {
+  const m = text.match(CHUNK_HEADER);
+  return m ? [m[0], text.slice(m[0].length)] : ["", text];
+}
+
+function overlapLength(a, b, min) {
+  for (let l = Math.min(a.length, b.length, 1000); l >= min; l--) {
+    if (a.endsWith(b.slice(0, l))) return l;
+  }
+  return 0;
+}
+
+/** Trim byte-identical overlap between adjacent ords of one file. Mutates `body` in place; only ever shrinks. */
+function dedupeOverlaps(included, minOverlap) {
+  const byFile = new Map();
+  included.forEach((entry, i) => {
+    const key = `${entry.c.source || "code"}|${entry.c.path}`;
+    if (!byFile.has(key)) byFile.set(key, []);
+    byFile.get(key).push(i);
+  });
+  for (const indices of byFile.values()) {
+    if (indices.length < 2) continue;
+    const byOrd = indices.slice().sort((x, y) => included[x].c.ord - included[y].c.ord);
+    for (let k = 0; k + 1 < byOrd.length; k++) {
+      const a = byOrd[k], b = byOrd[k + 1];
+      if (included[b].c.ord !== included[a].c.ord + 1) continue;
+      const [, bodyA] = splitHeader(included[a].body);
+      const [headB, bodyB] = splitHeader(included[b].body);
+      const L = overlapLength(bodyA, bodyB, minOverlap);
+      if (!L) continue;
+      if (a < b) {
+        if (bodyB.length > L) included[b].body = headB + bodyB.slice(L);
+      } else if (bodyA.length > L) {
+        included[a].body = included[a].body.slice(0, included[a].body.length - L);
+      }
+    }
+  }
+  return included;
+}
+
+function finishV2(scored, topK, claimType, maxChars = MAX_CHARS, st = { sourceAware: false }, queryCount = 1) {
+  const cfg = fusionConfig();
+  const selected = selectV2(scored, topK, queryCount, cfg, st);
+
+  // Same budget walk as legacy: `continue`, NOT `break`, so one oversized
+  // chunk cannot silently drop every smaller chunk behind it.
+  let budget = maxChars;
+  const included = [];
+  for (const c of selected) {
+    const body = c.text.length > 6200 ? c.text.slice(0, 6200) : c.text;
+    if (body.length > budget) continue;
+    budget -= body.length;
+    included.push({ c, body });
+  }
+  if (!included.length) return null;
+  dedupeOverlaps(included, cfg.minOverlap);
+
+  const blocks = [];
+  const files = [];
+  const evidence = [];
+  for (const { c, body } of included) {
+    files.push(c.path);
+    evidence.push({
+      source: c.source || "code", repository: c.repository || null,
+      revision: c.revision || null, path: c.path, ord: c.ord, score: c.score,
+      text: body,
+    });
+    const label = st.sourceAware
+      ? `SOURCE ${c.source} @ ${c.revision} | ${c.path}`
+      : c.path;
+    blocks.push(`--- ${label} (part ${c.ord + 1}, relevance ${c.score.toFixed(3)}) ---\n${body}`);
+  }
+  return {
+    context: st.sourceAware
+      ? `RETRIEVED EVIDENCE (${claimType} question). For current mechanics, executable code wins conflicts. For design intent, engineering docs win. For player navigation and explanation, shipped wiki prose is preferred unless it conflicts with code.\n\n${blocks.join("\n\n")}`
+      : `SOURCE CODE (the actual text of the most relevant parts of the game, retrieved for this question.\nThis is the game's real current behaviour and outranks any documentation):\n\n${blocks.join("\n\n")}`,
+    files: [...new Set(files)],
+    count: blocks.length,
+    hits: evidence,
+    claimType,
+  };
+}
+
+/**
+ * Per-retriever candidate lists for one question, for the eval harness. Pure
+ * addition: reads the same paths search() takes in whichever mode is active
+ * (or the `fusion` override) and changes nothing.
+ */
+async function debugCandidates(question, { claimType = inferClaimType(question), game = null, fusion } = {}) {
+  const st = stateFor(game);
+  const mode = fusionMode(fusion);
+  const slim = c => ({ path: c.path, ord: c.ord, source: c.source || "code" });
+  if (mode === "v2") {
+    const parts = await collectV2(question, claimType, st, { debug: true });
+    if (!parts) return null;
+    return {
+      mode, claimType, weights: parts.weights,
+      dense: parts.dense.map(d => ({ ...slim(d), score: d.norm, cosine: d.cosine, authority: d.authority }))
+        .sort((a, b) => b.cosine - a.cosine),
+      lexical: parts.lexical.map(l => ({ ...slim(l), score: l.norm, bm25: -l.raw, exact: l.exact }))
+        .sort((a, b) => b.bm25 - a.bm25),
+      fused: parts.fused.map(c => ({ ...slim(c), score: c.score, dense: c.dense, lexical: c.lexical, authority: c.authority, exact: c.exact })),
+    };
+  }
+  const parts = await candidatesLegacy(question, claimType, st, { debug: true });
+  if (!parts) return null;
+  return {
+    mode, claimType, weights: null,
+    dense: parts.dense.map(d => ({ ...slim(d), score: d.score })).sort((a, b) => b.score - a.score),
+    lexical: parts.lexical.map(l => ({ ...slim(l), score: l.boost, exact: l.boost === 1.5 })),
+    fused: parts.fused.map(c => ({ ...slim(c), score: c.score })),
+  };
+}
+
+const __debug = {
+  candidates: debugCandidates,
+  fusionMode, fusionConfig, identifierShaped, minMax, applyFloor, rrfMerge, selectV2, dedupeOverlaps, overlapLength,
+};
+
 // Source authority applied to ranking, not just to the prompt.
 //
 // The repo contains its own wiki and guide prose (src/lib/seeds/wiki/content,
@@ -651,4 +1099,4 @@ function stats(game = null) {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
-module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, embedBatch, embedEach, vectorsFor, hasPath };
+module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, embedBatch, embedEach, vectorsFor, hasPath, __debug };

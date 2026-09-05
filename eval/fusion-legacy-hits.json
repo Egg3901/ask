@@ -1,0 +1,937 @@
+{
+  "capturedAt": "2026-09-05T05:35:27.976Z",
+  "index": {
+    "generation": "6aac9727-f550-47be-adaf-3891d80b7889",
+    "revisions": {
+      "code": "107fc7b01e9da4f4b6283aa2b2cb4b5b443d710e",
+      "docs": "05cafde9805fac495dd8411bc8c1500c6dc05619",
+      "wiki": "107fc7b01e9da4f4b6283aa2b2cb4b5b443d710e"
+    }
+  },
+  "options": {
+    "topK": 8,
+    "maxChars": 22000
+  },
+  "cases": [
+    {
+      "question": "How many cloture votes are required to end a filibuster?",
+      "subQueries": [
+        "cloture threshold senate rules",
+        "filibuster mechanics"
+      ],
+      "single": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/turn/billLifecycle/configs/us.ts",
+          "src/lib/db/types/legislation.ts",
+          "src/components/legislature/dispatch/VoteSeatingChart.tsx",
+          "src/lib/billLifecycle.test.ts",
+          "src/components/legislature/dispatch/voteSeating.test.ts",
+          "src/lib/constants/impeachment.ts"
+        ],
+        "count": 6,
+        "contextSha256": "d03ca721ab0d4f88e802edce82d46023a02546e5398e90fbf2522cc088075420",
+        "hits": [
+          {
+            "path": "src/lib/turn/billLifecycle/configs/us.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2308988928794862
+          },
+          {
+            "path": "src/lib/db/types/legislation.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.2268264055252076
+          },
+          {
+            "path": "src/components/legislature/dispatch/VoteSeatingChart.tsx",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1898013710975648
+          },
+          {
+            "path": "src/lib/billLifecycle.test.ts",
+            "ord": 7,
+            "source": "code",
+            "score": 1.0166
+          },
+          {
+            "path": "src/components/legislature/dispatch/voteSeating.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0166
+          },
+          {
+            "path": "src/lib/constants/impeachment.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 0.944050133228302
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "mechanic",
+        "files": [
+          "src/app/congress/bills/[id]/page.tsx",
+          "src/lib/legislature/commands/nationalBillActions.ts",
+          "src/lib/turn/billLifecycle/configs/us.ts",
+          "src/lib/db/types/legislation.ts"
+        ],
+        "count": 4,
+        "contextSha256": "aa32a7722642d9268cb893862962b26a5699859a85b5b52f04590e6eebe74f26",
+        "hits": [
+          {
+            "path": "src/app/congress/bills/[id]/page.tsx",
+            "ord": 1,
+            "source": "code",
+            "score": 1.2431145668029786
+          },
+          {
+            "path": "src/lib/legislature/commands/nationalBillActions.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.236914908885956
+          },
+          {
+            "path": "src/lib/turn/billLifecycle/configs/us.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2308988928794862
+          },
+          {
+            "path": "src/lib/db/types/legislation.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.2268264055252076
+          }
+        ]
+      }
+    },
+    {
+      "question": "What is LEADERSHIP_INACTIVE_TURN_THRESHOLD and what does it do?",
+      "subQueries": [
+        "party leadership inactivity threshold",
+        "inactive leader removal turns"
+      ],
+      "single": {
+        "claimType": "general",
+        "files": [
+          "src/lib/nationalPartyElections.ts",
+          "src/lib/statePartyElections.ts",
+          "src/lib/parties/leadershipTenure.ts",
+          "src/lib/constants/partyActions.ts"
+        ],
+        "count": 5,
+        "contextSha256": "709c863b6f4bc29041ab81b9150a9ac769516f69fcb057e4616f8213bc5dd2df",
+        "hits": [
+          {
+            "path": "src/lib/nationalPartyElections.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/statePartyElections.ts",
+            "ord": 5,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/statePartyElections.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/parties/leadershipTenure.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 0.8127850294113159
+          },
+          {
+            "path": "src/lib/constants/partyActions.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 0.7886276245117188
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "general",
+        "files": [
+          "src/lib/nationalPartyElections.ts",
+          "src/lib/statePartyElections.ts",
+          "src/lib/turn/corporation/inactiveCeoSectorShed.ts"
+        ],
+        "count": 4,
+        "contextSha256": "014ab6c2841eb7d4294a23127a4d55c8db6d70450d3842c3d7275058eb00ba80",
+        "hits": [
+          {
+            "path": "src/lib/nationalPartyElections.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/statePartyElections.ts",
+            "ord": 5,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/statePartyElections.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/turn/corporation/inactiveCeoSectorShed.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1344640612602235
+          }
+        ]
+      }
+    },
+    {
+      "question": "How is GDP growth calculated each turn?",
+      "subQueries": [
+        "gdp growth formula metric engine",
+        "output gap potential growth"
+      ],
+      "single": {
+        "claimType": "general",
+        "files": [
+          "src/lib/seeds/reference/states.ts",
+          "src/lib/military/procurement.test.ts",
+          "src/lib/budget/revenue.eraB.test.ts",
+          "src/lib/intelligence/cost.test.ts",
+          "src/lib/budget/gdpDenominator.test.ts",
+          "src/lib/utils/diminishingReturns.ts"
+        ],
+        "count": 6,
+        "contextSha256": "20c00f3b8ccd93c762591ac166d4c0b9aab5b27ed02c9f31099989136ebe9cdc",
+        "hits": [
+          {
+            "path": "src/lib/seeds/reference/states.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/military/procurement.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/budget/revenue.eraB.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/intelligence/cost.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/budget/gdpDenominator.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/utils/diminishingReturns.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0304000000000002
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "general",
+        "files": [
+          "src/lib/seeds/reference/states.ts",
+          "src/lib/military/procurement.test.ts",
+          "src/lib/budget/revenue.eraB.test.ts",
+          "src/lib/intelligence/cost.test.ts",
+          "src/lib/budget/gdpDenominator.test.ts"
+        ],
+        "count": 5,
+        "contextSha256": "b75c9cb484772b79904db458bcfb08607848f17e09b04ed9102095bc5c3c809b",
+        "hits": [
+          {
+            "path": "src/lib/seeds/reference/states.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/military/procurement.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/budget/revenue.eraB.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/intelligence/cost.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/budget/gdpDenominator.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.4280000000000002
+          }
+        ]
+      }
+    },
+    {
+      "question": "What happens when a corporation cannot pay its bond coupon?",
+      "subQueries": [
+        "bond coupon default corporation",
+        "corporate bond missed payment consequences"
+      ],
+      "single": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/bonds/bondIssueIncomePreview.test.ts",
+          "src/lib/constants/corporations.ts",
+          "src/lib/constants/bonds.ts",
+          "src/components/corporation/BondsTab.tsx"
+        ],
+        "count": 4,
+        "contextSha256": "bbe12b3935fd59e142e767806ca0cf8b2d1e6497a17ac2a02520428f67a6fae1",
+        "hits": [
+          {
+            "path": "src/lib/bonds/bondIssueIncomePreview.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0166
+          },
+          {
+            "path": "src/lib/constants/corporations.ts",
+            "ord": 7,
+            "source": "code",
+            "score": 1.0152125358581543
+          },
+          {
+            "path": "src/lib/constants/bonds.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 0.9932400584220886
+          },
+          {
+            "path": "src/components/corporation/BondsTab.tsx",
+            "ord": 2,
+            "source": "code",
+            "score": 0.947452962398529
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/bonds/corporateBondDefault.ts",
+          "src/lib/turn/bondTurn.ts",
+          "src/lib/bonds/bondIssueIncomePreview.test.ts"
+        ],
+        "count": 4,
+        "contextSha256": "fae45f9ed96af8e854a559b320c8503a5495cf2e1a8aa621b2b433e0f0fd1233",
+        "hits": [
+          {
+            "path": "src/lib/bonds/corporateBondDefault.ts",
+            "ord": 1,
+            "source": "code",
+            "score": 1.287075138092041
+          },
+          {
+            "path": "src/lib/turn/bondTurn.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.2824658513069154
+          },
+          {
+            "path": "src/lib/turn/bondTurn.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.2804330348968507
+          },
+          {
+            "path": "src/lib/bonds/bondIssueIncomePreview.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0166
+          }
+        ]
+      }
+    },
+    {
+      "question": "How does the central bank set the interest rate?",
+      "subQueries": [
+        "central bank policy rate decision",
+        "FOMC interest rate setting"
+      ],
+      "single": {
+        "claimType": "general",
+        "files": [
+          "src/lib/turn/bankingTurn.ts",
+          "src/lib/savings/rules/commands.ts",
+          "src/lib/db/types/savingsLedger.ts",
+          "src/lib/constants/centralBankLobby.ts"
+        ],
+        "count": 5,
+        "contextSha256": "fbef803ca4cedc8675ba529bf4effd69b0a27c5f249575fc001ca4e7b38a8ccc",
+        "hits": [
+          {
+            "path": "src/lib/turn/bankingTurn.ts",
+            "ord": 11,
+            "source": "code",
+            "score": 1.1158465504646302
+          },
+          {
+            "path": "src/lib/savings/rules/commands.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.0304000000000002
+          },
+          {
+            "path": "src/lib/db/types/savingsLedger.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0304000000000002
+          },
+          {
+            "path": "src/lib/savings/rules/commands.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0304000000000002
+          },
+          {
+            "path": "src/lib/constants/centralBankLobby.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 0.8696414828300476
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "general",
+        "files": [
+          "src/app/api/country/[code]/fomc/nominate/route.ts",
+          "src/lib/banking/__tests__/apiShapes.characterization.test.ts",
+          "src/lib/turn/bankingTurn.ts",
+          "src/lib/db/types/centralBank.ts"
+        ],
+        "count": 5,
+        "contextSha256": "d7df6e989ad5c1db9c69c864691c93ad82ddd8c7bafb5e81602ef94d24f5d19e",
+        "hits": [
+          {
+            "path": "src/app/api/country/[code]/fomc/nominate/route.ts",
+            "ord": 1,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/app/api/country/[code]/fomc/nominate/route.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.6800000000000002
+          },
+          {
+            "path": "src/lib/banking/__tests__/apiShapes.characterization.test.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.4280000000000002
+          },
+          {
+            "path": "src/lib/turn/bankingTurn.ts",
+            "ord": 11,
+            "source": "code",
+            "score": 1.1158465504646302
+          },
+          {
+            "path": "src/lib/db/types/centralBank.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.095364248752594
+          }
+        ]
+      }
+    },
+    {
+      "question": "What does bondTurn.ts do each turn?",
+      "subQueries": [
+        "bond turn processing coupons",
+        "government bond issuance per turn"
+      ],
+      "single": {
+        "claimType": "general",
+        "files": [
+          "src/lib/turn/bondTurn.test.ts",
+          "src/simulation/engine/turnPhaseRuntime.test.ts",
+          "src/lib/turn/corporation/recomputeSharePrices.test.ts",
+          "design/corporate-bond-defaults.md"
+        ],
+        "count": 4,
+        "contextSha256": "f8ea5e73c96be6dfbd52f66e0f31ba1265d373eff18616625d5aab249658cd66",
+        "hits": [
+          {
+            "path": "src/lib/turn/bondTurn.test.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.778
+          },
+          {
+            "path": "src/simulation/engine/turnPhaseRuntime.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.778
+          },
+          {
+            "path": "src/lib/turn/corporation/recomputeSharePrices.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.778
+          },
+          {
+            "path": "design/corporate-bond-defaults.md",
+            "ord": 2,
+            "source": "docs",
+            "score": 1.5
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "general",
+        "files": [
+          "src/lib/turn/bondTurn.test.ts",
+          "src/simulation/engine/turnPhaseRuntime.test.ts",
+          "src/lib/turn/corporation/recomputeSharePrices.test.ts",
+          "design/corporate-bond-defaults.md"
+        ],
+        "count": 4,
+        "contextSha256": "f8ea5e73c96be6dfbd52f66e0f31ba1265d373eff18616625d5aab249658cd66",
+        "hits": [
+          {
+            "path": "src/lib/turn/bondTurn.test.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.778
+          },
+          {
+            "path": "src/simulation/engine/turnPhaseRuntime.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.778
+          },
+          {
+            "path": "src/lib/turn/corporation/recomputeSharePrices.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.778
+          },
+          {
+            "path": "design/corporate-bond-defaults.md",
+            "ord": 2,
+            "source": "docs",
+            "score": 1.5
+          }
+        ]
+      }
+    },
+    {
+      "question": "How much does it cost to build a plant and how many turns does it take?",
+      "subQueries": [
+        "plant construction cost",
+        "plant build time turns"
+      ],
+      "single": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/constants/capacityEconomy.ts",
+          "src/lib/turn/nppCorporationBehavior.ts",
+          "src/app/corporation/[id]/sector/[sectorId]/sections/StrandedPlantBanner.tsx"
+        ],
+        "count": 4,
+        "contextSha256": "a11efc284174d699405557d519a2321b79c2a06b303af4cab581d96a95246962",
+        "hits": [
+          {
+            "path": "src/lib/constants/capacityEconomy.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.2020036935806275
+          },
+          {
+            "path": "src/lib/turn/nppCorporationBehavior.ts",
+            "ord": 13,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/app/corporation/[id]/sector/[sectorId]/sections/StrandedPlantBanner.tsx",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/constants/capacityEconomy.ts",
+            "ord": 7,
+            "source": "code",
+            "score": 0.9027696847915649
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/constants/capacityEconomy.ts",
+          "src/lib/turn/nppCorporationBehavior.ts",
+          "src/app/corporation/[id]/sector/[sectorId]/sections/StrandedPlantBanner.tsx",
+          "src/lib/corporations/plantLedger.ts"
+        ],
+        "count": 4,
+        "contextSha256": "e47b0223f8368d82bfe6b1a3c6d56d71fa8fc27212c9726e1c13b8e9dc13bcab",
+        "hits": [
+          {
+            "path": "src/lib/constants/capacityEconomy.ts",
+            "ord": 4,
+            "source": "code",
+            "score": 1.2020036935806275
+          },
+          {
+            "path": "src/lib/turn/nppCorporationBehavior.ts",
+            "ord": 13,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/app/corporation/[id]/sector/[sectorId]/sections/StrandedPlantBanner.tsx",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/corporations/plantLedger.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0538682699203492
+          }
+        ]
+      }
+    },
+    {
+      "question": "What is the formula for inflation?",
+      "subQueries": [
+        "inflation calculation demand pull cost push",
+        "price level change per turn"
+      ],
+      "single": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/sovereignDefault/__tests__/marketDemand.integration.test.ts",
+          "src/lib/currency/savingsInterest.test.ts",
+          "src/lib/budget/inflation.ts",
+          "src/lib/turn/inflationRecalc.ts",
+          "design/budget-calculations.md"
+        ],
+        "count": 5,
+        "contextSha256": "1f57a23b5d0bd51d41c581ae8e9967e0b8d423950f1e0315754b524bffd76ed8",
+        "hits": [
+          {
+            "path": "src/lib/sovereignDefault/__tests__/marketDemand.integration.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0166
+          },
+          {
+            "path": "src/lib/currency/savingsInterest.test.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0166
+          },
+          {
+            "path": "src/lib/budget/inflation.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 0.9599546790122986
+          },
+          {
+            "path": "src/lib/turn/inflationRecalc.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 0.9206543564796448
+          },
+          {
+            "path": "design/budget-calculations.md",
+            "ord": 1,
+            "source": "docs",
+            "score": 0.92
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/budget/inflation.ts",
+          "src/lib/economy/householdPriceIndex.ts",
+          "src/lib/sovereignDefault/types.ts",
+          "src/lib/db/types/corporationHistory.ts"
+        ],
+        "count": 5,
+        "contextSha256": "3025a1704224a6c310acd479f4f40ca1fdcbf2ce98cd43d2034f4940a1e9687a",
+        "hits": [
+          {
+            "path": "src/lib/budget/inflation.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2375085711479188
+          },
+          {
+            "path": "src/lib/economy/householdPriceIndex.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2096599102020265
+          },
+          {
+            "path": "src/lib/budget/inflation.ts",
+            "ord": 1,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/sovereignDefault/types.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/db/types/corporationHistory.ts",
+            "ord": 1,
+            "source": "code",
+            "score": 1.1960000000000002
+          }
+        ]
+      }
+    },
+    {
+      "question": "How does a contingent presidential election work?",
+      "subQueries": [
+        "contingent election house delegation vote",
+        "electoral college no majority"
+      ],
+      "single": {
+        "claimType": "general",
+        "files": [
+          "src/lib/elections/contingentElection.ts",
+          "src/app/elections/[id]/components/ContingentResolutionPendingBanner.tsx",
+          "design/contingent-election.md",
+          "src/lib/turn/election/presidentResolutionMessaging.ts",
+          "src/lib/turn/election/loadContingentElectionData.ts"
+        ],
+        "count": 6,
+        "contextSha256": "dc9d91496e3e22645a44ba36cec8487090163694040659f3be2e5ff537403393",
+        "hits": [
+          {
+            "path": "src/lib/elections/contingentElection.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.2667076349258424
+          },
+          {
+            "path": "src/lib/elections/contingentElection.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.262181556224823
+          },
+          {
+            "path": "src/app/elections/[id]/components/ContingentResolutionPendingBanner.tsx",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2181254982948304
+          },
+          {
+            "path": "design/contingent-election.md",
+            "ord": 0,
+            "source": "docs",
+            "score": 1.21555153131485
+          },
+          {
+            "path": "src/lib/turn/election/presidentResolutionMessaging.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.1774896740913392
+          },
+          {
+            "path": "src/lib/turn/election/loadContingentElectionData.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.1113955140113831
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "general",
+        "files": [
+          "src/lib/elections/contingentElection.ts",
+          "src/app/elections/[id]/components/ContingentResolutionPendingBanner.tsx",
+          "design/contingent-election.md",
+          "src/lib/turn/election/presidentResolutionMessaging.ts",
+          "src/lib/turn/election/loadContingentElectionData.ts"
+        ],
+        "count": 6,
+        "contextSha256": "dc9d91496e3e22645a44ba36cec8487090163694040659f3be2e5ff537403393",
+        "hits": [
+          {
+            "path": "src/lib/elections/contingentElection.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.2667076349258424
+          },
+          {
+            "path": "src/lib/elections/contingentElection.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.262181556224823
+          },
+          {
+            "path": "src/app/elections/[id]/components/ContingentResolutionPendingBanner.tsx",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2181254982948304
+          },
+          {
+            "path": "design/contingent-election.md",
+            "ord": 0,
+            "source": "docs",
+            "score": 1.21555153131485
+          },
+          {
+            "path": "src/lib/turn/election/presidentResolutionMessaging.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.1774896740913392
+          },
+          {
+            "path": "src/lib/turn/election/loadContingentElectionData.ts",
+            "ord": 2,
+            "source": "code",
+            "score": 1.1113955140113831
+          }
+        ]
+      }
+    },
+    {
+      "question": "How does ship repair work in port and how much per turn?",
+      "subQueries": [
+        "naval repair per turn in port",
+        "ship integrity damage repair rate"
+      ],
+      "single": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/navair/repair.ts",
+          "src/lib/migrations/entries/2026-08-23-repair-kazakh-law-levels.ts",
+          "src/lib/migrations/entries/2026-08-26-repair-out-of-range-policy-levels.ts",
+          "src/lib/military/arsenal.ts",
+          "src/app/country/[code]/navair/NavairCommandClient.test.tsx",
+          "src/lib/navair/__tests__/repair.test.ts"
+        ],
+        "count": 6,
+        "contextSha256": "df17eee0b49d2b1c54b7ac18879d3b70f822defd07e04ed387bf9f17b52fde10",
+        "hits": [
+          {
+            "path": "src/lib/navair/repair.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2626917719841004
+          },
+          {
+            "path": "src/lib/migrations/entries/2026-08-23-repair-kazakh-law-levels.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/migrations/entries/2026-08-26-repair-out-of-range-policy-levels.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/military/arsenal.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.1714945197105409
+          },
+          {
+            "path": "src/app/country/[code]/navair/NavairCommandClient.test.tsx",
+            "ord": 0,
+            "source": "code",
+            "score": 1.0166
+          },
+          {
+            "path": "src/lib/navair/__tests__/repair.test.ts",
+            "ord": 1,
+            "source": "code",
+            "score": 1.0166
+          }
+        ]
+      },
+      "multi": {
+        "claimType": "mechanic",
+        "files": [
+          "src/lib/turn/navalRepairTurn.ts",
+          "src/lib/navair/repair.ts",
+          "src/lib/military/arsenal.ts",
+          "src/lib/migrations/entries/2026-08-23-repair-kazakh-law-levels.ts",
+          "src/lib/navair/types.ts"
+        ],
+        "count": 5,
+        "contextSha256": "c760469dcefd145e97c8017d37e138cfb4518dc4fdcbad745521208f23cb250d",
+        "hits": [
+          {
+            "path": "src/lib/turn/navalRepairTurn.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.328809952735901
+          },
+          {
+            "path": "src/lib/navair/repair.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.2626917719841004
+          },
+          {
+            "path": "src/lib/military/arsenal.ts",
+            "ord": 3,
+            "source": "code",
+            "score": 1.2402005553245545
+          },
+          {
+            "path": "src/lib/migrations/entries/2026-08-23-repair-kazakh-law-levels.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.1960000000000002
+          },
+          {
+            "path": "src/lib/navair/types.ts",
+            "ord": 0,
+            "source": "code",
+            "score": 1.160023069381714
+          }
+        ]
+      }
+    }
+  ]
+}
