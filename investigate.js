@@ -113,6 +113,10 @@ const MODERATOR_LIVE_ALLOWLIST = new Set([
   "trace_actions", "alt_rank", "alt_ring_audit", "audit_query",
 ]);
 
+// The tools a public session is never offered. A public answer built on one of
+// these would be a real leak, so the delivery guard asserts on it.
+const MODERATOR_ONLY_TOOLS = new Set([...MODERATOR_LIVE_ALLOWLIST].filter(name => !LIVE_ALLOWLIST.has(name)));
+
 const allowedLiveTools = privateAccess => privateAccess ? MODERATOR_LIVE_ALLOWLIST : LIVE_ALLOWLIST;
 
 // Tools that read one character's private standing. Non-staff askers are pinned
@@ -511,5 +515,5 @@ async function run({ question, context = null, useLive = false, deep = false, ti
 
 module.exports = {
   run, needsMechanicEvidence, needsCapabilityInventory, capabilityCatalog, capsFor,
-  LIVE_ALLOWLIST, MODERATOR_LIVE_ALLOWLIST, SELF_ONLY_TOOLS,
+  LIVE_ALLOWLIST, MODERATOR_LIVE_ALLOWLIST, MODERATOR_ONLY_TOOLS, SELF_ONLY_TOOLS,
 };

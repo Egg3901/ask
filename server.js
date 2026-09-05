@@ -1312,11 +1312,18 @@ const server = http.createServer(async (req, res) => {
         if (conflicts.length) store.recordConflicts(conflicts, { question, user_key: key });
         const cited = cites.apply(finalConflictExtraction.text, { question, game });
         const citations = cited.citations;
+        // Did this answer actually read a moderator-only tool? For a public
+        // session it cannot have — the tool is not offered — so this is an
+        // assertion about the run rather than a reading of the prose.
+        const privateEvidence = (liveEvidence.tools || []).some(
+          tool => investigate.MODERATOR_ONLY_TOOLS.has(String(tool).split(":").pop()),
+        );
         const guarded = answerGuard.enforce({
           answer: cited.text, datasets: liveVisualizations, plan,
           visualizationsEnabled: visualizations, question, privacyQuestion: contractQuestion,
           privacyGuardEnabled: !moderatorAccess,
           trustedStaticAnswer: mechanicsContractApplied,
+          privateEvidence,
         });
         let answer = visualization.ensure(guarded.answer, liveVisualizations, { required: guarded.required, question });
         // Deep answers are where models invent connective tissue between systems

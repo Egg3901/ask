@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.18.0 - 2026-09-05
+
+### Changed
+- Ask no longer reads your answer for military-sounding words. Fog of war is enforced where it can actually be enforced: a request for a live roster is refused before anything is generated, and the tool that returns a roster is never offered to a public session, so a public answer cannot contain live force data whatever its wording. The word-matching pass that sat between those two refused six mechanics answers in a single day, over a table cell that began "No", a "Power" column, and the sentence "Repair is 12 per turn in port". It is gone.
+- The one delivery check that remains is a fact about the run rather than a guess about the prose: if an answer for a public asker somehow read a moderator-only tool, it is withheld.
+
 ## 1.17.5 - 2026-09-05
 
 ### Fixed
