@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.17.0 - 2026-09-05
+
+### Added
+- Moderators and admins get their moderator access in Discord, not only on the web. The role is read from the game account linked to the Discord id, so the same person gets the same answer on both surfaces, and the fog-of-war guard steps aside for staff as it always has in the browser.
+- Answers produced with moderator access are marked as such in the response, so the bot can deliver them privately. Until it does, a staff answer in a channel is visible to that channel.
+
 ## 1.16.0 - 2026-09-05
 
 ### Changed

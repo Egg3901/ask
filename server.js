@@ -308,6 +308,12 @@ const server = http.createServer(async (req, res) => {
       try {
         internalSession = discordAsk.discordSession(body);
         req._askJson = discordAsk.normalizeDiscordAsk(body);
+        // Moderators and admins are moderators and admins in Discord too. Their
+        // role is read from the linked game account, never taken from the
+        // request, so the fog-of-war guard steps aside for the same people it
+        // steps aside for on the web.
+        const linked = await auth.playerContextForDiscordId(body.discordId || body.requester?.discordUserId);
+        internalSession = discordAsk.elevate(internalSession, linked);
         p = "/api/ask";
       } catch (error) {
         return json(res, 400, { error: String(error?.message || error) });
@@ -1532,6 +1538,10 @@ const server = http.createServer(async (req, res) => {
           providerName: models.providerDisplayFor(servedModel),
           conflicts: conflicts.map(c => ({ source: c.source, page: c.page, claim: c.claim, actual: c.actual })),
           usage: store.usage(key, ent),
+          // This answer was produced with moderator access, so it can contain
+          // private data. The Discord bot should deliver it privately; a channel
+          // post publishes what the public guard exists to withhold.
+          moderator: moderatorAccess,
           // Answered from code but the question reads like a live-state one, and
           // the player didn't ask for live data and still has some left.
           liveHint: (!useMcp && usage.mcpRemaining > 0) ? mcp.liveHintFor(plan, question) : null,

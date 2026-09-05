@@ -187,6 +187,31 @@ function invalidate(req) {
   if (token) _ctxCache.delete(token);
 }
 
+// Staff status belongs to the person, not to the surface they asked from. A
+// Discord question carries no AHD session, so the role is looked up from the
+// account linked to the Discord id. Cached: a burst of questions in one channel
+// must not become a burst of Mongo lookups.
+const _discordCtxCache = new Map();
+const DISCORD_CTX_TTL = 300000;
+
+async function playerContextForDiscordId(discordId) {
+  const id = String(discordId || "").trim();
+  if (!id) return null;
+  const hit = _discordCtxCache.get(id);
+  if (hit && hit.exp > Date.now()) return hit.value;
+  let value = null;
+  try {
+    const { ok, data } = await postJson(`${OPS_INTERNAL}/internal/player-context`,
+      { discordId: id }, { "x-ask-secret": ASK_SECRET }, 20000);
+    value = ok ? data : null;
+  } catch {}
+  // A failed lookup is cached briefly only: an ops-dash blip must not lock a
+  // moderator out of their own tools for five minutes.
+  _discordCtxCache.set(id, { value, exp: Date.now() + (value ? DISCORD_CTX_TTL : 30000) });
+  if (_discordCtxCache.size > 2000) _discordCtxCache.clear();
+  return value;
+}
+
 async function playerContextForUserId(userId) {
   if (!userId) return null;
   try {
@@ -196,4 +221,4 @@ async function playerContextForUserId(userId) {
   } catch { return null; }
 }
 
-module.exports = { loginRedirect, completeLogin, logout, resolve, entitlementFor, parseCookies, TIERS, PLAYER, STAFF, COOKIE, invalidate, playerContextForUserId };
+module.exports = { loginRedirect, completeLogin, logout, resolve, entitlementFor, parseCookies, TIERS, PLAYER, STAFF, COOKIE, invalidate, playerContextForUserId, playerContextForDiscordId };
