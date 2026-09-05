@@ -1,0 +1,55 @@
+{
+  "builtAt": "2026-09-05T06:20:17.722Z",
+  "snapshot": {
+    "path": "/root/misc/ask-remediation/eval/index-v2.snapshot.db",
+    "sha256": "196ecbfdcc044798fe63ab3c9663b92ea7872a81a138e7db22576ea12ae5096c",
+    "chunks": 21473,
+    "generation": "6aac9727-f550-47be-adaf-3891d80b7889",
+    "publishedAt": "2026-09-05T05:21:47.181Z",
+    "sources": {
+      "code": {
+        "repository": "AHDGame",
+        "revision": "107fc7b01e9da4f4b6283aa2b2cb4b5b443d710e",
+        "files": 11236,
+        "chunks": 20756
+      },
+      "docs": {
+        "repository": "ahd-docs",
+        "revision": "05cafde9805fac495dd8411bc8c1500c6dc05619",
+        "files": 130,
+        "chunks": 343
+      },
+      "wiki": {
+        "repository": "AHDGame",
+        "revision": "107fc7b01e9da4f4b6283aa2b2cb4b5b443d710e",
+        "files": 177,
+        "chunks": 374
+      }
+    }
+  },
+  "queries": 414,
+  "real": 272,
+  "synthetic": 142,
+  "realUnjudged": 0,
+  "noRelevant": 20,
+  "byKind": {
+    "live": 71,
+    "mechanic": 185,
+    "causal": 78,
+    "meta": 11,
+    "navigation": 45,
+    "symbol": 24
+  },
+  "bySplit": {
+    "real/dev": 191,
+    "real/heldout": 81,
+    "synthetic/heldout": 42,
+    "synthetic/dev": 100
+  },
+  "judgedPairs": 25826,
+  "llmCalls": {
+    "total": 322,
+    "synth": 34,
+    "adjudicate": 288
+  }
+}

@@ -1099,4 +1099,67 @@ function stats(game = null) {
   } catch { return { ready: false, chunks: 0 }; }
 }
 
+// ── evaluation hook ───────────────────────────────────────────────────────────
+// Per-retriever candidate lists for the retrieval eval harness
+// (eval/retrieval). Nothing on the answer path calls this. It reads the same
+// matrix, the same authority weights and the same FTS expressions collect()
+// uses, so "dense-only" and "BM25-only" here mean the production components
+// run in isolation, not a reimplementation. Keep the dense formula identical
+// to the sweep in collect(): dot product times weightFor().
+async function isolatedCandidates(question, { claimType = inferClaimType(question), game = null, denseK = 200, ftsLimit = 50 } = {}) {
+  const st = stateFor(game);
+  const h = open(st);
+  if (!h || !st.ready) return null;
+  const qv = await embedQuery(question);
+  const M = matrix(st);
+  if (!M || M.n === 0 || M.dims !== qv.length) return null;
+  const { data, dims, n, meta } = M;
+  const scored = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const off = i * dims;
+    let dot = 0;
+    for (let j = 0; j < dims; j++) dot += qv[j] * data[off + j];
+    scored[i] = { i, score: dot * weightFor(meta[i].path, meta[i].source, claimType, st.sourceAware) };
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const dense = scored.slice(0, denseK).map(d => ({ ...meta[d.i], score: d.score }));
+
+  // BM25-only: the expressions keywordHits() builds, ranked by bm25 within
+  // each expression, explicit symbols ahead of rare words. The score keeps the
+  // production boost*weight magnitude and adds a strictly decreasing rank term
+  // so the list has a total order finish() can consume.
+  const { ids, words } = termsIn(question);
+  const sourceProjection = st.sourceAware
+    ? "c.source_kind source,c.repository,c.revision"
+    : "'code' source,'' repository,'' revision";
+  const byKey = new Map();
+  const runFts = (expr, boost) => {
+    let rows = [];
+    try {
+      rows = h.prepare(
+        `SELECT c.path,c.ord,c.text,${sourceProjection},bm25(chunks_fts) rank FROM chunks_fts f JOIN chunks c ON c.id=f.rowid
+         WHERE chunks_fts MATCH ? ORDER BY bm25(chunks_fts) LIMIT ?`).all(expr, ftsLimit);
+    } catch { return; }
+    rows.forEach((r, idx) => {
+      const key = r.path + "#" + r.ord;
+      const score = boost * weightFor(r.path, r.source, claimType, st.sourceAware) + (ftsLimit - idx) * 1e-4;
+      const prev = byKey.get(key);
+      if (!prev || score > prev.score) byKey.set(key, { ...r, boost, score });
+    });
+  };
+  for (const id of ids) runFts(`"${id}"`, 1.5);
+  if (words.length) runFts(words.map(w => `"${w}"`).join(" OR "), 0.92);
+  const bm25 = [...byKey.values()].sort((a, b) => b.score - a.score);
+
+  const hybrid = await collect(question, claimType, st);
+  return { claimType, dense, bm25, hybrid: hybrid || [] };
+}
+
+// The harness reads the production components in isolation through the same
+// debug surface fusion v2 exposes; distinct keys so neither shape shadows the
+// other. Nothing on the answer path calls these.
+__debug.isolated = isolatedCandidates;
+__debug.finish = (scored, { topK = TOP_K, maxChars = MAX_CHARS, claimType = "general", game = null } = {}) =>
+  finish(scored, topK, claimType, maxChars, stateFor(game));
+
 module.exports = { inferClaimType, search, searchMulti, searchExact, readIndexedFile, mergeEvidence, stats, embedQuery, embedBatch, embedEach, vectorsFor, hasPath, __debug };

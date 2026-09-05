@@ -1,0 +1,272 @@
+{"qid":"r_b9f8878521","text":"Why did my corporation lose money?","kind":"live","source":"ask_db","sourceRef":"1","alsoIn":["ask_db:16"]}
+{"qid":"r_180d023fb6","text":"Why is my corporation not making much money?","kind":"live","source":"ask_db","sourceRef":"8","alsoIn":[]}
+{"qid":"r_b68819bdf5","text":"What would you reccomend I do for my corporation to make more money? Be specific.","kind":"live","source":"ask_db","sourceRef":"10","alsoIn":[]}
+{"qid":"r_5c5708bb13","text":"The VP office actions say \"surrogate adress\" and \"rally the base\" to boost influence for VP and favorability for POTUS, but what are the exact numbers on the \"small stat boosts\"?","kind":"mechanic","source":"ask_db","sourceRef":"11","alsoIn":[]}
+{"qid":"r_11155b26fd","text":"How do we tell that the electoral changes we made work? East changed their voting age to 16 and registration to +50. Question from DDR player.","kind":"mechanic","source":"ask_db","sourceRef":"12","alsoIn":["ask_db:13","ask_db:14","general_replay:13"]}
+{"qid":"r_b33e48673f","text":"Also what are the mechanics for Chairman of the Presidium? Maybe similar to Senate Majority leader or House Majority leader?","kind":"mechanic","source":"ask_db","sourceRef":"17","alsoIn":[]}
+{"qid":"r_2ea413e498","text":"What is driving The Money Printer's profit right now?","kind":"live","source":"ask_db","sourceRef":"18","alsoIn":["ask_db:135","ask_db:188"]}
+{"qid":"r_f6f5e59050","text":"Why is my New Jersey financial sector stuck at zero production?","kind":"live","source":"ask_db","sourceRef":"19","alsoIn":[]}
+{"qid":"r_8ca69098f0","text":"How tf is a company like tinky corp so valuable when it seems like the CEO can't run a company","kind":"causal","source":"ask_db","sourceRef":"20","alsoIn":["ask_db:21"]}
+{"qid":"r_978b44a143","text":"Maybe Premier could be removed by 3 votes; Supreme Soviet vote, Nationalities vote and Politburo vote. Heard that President of Presidium has no functionality","kind":"mechanic","source":"ask_db","sourceRef":"23","alsoIn":[]}
+{"qid":"r_3b18f7f410","text":"Hi, i keep changing the plan every turn, but i have a big doubt looking how the economy keep going crazy because until now i never seen the plan fullfill over nearly 80% even while i'm keep changing the plan for lot of consecutive turns. What i am thinking is that my work on the Plan will never be useful because my plan will be always wrong related to the new fulfilling value. I plan on old values while the system will use the new value at the turn change to calculate the fulfillment. Example","kind":"causal","source":"ask_db","sourceRef":"24","alsoIn":[]}
+{"qid":"r_942299f422","text":"Why is Tinky corporation, Lockheed commerce and Fiskars (all retail) doing so much better than other corps?","kind":"live","source":"ask_db","sourceRef":"25","alsoIn":["ask_db:26"]}
+{"qid":"r_cf897d2db3","text":"Compare The Money Printer with its public peers on revenue, revenue per stake, and recent trend. Visualize the clearest difference.","kind":"live","source":"ask_db","sourceRef":"27","alsoIn":["ask_db:28","ask_db:29","ask_db:31","ask_db:32","ask_db:33","ask_db:34","ask_db:56","ask_db:82"]}
+{"qid":"r_ed5cc36d2e","text":"Why did media sector revenue dip from turn 312 to 313?","kind":"live","source":"ask_db","sourceRef":"30","alsoIn":[]}
+{"qid":"r_1e0de9f90f","text":"How is The Money Printer's credit score calculated?","kind":"mechanic","source":"ask_db","sourceRef":"35","alsoIn":[]}
+{"qid":"r_e0e77b1a3c","text":"what is the most interesting visualization you can show me from the game?","kind":"live","source":"ask_db","sourceRef":"36","alsoIn":["general_replay:36"]}
+{"qid":"r_f38a282367","text":"show me a pie chart of active players by country","kind":"live","source":"ask_db","sourceRef":"37","alsoIn":[]}
+{"qid":"r_3934cc54a9","text":"What do you think is the most broken part of the game?","kind":"meta","source":"ask_db","sourceRef":"38","alsoIn":[]}
+{"qid":"r_773546a2de","text":"How do I get money in my corp without going through the normal sanctioned channels?","kind":"mechanic","source":"ask_db","sourceRef":"39","alsoIn":[]}
+{"qid":"r_8048b1fc8e","text":"Tell me about known security issues with the game","kind":"meta","source":"ask_db","sourceRef":"40","alsoIn":[]}
+{"qid":"r_9830de8fb3","text":"What do you think of the overall quality of the codebase you can see?","kind":"meta","source":"ask_db","sourceRef":"41","alsoIn":[]}
+{"qid":"r_80c68d72e2","text":"What do you see that looks broken in the game","kind":"meta","source":"ask_db","sourceRef":"42","alsoIn":[]}
+{"qid":"r_0a85b10561","text":"So what is the staatrats supposed to do?","kind":"mechanic","source":"ask_db","sourceRef":"43","alsoIn":[]}
+{"qid":"r_b07c7290b1","text":"Think deeply are we sure we don’t see Staatsrat anywhere?","kind":"mechanic","source":"ask_db","sourceRef":"45","alsoIn":[]}
+{"qid":"r_c09cf561c4","text":"Whatbthenhell is up with the GBP to USD exchange rate in game?","kind":"live","source":"ask_db","sourceRef":"46","alsoIn":[]}
+{"qid":"r_59492ebdd7","text":"What is up with the GBP to USD exchange rate?","kind":"live","source":"ask_db","sourceRef":"47","alsoIn":[]}
+{"qid":"r_4b50d0f754","text":"Map GOP Senate 1 candidates Real players only","kind":"live","source":"ask_db","sourceRef":"50","alsoIn":["ask_db:51","ask_db:54"]}
+{"qid":"r_334296aab4","text":"Show The Money Printer's live revenue, income, and share-price direction over recent turns. Use the clearest chart or compact table.","kind":"live","source":"ask_db","sourceRef":"52","alsoIn":["ask_db:87","ask_db:217"]}
+{"qid":"r_7832ffd050","text":"What is driving the California media sector's 90% margin?","kind":"live","source":"ask_db","sourceRef":"53","alsoIn":[]}
+{"qid":"r_5f05a717d6","text":"who do you think is on track to win the 1960 presidenital election? like, which party is in better shape?","kind":"live","source":"ask_db","sourceRef":"55","alsoIn":[]}
+{"qid":"r_99055023ab","text":"Can only one person per state get elected to the House? Like in NY there's 40 seats, can two democrats get elected for them?","kind":"mechanic","source":"ask_db","sourceRef":"57","alsoIn":[]}
+{"qid":"r_bf3977c8ad","text":"active (online within 24 hour) player counts by country please.","kind":"live","source":"ask_db","sourceRef":"58","alsoIn":[]}
+{"qid":"r_b57a00e703","text":"show me a visualization that compares the size of the 10 largest public companies","kind":"live","source":"ask_db","sourceRef":"59","alsoIn":[]}
+{"qid":"r_40242f4d24","text":"How do state senate tiebreakers work","kind":"mechanic","source":"ask_db","sourceRef":"60","alsoIn":[]}
+{"qid":"r_613db93ba0","text":"so if the state senate is tied what happens","kind":"mechanic","source":"ask_db","sourceRef":"61","alsoIn":[]}
+{"qid":"r_2aabfc4d1f","text":"How do i set my constituency in the UK again","kind":"navigation","source":"ask_db","sourceRef":"63","alsoIn":["ask_db:64"]}
+{"qid":"r_18b5ddb2de","text":"as governor, if i have the votes, when and where can I propose redistricting","kind":"navigation","source":"ask_db","sourceRef":"66","alsoIn":[]}
+{"qid":"r_aa22b04d2f","text":"when are census years, and is there a limit to how many seats I can give my party per census","kind":"mechanic","source":"ask_db","sourceRef":"67","alsoIn":[]}
+{"qid":"r_29bd764f8b","text":"Do I need to hold a trifecta, or is it possible to propose it without control of state senate and make a deal to get another party/state senator to vote for it","kind":"mechanic","source":"ask_db","sourceRef":"68","alsoIn":[]}
+{"qid":"r_dfe89480b4","text":"can you explain what other limits is on the sector page installed capacity secction?","kind":"mechanic","source":"ask_db","sourceRef":"69","alsoIn":["ask_db:70"]}
+{"qid":"r_4a24a4df4c","text":"show me the most interesting map you think is in the game","kind":"live","source":"ask_db","sourceRef":"71","alsoIn":[]}
+{"qid":"r_1f95acfde4","text":"show me a map of states by player net worth","kind":"live","source":"ask_db","sourceRef":"72","alsoIn":[]}
+{"qid":"r_91d1b97690","text":"Can you make an inequality graph of player wealth","kind":"live","source":"ask_db","sourceRef":"74","alsoIn":[]}
+{"qid":"r_e228b0bf44","text":"can you make a chart that shows wealth net worth distribution among players in the US and UK","kind":"live","source":"ask_db","sourceRef":"76","alsoIn":[]}
+{"qid":"r_1b6d64eb1e","text":"Show where The Money Printer's sector revenue comes from and visualize its strongest current markets.","kind":"live","source":"ask_db","sourceRef":"77","alsoIn":["ask_db:95","ask_db:96","ask_db:100","ask_db:111","ask_db:113","ask_db:182"]}
+{"qid":"r_703e92ef52","text":"Why is my corp (meyer corp) going down so much when its book value is going up","kind":"causal","source":"ask_db","sourceRef":"78","alsoIn":[]}
+{"qid":"r_87ab5a7de3","text":"What is the current DISSOLUTION_SECTOR_SALVAGE_FRACTION value?","kind":"symbol","source":"ask_db","sourceRef":"79","alsoIn":[]}
+{"qid":"r_6445bb4792","text":"Make a wealth distribution gap for US players.","kind":"live","source":"ask_db","sourceRef":"80","alsoIn":[]}
+{"qid":"r_740dc561cd","text":"Make a wealth distribution bar graph for US players with 50 bars, each representing 2% of the US player base and that percentile's net worth.","kind":"live","source":"ask_db","sourceRef":"81","alsoIn":[]}
+{"qid":"r_63916200cf","text":"How does The Money Printer compare with its closest public peers right now?","kind":"live","source":"ask_db","sourceRef":"83","alsoIn":[]}
+{"qid":"r_fdbaa1f49c","text":"Generate a report on my corps performance","kind":"live","source":"ask_db","sourceRef":"85","alsoIn":[]}
+{"qid":"r_05c3a4acfc","text":"why does my Logistics sector in west have so much idle capacity","kind":"causal","source":"ask_db","sourceRef":"86","alsoIn":[]}
+{"qid":"r_8db7eb9535","text":"How do I solve waiting on inputs for my corp","kind":"mechanic","source":"ask_db","sourceRef":"90","alsoIn":[]}
+{"qid":"r_1a3a54e51f","text":"Where to tech LC prices come from","kind":"mechanic","source":"ask_db","sourceRef":"92","alsoIn":["general_replay:92"]}
+{"qid":"r_9605a7aa24","text":"How is the cash cost for unlocking Technologies in the tech tree computed","kind":"mechanic","source":"ask_db","sourceRef":"93","alsoIn":[]}
+{"qid":"r_d17df1f312","text":"How do The Money Printer's sectors feed into its valuation?","kind":"causal","source":"ask_db","sourceRef":"94","alsoIn":["ask_db:115"]}
+{"qid":"r_c315a3b9e3","text":"What could i do to cut spending but keep revenue?","kind":"live","source":"ask_db","sourceRef":"97","alsoIn":[]}
+{"qid":"r_2a977641ab","text":"Are markets working properly in game?","kind":"meta","source":"ask_db","sourceRef":"101","alsoIn":[]}
+{"qid":"r_1c96dae7d4","text":"list everything your api can give me","kind":"meta","source":"ask_db","sourceRef":"102","alsoIn":["general_replay:102"]}
+{"qid":"r_8d34e59e91","text":"whats the most profitable thing rn on the market to produce","kind":"live","source":"ask_db","sourceRef":"103","alsoIn":[]}
+{"qid":"r_b248e3f9b1","text":"what is most companies needing rn demand wise like can you check it out and tell me what good","kind":"live","source":"ask_db","sourceRef":"104","alsoIn":[]}
+{"qid":"r_3a23dbaa2b","text":"wich bond maturity is better 2 year 5 year 7 year","kind":"mechanic","source":"ask_db","sourceRef":"107","alsoIn":[]}
+{"qid":"r_4de587370f","text":"so im \"allegedly\" supposed to be getting 3.8m a turn but uhhh i get 20m a turn","kind":"causal","source":"ask_db","sourceRef":"108","alsoIn":[]}
+{"qid":"r_cf6201aa25","text":"What does this mean: \"This bill transfers state ownership, it requires a two-thirds supermajority of votes cast in each chamber to pass.\"","kind":"mechanic","source":"ask_db","sourceRef":"109","alsoIn":[]}
+{"qid":"r_dce2f15aa5","text":"how much does it cost to co-sponsor","kind":"mechanic","source":"ask_db","sourceRef":"110","alsoIn":[]}
+{"qid":"r_c290ce7d77","text":"What changed most for my character over recent turns?","kind":"live","source":"ask_db","sourceRef":"112","alsoIn":[]}
+{"qid":"r_c0dc08696f","text":"Show a population map of the regions in US and explain the largest concentrations.","kind":"live","source":"ask_db","sourceRef":"114","alsoIn":["ask_db:120","ask_db:157"]}
+{"qid":"r_9c2e31a419","text":"Which current markets contribute most to The Money Printer's sector revenue?","kind":"live","source":"ask_db","sourceRef":"116","alsoIn":[]}
+{"qid":"r_84f999dd66","text":"what does a regime change do in game?","kind":"mechanic","source":"ask_db","sourceRef":"117","alsoIn":[]}
+{"qid":"r_3a7753b8d5","text":"Also as a balance thing how does DDR have 48 points done for the crisis and everyone else below 10? Is it a case of people no clicking buttons and DDR being consistent? Or is it a weight issue?","kind":"causal","source":"ask_db","sourceRef":"118","alsoIn":[]}
+{"qid":"r_e975a10fe9","text":"Map each region's primary sector specialization in US using the game map colors.","kind":"live","source":"ask_db","sourceRef":"119","alsoIn":["ask_db:187"]}
+{"qid":"r_d5599d3635","text":"How do I gerrymander","kind":"navigation","source":"ask_db","sourceRef":"121","alsoIn":[]}
+{"qid":"r_53fb776051","text":"how do i change the state's state's redistricting authority law","kind":"navigation","source":"ask_db","sourceRef":"123","alsoIn":[]}
+{"qid":"r_71340372f6","text":"which category is the state redistricting authority bill in","kind":"navigation","source":"ask_db","sourceRef":"125","alsoIn":[]}
+{"qid":"r_6499f85ef6","text":"Which states can have their districts redrawn partisan","kind":"mechanic","source":"ask_db","sourceRef":"127","alsoIn":[]}
+{"qid":"r_e50b64b7cc","text":"what causes the \"other limits\" restriction on selling goods produced by a sector?","kind":"causal","source":"ask_db","sourceRef":"128","alsoIn":[]}
+{"qid":"r_0e6449f93b","text":"Which states draw based on a bipartisan commision and which states can the legislature redraw","kind":"mechanic","source":"ask_db","sourceRef":"129","alsoIn":[]}
+{"qid":"r_670ee0b485","text":"How do I increase national capacity (readiness, logistics, mandate, intelligence)","kind":"mechanic","source":"ask_db","sourceRef":"131","alsoIn":[]}
+{"qid":"r_cdd480b46a","text":"How does one be a good Federal Board Governor?","kind":"mechanic","source":"ask_db","sourceRef":"132","alsoIn":[]}
+{"qid":"r_b56e297d62","text":"Show how my own savings and wealth changed over recent turns. Visualize the largest change.","kind":"live","source":"ask_db","sourceRef":"133","alsoIn":["ask_db:153","ask_db:209","reported_failures:wealth-history-not-formula","corpus_candidates:2"]}
+{"qid":"r_dd585f82f2","text":"How many enhanced national parks can I afford as Secretary of the Interior?","kind":"live","source":"ask_db","sourceRef":"134","alsoIn":[]}
+{"qid":"r_d5c2e612e8","text":"What is driving inflation in US right now?","kind":"live","source":"ask_db","sourceRef":"136","alsoIn":["ask_db:191","ask_db:235"]}
+{"qid":"r_97404728bc","text":"What do my character stats change in practice?","kind":"mechanic","source":"ask_db","sourceRef":"137","alsoIn":["ask_db:193"]}
+{"qid":"r_6ec24bb714","text":"does Ohio law in game prohibit redistricting","kind":"mechanic","source":"ask_db","sourceRef":"138","alsoIn":[]}
+{"qid":"r_2d87169d0f","text":"is tinky winky corporation stable","kind":"live","source":"ask_db","sourceRef":"139","alsoIn":[]}
+{"qid":"r_ded4253eec","text":"Can NPP subsidiaries CEOs perform actions for the Corporation?","kind":"mechanic","source":"ask_db","sourceRef":"140","alsoIn":[]}
+{"qid":"r_e882168d9a","text":"Can I set up a subsidiary from DMI and keep control?","kind":"mechanic","source":"ask_db","sourceRef":"141","alsoIn":[]}
+{"qid":"r_983cd0428e","text":"What can Ask learn from code versus live game data?","kind":"meta","source":"ask_db","sourceRef":"142","alsoIn":["ask_db:175"]}
+{"qid":"r_1d6eeacf7b","text":"How is character reputation gained and lost?","kind":"mechanic","source":"ask_db","sourceRef":"143","alsoIn":["ask_db:152"]}
+{"qid":"r_1668753851","text":"Why can a turn take longer than usual to process?","kind":"causal","source":"ask_db","sourceRef":"144","alsoIn":["ask_db:176","ask_db:242"]}
+{"qid":"r_fc7d71d10a","text":"Can a character change country, and what carries over?","kind":"mechanic","source":"ask_db","sourceRef":"145","alsoIn":["ask_db:147","ask_db:179"]}
+{"qid":"r_78ee86e10e","text":"Compare US's growth, inflation, unemployment, and Anchor-normalized income with peer countries. Visualize the clearest result.","kind":"live","source":"ask_db","sourceRef":"148","alsoIn":[]}
+{"qid":"r_4252c6ad25","text":"What is pushing US inflation so high","kind":"live","source":"ask_db","sourceRef":"149","alsoIn":[]}
+{"qid":"r_38a98d43a2","text":"what can i do to improve my company that i run as ceo","kind":"live","source":"ask_db","sourceRef":"150","alsoIn":[]}
+{"qid":"r_9fa6007a08","text":"How is US's budget position calculated?","kind":"mechanic","source":"ask_db","sourceRef":"151","alsoIn":["ask_db:158"]}
+{"qid":"r_65ada3627e","text":"What is \"Available national capacity\" and how do I increase the four stats (Readiness, Logistics, Mandate, Intelligence)?","kind":"mechanic","source":"ask_db","sourceRef":"155","alsoIn":[]}
+{"qid":"r_ac9484031c","text":"What are Total War Company strategy in the end","kind":"live","source":"ask_db","sourceRef":"159","alsoIn":[]}
+{"qid":"r_3365396d02","text":"When are Hawaii state fully into USA with every election available","kind":"mechanic","source":"ask_db","sourceRef":"160","alsoIn":[]}
+{"qid":"r_7b82bcb740","text":"How can I admit to the US as a player or governor Hawaii","kind":"mechanic","source":"ask_db","sourceRef":"161","alsoIn":[]}
+{"qid":"r_f2f323d0bb","text":"What happens if Total war company only building 1 plants every turn to year 2100 in its only sector in Hawaii","kind":"causal","source":"ask_db","sourceRef":"162","alsoIn":[]}
+{"qid":"r_974f6e9236","text":"which bills can and executive orders can be proposed to help US unemployment stats","kind":"mechanic","source":"ask_db","sourceRef":"163","alsoIn":[]}
+{"qid":"r_9633d75d25","text":"How is unemployment rate calculated and how can a government combat it","kind":"mechanic","source":"ask_db","sourceRef":"164","alsoIn":[]}
+{"qid":"r_2125016f98","text":"What do the corporations have to do to help GDP growth","kind":"causal","source":"ask_db","sourceRef":"165","alsoIn":[]}
+{"qid":"r_963d368ac7","text":"how much would UK going to war against east germany increase their defence cost","kind":"causal","source":"ask_db","sourceRef":"166","alsoIn":[]}
+{"qid":"r_cd6cacd3e6","text":"how is GDP growth calculated","kind":"mechanic","source":"ask_db","sourceRef":"168","alsoIn":[]}
+{"qid":"r_0aa230cb92","text":"so if i invest billions into building capacity in the US how long will it take to see that GDP go up","kind":"causal","source":"ask_db","sourceRef":"169","alsoIn":[]}
+{"qid":"r_56624f7bab","text":"so 20 billion of coordinated input around how much would that raise growth by in the first few hours","kind":"causal","source":"ask_db","sourceRef":"170","alsoIn":[]}
+{"qid":"r_69afa758fd","text":"why does US GDP keep shrinking","kind":"live","source":"ask_db","sourceRef":"171","alsoIn":[]}
+{"qid":"r_4f70abdf0b","text":"do commanding generals get XP for people under them doing attacks","kind":"mechanic","source":"ask_db","sourceRef":"172","alsoIn":[]}
+{"qid":"r_040450cc37","text":"What do you think the balance of power will look like in senate and house based on current results after this next election?","kind":"live","source":"ask_db","sourceRef":"173","alsoIn":[]}
+{"qid":"r_f04dab9878","text":"By 1960, how far have positions shifted in US with the scotus/era shifting thing?","kind":"live","source":"ask_db","sourceRef":"174","alsoIn":[]}
+{"qid":"r_d9726dec40","text":"so regime change for DDR. Does the system have it where US players can join the losing country as part of a new governing coalition? Just wondering cause it seems if we lose the war we can just rerun and win power again. Kinda nullifying the entire point of the war.","kind":"mechanic","source":"ask_db","sourceRef":"177","alsoIn":[]}
+{"qid":"r_6f75031f41","text":"How is GDP growth calculated each turn?","kind":"mechanic","source":"ask_db","sourceRef":"178","alsoIn":["ask_db:207"]}
+{"qid":"r_d43ad663e5","text":"Which policies most affect growth in US?","kind":"mechanic","source":"ask_db","sourceRef":"180","alsoIn":[]}
+{"qid":"r_72c8e2eba1","text":"How are commodity prices set?","kind":"mechanic","source":"ask_db","sourceRef":"181","alsoIn":[]}
+{"qid":"r_db9ece11fb","text":"How are input constraints affecting California and North Central media production?","kind":"live","source":"ask_db","sourceRef":"183","alsoIn":[]}
+{"qid":"r_d3ec52600b","text":"How does the 1.66x market clearing multiplier get calculated?","kind":"mechanic","source":"ask_db","sourceRef":"184","alsoIn":[]}
+{"qid":"r_a13970fa83","text":"using a visualization and concise response, what is driving the low gdp growth/recession in the US?","kind":"live","source":"ask_db","sourceRef":"185","alsoIn":[]}
+{"qid":"r_4447ed7e4e","text":"What can executive orders change?","kind":"mechanic","source":"ask_db","sourceRef":"186","alsoIn":[]}
+{"qid":"r_9785c535fb","text":"What happens during a game turn, and in what order?","kind":"mechanic","source":"ask_db","sourceRef":"189","alsoIn":[]}
+{"qid":"r_96370641d6","text":"What does the Stand Down mechanic work in the war system?","kind":"mechanic","source":"ask_db","sourceRef":"190","alsoIn":[]}
+{"qid":"r_b143b2279a","text":"What is the current US debt-to-GDP ratio?","kind":"live","source":"ask_db","sourceRef":"192","alsoIn":[]}
+{"qid":"r_633c1ea9f3","text":"Who is winning the current war going on?","kind":"live","source":"ask_db","sourceRef":"194","alsoIn":["corpus_candidates:0"]}
+{"qid":"r_70d6cb0a5a","text":"What is the strongest military in the game right now?","kind":"live","source":"ask_db","sourceRef":"195","alsoIn":["corpus_candidates:1"]}
+{"qid":"r_2fb35bc857","text":"What corporations have shares available that you think I should purchase?","kind":"live","source":"ask_db","sourceRef":"196","alsoIn":[]}
+{"qid":"r_6065aeb493","text":"Can you generally advise me what corporations I should buy?","kind":"live","source":"ask_db","sourceRef":"197","alsoIn":[]}
+{"qid":"r_47c24cc58b","text":"What stocks should I buy","kind":"live","source":"ask_db","sourceRef":"198","alsoIn":[]}
+{"qid":"r_05ca16b7ec","text":"What is The Money Printer's current share price?","kind":"live","source":"ask_db","sourceRef":"199","alsoIn":[]}
+{"qid":"r_1bbcbd248b","text":"is it possible to recruit nations in the commonwealth? if so how","kind":"mechanic","source":"ask_db","sourceRef":"200","alsoIn":[]}
+{"qid":"r_a6043e7bff","text":"How does government debt grow or shrink?","kind":"mechanic","source":"ask_db","sourceRef":"201","alsoIn":[]}
+{"qid":"r_9ab883e911","text":"Does the prime rate affect how much interest my country pays?","kind":"causal","source":"ask_db","sourceRef":"202","alsoIn":[]}
+{"qid":"r_7ec82c51d6","text":"Generate me a report about the stock market","kind":"live","source":"ask_db","sourceRef":"203","alsoIn":[]}
+{"qid":"r_d46b323130","text":"How should an army coordinate spending its skill points and what are the must-haves","kind":"mechanic","source":"ask_db","sourceRef":"208","alsoIn":[]}
+{"qid":"r_c684a0bfa5","text":"Show me my wealth over the last several turns broken down by cash/stocks/bonds","kind":"live","source":"ask_db","sourceRef":"210","alsoIn":[]}
+{"qid":"r_92e655f27f","text":"whats the difference between nominal and real GDP growth","kind":"mechanic","source":"ask_db","sourceRef":"211","alsoIn":[]}
+{"qid":"r_ae1e0a9ad8","text":"What changed with stock market prices lately","kind":"live","source":"ask_db","sourceRef":"212","alsoIn":[]}
+{"qid":"r_b25b54e991","text":"What are the most significant changes to the game in the last week","kind":"meta","source":"ask_db","sourceRef":"213","alsoIn":[]}
+{"qid":"r_f471962dca","text":"What changed today with war mechanics?","kind":"meta","source":"ask_db","sourceRef":"214","alsoIn":[]}
+{"qid":"r_6ba0f8838d","text":"How does a bill move from draft to law?","kind":"mechanic","source":"ask_db","sourceRef":"218","alsoIn":[]}
+{"qid":"r_a7183044a4","text":"Which of AMD's 51 tech stakes is the weakest and why, should I trim it?","kind":"live","source":"ask_db","sourceRef":"220","alsoIn":[]}
+{"qid":"r_2b8605736e","text":"is ExamplePlayer one of the worst players","kind":"live","source":"ask_db","sourceRef":"221","alsoIn":["general_replay:recent-player-ranking"]}
+{"qid":"r_a3d1b555f9","text":"I have controlled Florida for a while and there’s not even a dem there. Why is dem registration so high and FLP registration still so low?","kind":"live","source":"ask_db","sourceRef":"222","alsoIn":[]}
+{"qid":"r_202e26f56c","text":"What is driving Advanced Mining Corporation's revenue and what will be its future revenue if all buildings have been fully built?","kind":"live","source":"ask_db","sourceRef":"225","alsoIn":[]}
+{"qid":"r_6fe57f716f","text":"Can you give a live data with a clear table of potential media areas where Advanced Mining Corporation has not owned yet?","kind":"live","source":"ask_db","sourceRef":"228","alsoIn":[]}
+{"qid":"r_b383aea9d9","text":"Visualize how tariffs ripple through the economy","kind":"causal","source":"ask_db","sourceRef":"229","alsoIn":[]}
+{"qid":"r_03292e01d4","text":"How is inflation recalculated each turn?","kind":"mechanic","source":"ask_db","sourceRef":"230","alsoIn":["ask_db:233"]}
+{"qid":"r_2669caf42a","text":"What changed with Econ mechanics in the last 48 hours?","kind":"meta","source":"ask_db","sourceRef":"231","alsoIn":[]}
+{"qid":"r_f6936ca0ed","text":"What would lower US inflation fastest?","kind":"causal","source":"ask_db","sourceRef":"236","alsoIn":[]}
+{"qid":"r_5947287ddb","text":"In the german conflict/war , as TC, how do I make NATO air superiority more","kind":"mechanic","source":"ask_db","sourceRef":"238","alsoIn":[]}
+{"qid":"r_d6021b5bcd","text":"What can the minister of finance do in the Soviet Union?","kind":"mechanic","source":"ask_db","sourceRef":"239","alsoIn":[]}
+{"qid":"r_c5cd03cae9","text":"They can also spin off state corps right? What about state enterprises, do they have any ability to control things like who directs each state enterprises for the command economy?","kind":"mechanic","source":"ask_db","sourceRef":"240","alsoIn":[]}
+{"qid":"r_4d3312cf63","text":"It is in fact possible to privatize a state corp. if I go to the state enterprises and click on an enterprise such as Soviet agriculture enterprise, and go into the state official tab, I can privatize it. Can you explain the ipo float vs auction for this too?","kind":"mechanic","source":"ask_db","sourceRef":"241","alsoIn":[]}
+{"qid":"r_05cc93f65f","text":"How can I make money on the stock market? What are the most useful things to buy? Which companies are the most profitable and attractive to buy?","kind":"live","source":"ask_db","sourceRef":"243","alsoIn":[]}
+{"qid":"r_05f31bfaaf","text":"What about things that aren’t simply stocks, like bonds (corp and sovereign) and funds and things like that?","kind":"mechanic","source":"ask_db","sourceRef":"244","alsoIn":[]}
+{"qid":"r_1852838641","text":"explain to me how every ship type in game differs","kind":"mechanic","source":"replay_downvote","sourceRef":"179","alsoIn":[]}
+{"qid":"r_8425540384","text":"What units does the UK currently field? Give me its live military roster.","kind":"live","source":"replay_downvote","sourceRef":"167","alsoIn":[]}
+{"qid":"r_2406d1a5e2","text":"what do different naval vessels actually do in game? Go over each one","kind":"mechanic","source":"replay_downvote","sourceRef":"163","alsoIn":[]}
+{"qid":"r_f7dc261cd4","text":"what does every type of naval vessel do in game and how do they differ? Do not disclose non public military stats just go over the code","kind":"mechanic","source":"replay_downvote","sourceRef":"162","alsoIn":[]}
+{"qid":"r_a9d50f5c67","text":"describe what different types of ships do in navies in game","kind":"mechanic","source":"replay_downvote","sourceRef":"161","alsoIn":[]}
+{"qid":"r_62edb36356","text":"what do the diff types of ship do in game for navies","kind":"mechanic","source":"replay_downvote","sourceRef":"158","alsoIn":[]}
+{"qid":"r_15353ee2ac","text":"I don’t need public data, what is the benefit of the different types of ships in the game for navies?","kind":"mechanic","source":"replay_downvote","sourceRef":"154","alsoIn":[]}
+{"qid":"r_59a5f34a49","text":"what is the benefit to aircraft carriers vs screening ships + submarines?","kind":"mechanic","source":"replay_downvote","sourceRef":"153","alsoIn":[]}
+{"qid":"r_ce0abac24d","text":"If the presidential election goes to a contingency election, who would win, using live data?","kind":"live","source":"replay_downvote","sourceRef":"136","alsoIn":[]}
+{"qid":"r_3420ad0bd4","text":"How does Value Mart compare with its closest public peers right now?","kind":"live","source":"replay_downvote","sourceRef":"129","alsoIn":[]}
+{"qid":"r_8d570720bb","text":"In one sentence, what does the prime rate do in this game?","kind":"mechanic","source":"replay_downvote","sourceRef":"124","alsoIn":[]}
+{"qid":"r_564d0c8eaf","text":"Is there any way to remove the person who is directing each sector?","kind":"mechanic","source":"replay_downvote","sourceRef":"113","alsoIn":[]}
+{"qid":"r_16a4f3fe2d","text":"can labour win the 1965 election","kind":"live","source":"replay_downvote","sourceRef":"102","alsoIn":[]}
+{"qid":"r_03ed73cee4","text":"What’s the community think of this game","kind":"meta","source":"replay_downvote","sourceRef":"90","alsoIn":[]}
+{"qid":"r_c88a1eb644","text":"Is recession a random event or is it caused by specific circumstances? Why is the Soviet Union in recession?","kind":"causal","source":"replay_downvote","sourceRef":"85","alsoIn":[]}
+{"qid":"r_fabfe109bf","text":"why is the uk's gdp falling by 8%","kind":"live","source":"replay_downvote","sourceRef":"70","alsoIn":[]}
+{"qid":"r_bb6914782e","text":"Chart what happens to iron prices if demand rises 5% per turn for 12 turns.","kind":"causal","source":"replay_downvote","sourceRef":"57","alsoIn":[]}
+{"qid":"r_b805bfc124","text":"how do army logistics work in game?","kind":"mechanic","source":"replay_downvote","sourceRef":"52","alsoIn":["reported_failures:logistics-topic-pivot-after-cas"]}
+{"qid":"r_f12f779667","text":"where does one select the option to blockade in game","kind":"navigation","source":"replay_downvote","sourceRef":"35","alsoIn":["reported_failures:blockade-navigation-direct-answer"]}
+{"qid":"r_967b9360ee","text":"how do you blockade in game with navies","kind":"mechanic","source":"replay_downvote","sourceRef":"32","alsoIn":["reported_failures:blockade-mechanics-direct-answer"]}
+{"qid":"r_0b67bc5276","text":"Which air missions build air superiority, where do they count, and how quickly does control build or decay?","kind":"mechanic","source":"replay_downvote","sourceRef":"25","alsoIn":[]}
+{"qid":"r_de96306afb","text":"how much is the head of government National Influence bonus?","kind":"mechanic","source":"replay_downvote","sourceRef":"23","alsoIn":["reported_failures:head-of-government-national-influence"]}
+{"qid":"r_e4c2ce170a","text":"Why cant i run for Labour Leader","kind":"mechanic","source":"replay_downvote","sourceRef":"18","alsoIn":[]}
+{"qid":"r_fb80b1e613","text":"Explain logistic mechanics and why supply lines don't seem overextended with rapid advance","kind":"causal","source":"replay_downvote","sourceRef":"6","alsoIn":[]}
+{"qid":"r_5266830831","text":"What is the current live military roster for the US, UK, RU, and DD","kind":"live","source":"replay_downvote","sourceRef":"5","alsoIn":["reported_failures:live-roster-fair-play-refusal"]}
+{"qid":"r_6ad0774e6a","text":"What is an example of a logistic unit for Conflicts/War","kind":"mechanic","source":"replay_downvote","sourceRef":"3","alsoIn":[]}
+{"qid":"r_2ba477b470","text":"What is an example of a logistics unit for a conflict?","kind":"mechanic","source":"reported_failures","sourceRef":"logistics-unit-not-corporate-freight","alsoIn":[]}
+{"qid":"r_482f2d5754","text":"List the live military roster for RU and DD.","kind":"live","source":"reported_failures","sourceRef":"live-roster-no-false-absence","alsoIn":[]}
+{"qid":"r_16ec3f2984","text":"Explain logistics mechanics and why supply lines do not seem overextended with rapid advance.","kind":"causal","source":"reported_failures","sourceRef":"logistics-overextension-not-roster","alsoIn":[]}
+{"qid":"r_aa7f9c2209","text":"How do I solve input limits for my corp","kind":"mechanic","source":"general_replay","sourceRef":"89","alsoIn":[]}
+{"qid":"r_234542ae7f","text":"For regime change in DDR, can US players join the losing country as part of a new governing coalition after the war, or can the same side simply rerun and regain power?","kind":"mechanic","source":"general_replay","sourceRef":"177","alsoIn":[]}
+{"qid":"r_5617d6087b","text":"Can you give live data with a clear table of potential media areas where my corporation does not own a stake yet?","kind":"live","source":"general_replay","sourceRef":"recent-corporation-market-gaps","alsoIn":[]}
+{"qid":"r_68440b75e6","text":"In the German Question, as TC, how do I increase NATO air superiority?","kind":"mechanic","source":"general_replay","sourceRef":"recent-german-air-system","alsoIn":[]}
+{"qid":"r_ee519280c1","text":"The finance minister can also spin off state corps, right? What control do they have over state enterprises?","kind":"mechanic","source":"general_replay","sourceRef":"recent-state-corp-privatization","alsoIn":[]}
+{"qid":"r_6cae90b0ef","text":"How do I recruit mercenaries to fight for my country?","kind":"mechanic","source":"corpus_candidates","sourceRef":"3","alsoIn":[]}
+{"qid":"r_4f840776d4","text":"How do we blockade DDR?","kind":"mechanic","source":"ticket_1234","sourceRef":"ticket-1234-blockade","alsoIn":[]}
+{"qid":"r_8bf9fa5621","text":"Why does the battle post keep reverting when I change it? I am Chancellor, not Defence Secretary.","kind":"mechanic","source":"ticket_1234","sourceRef":"ticket-1234-role-save","alsoIn":[]}
+{"qid":"r_ebc9c0ceb6","text":"How does this battle odds/front bar change, why did DDR's costly defeat only move it about 2%, and what should we do to gain ground?","kind":"causal","source":"ticket_1234","sourceRef":"ticket-1234-front","alsoIn":[]}
+{"qid":"r_c8e4d1929a","text":"How can we nuke people, what is the point of our nukes, and where can I see how many we have?","kind":"mechanic","source":"ticket_1234","sourceRef":"ticket-1234-nuclear","alsoIn":[]}
+{"qid":"r_5073987e09","text":"What does EXEC_ORDER_SLOT_CAP limit and what is its value?","kind":"symbol","source":"authored","sourceRef":"0","alsoIn":[]}
+{"qid":"r_15956f86e6","text":"What is CEO_SALARY_MAX_REVENUE_MULTIPLE set to?","kind":"symbol","source":"authored","sourceRef":"1","alsoIn":[]}
+{"qid":"r_1f53c4684c","text":"Where is MAX_BOND_ISSUANCE_FRACTION defined and how is it used when a country issues bonds?","kind":"symbol","source":"authored","sourceRef":"2","alsoIn":[]}
+{"qid":"r_1e2b128e3a","text":"What is CONTRACT_ROYALTY_RATE_MAX for extraction contracts?","kind":"symbol","source":"authored","sourceRef":"3","alsoIn":[]}
+{"qid":"r_50910be338","text":"How many seats is TOTAL_UK_COMMONS_SEATS?","kind":"symbol","source":"authored","sourceRef":"4","alsoIn":[]}
+{"qid":"r_b5d7fa618e","text":"What does SEAT_ACTION_BANK_TURNS control?","kind":"symbol","source":"authored","sourceRef":"5","alsoIn":[]}
+{"qid":"r_cf34f3a38d","text":"What relationship score does CAUCUS_NPP_RECRUIT_MIN_RELATIONSHIP require before an NPP can be recruited into a caucus?","kind":"symbol","source":"authored","sourceRef":"6","alsoIn":[]}
+{"qid":"r_8374568af3","text":"What is the AID_MAX_PCT_GDP cap on foreign aid?","kind":"symbol","source":"authored","sourceRef":"7","alsoIn":[]}
+{"qid":"r_cb592dffcc","text":"What does the aggregateForce function compute for a military unit?","kind":"symbol","source":"authored","sourceRef":"8","alsoIn":[]}
+{"qid":"r_6fadaa773d","text":"What does normalizeNPI do and what curve does it use?","kind":"symbol","source":"authored","sourceRef":"9","alsoIn":[]}
+{"qid":"r_a8f9a050aa","text":"What does the isBlocked predicate decide in the trade code?","kind":"symbol","source":"authored","sourceRef":"10","alsoIn":[]}
+{"qid":"r_f746c5ac22","text":"What is LEADERSHIP_INACTIVE_TURN_THRESHOLD and what happens when a leader crosses it?","kind":"symbol","source":"authored","sourceRef":"11","alsoIn":[]}
+{"qid":"r_5f52dea86f","text":"What does INFLATION_HIGH_THRESHOLD gate?","kind":"symbol","source":"authored","sourceRef":"12","alsoIn":[]}
+{"qid":"r_e710d00094","text":"How does techNodeCashCost compute the cash price of a tech tree node?","kind":"symbol","source":"authored","sourceRef":"13","alsoIn":[]}
+{"qid":"r_ce6808a62d","text":"What is RD_CAPACITY_BOOST_MAX_PCT?","kind":"symbol","source":"authored","sourceRef":"14","alsoIn":[]}
+{"qid":"r_962b6113c4","text":"What is CENTRAL_BANK_LOBBY_MIN_AMOUNT?","kind":"symbol","source":"authored","sourceRef":"15","alsoIn":[]}
+{"qid":"r_44a690cc55","text":"How many members sit on the FOMC and how long is a governor's term in turns?","kind":"mechanic","source":"authored","sourceRef":"16","alsoIn":[]}
+{"qid":"r_9e817117fa","text":"How often does the FOMC meet and how many rate changes can it execute per term?","kind":"mechanic","source":"authored","sourceRef":"17","alsoIn":[]}
+{"qid":"r_1b2236cbf7","text":"What happens to rate setting when the FOMC board falls below four seated members?","kind":"mechanic","source":"authored","sourceRef":"18","alsoIn":[]}
+{"qid":"r_2ceacb2763","text":"How much does canvassing cost and what is the base turnout boost?","kind":"mechanic","source":"authored","sourceRef":"19","alsoIn":[]}
+{"qid":"r_7cb38c165b","text":"What is the maximum turnout modifier canvassing can build, and how fast does it decay each turn?","kind":"mechanic","source":"authored","sourceRef":"20","alsoIn":[]}
+{"qid":"r_31209a8d90","text":"How are the 100 points of a state-level primary score split between alignment, favorability and political influence?","kind":"mechanic","source":"authored","sourceRef":"21","alsoIn":[]}
+{"qid":"r_61adaffaee","text":"What share of the general election vote pool is cast in the final four turns?","kind":"mechanic","source":"authored","sourceRef":"22","alsoIn":[]}
+{"qid":"r_39aa67e8ed","text":"How much does tenure erosion reduce influence and favorability per term held, and where does it stop?","kind":"mechanic","source":"authored","sourceRef":"23","alsoIn":[]}
+{"qid":"r_27840b9a1a","text":"What are the office strength multipliers for governor, president, house and senate races?","kind":"mechanic","source":"authored","sourceRef":"24","alsoIn":[]}
+{"qid":"r_700d5b18ab","text":"What is the base compliance chance for a hard whip and what range is it clamped to?","kind":"mechanic","source":"authored","sourceRef":"25","alsoIn":[]}
+{"qid":"r_a4accb4ba6","text":"By how much does voting on a bill shift my own economic and social positions?","kind":"mechanic","source":"authored","sourceRef":"26","alsoIn":[]}
+{"qid":"r_be31152d4a","text":"What sum threshold makes an NPP vote For, Against or Abstain under the cross-pressure model?","kind":"mechanic","source":"authored","sourceRef":"27","alsoIn":[]}
+{"qid":"r_311b7fc205","text":"How many turns make a game year and how long is one turn in real time?","kind":"mechanic","source":"authored","sourceRef":"28","alsoIn":[]}
+{"qid":"r_10ad702e72","text":"What is the action cap and what is the hoarding penalty above 100 actions?","kind":"mechanic","source":"authored","sourceRef":"29","alsoIn":[]}
+{"qid":"r_2444437c59","text":"How many turns can a Prime Minister seat stay vacant before a snap election is triggered automatically?","kind":"mechanic","source":"authored","sourceRef":"30","alsoIn":[]}
+{"qid":"r_a67d8ecde8","text":"What supermajority does a war declaration need and how long is the cooldown after a war?","kind":"mechanic","source":"authored","sourceRef":"31","alsoIn":[]}
+{"qid":"r_449c06272f","text":"How long is the truce after a war ends?","kind":"mechanic","source":"authored","sourceRef":"32","alsoIn":[]}
+{"qid":"r_dbddb812aa","text":"What is the 75% cap on extraction contracts?","kind":"mechanic","source":"authored","sourceRef":"33","alsoIn":[]}
+{"qid":"r_89ee0a60ca","text":"In which turn of the fiscal year does October processing run?","kind":"mechanic","source":"authored","sourceRef":"34","alsoIn":[]}
+{"qid":"r_021f285a8d","text":"Do acting cabinet secretaries lapse, and after how many turns?","kind":"mechanic","source":"authored","sourceRef":"35","alsoIn":[]}
+{"qid":"r_e6f24a4953","text":"What is the diminishing returns formula for canvassing when a turnout modifier is already high?","kind":"mechanic","source":"authored","sourceRef":"36","alsoIn":[]}
+{"qid":"r_785ee1d6fc","text":"Does a bill need a quorum to pass, and what is the majority rule?","kind":"mechanic","source":"authored","sourceRef":"37","alsoIn":[]}
+{"qid":"r_8875b935a2","text":"How does the primary score penalty for NPPs work when a player is in the same primary?","kind":"mechanic","source":"authored","sourceRef":"38","alsoIn":[]}
+{"qid":"r_7a0aca51b7","text":"What does the market safeguard treat as a too sharp price move and what happens when it trips?","kind":"mechanic","source":"authored","sourceRef":"39","alsoIn":[]}
+{"qid":"r_e02c3e3308","text":"How much do NPP candidates get penalised in a general election against a player?","kind":"mechanic","source":"authored","sourceRef":"40","alsoIn":[]}
+{"qid":"r_8db57e33bd","text":"What is the presidential primary score made of and how is national reach normalised?","kind":"mechanic","source":"authored","sourceRef":"41","alsoIn":[]}
+{"qid":"r_5f8dbeb378","text":"How is a corporate bond coupon rate derived from the credit rating and term premium?","kind":"mechanic","source":"authored","sourceRef":"42","alsoIn":[]}
+{"qid":"r_373d4b5344","text":"How many strategic regions are there for military Commands and what do Commanding Generals do?","kind":"mechanic","source":"authored","sourceRef":"43","alsoIn":[]}
+{"qid":"r_e1c7f413e5","text":"How does raising the prime rate feed through to inflation, corporate borrowing and government interest costs?","kind":"causal","source":"authored","sourceRef":"44","alsoIn":[]}
+{"qid":"r_2cacfe4e0f","text":"How does a naval blockade end up raising freight costs and blocking commodity flows for corporations?","kind":"causal","source":"authored","sourceRef":"45","alsoIn":[]}
+{"qid":"r_5f31618fa7","text":"How do canvassing, party GOTV and turnout decay interact over the course of a campaign?","kind":"causal","source":"authored","sourceRef":"46","alsoIn":[]}
+{"qid":"r_fb04086e9d","text":"How does infamy affect both a candidate's primary score and their general election vote weight?","kind":"causal","source":"authored","sourceRef":"47","alsoIn":[]}
+{"qid":"r_9ae66860e2","text":"How do tariffs change commodity prices and then corporation profit margins?","kind":"causal","source":"authored","sourceRef":"48","alsoIn":[]}
+{"qid":"r_a3cfeef289","text":"What links cold war tension to nuclear tests and global response crises?","kind":"causal","source":"authored","sourceRef":"49","alsoIn":[]}
+{"qid":"r_bfe8a41c1c","text":"When a private bank fails, what happens to its interbank loans and the deposit insurance fund?","kind":"causal","source":"authored","sourceRef":"50","alsoIn":[]}
+{"qid":"r_2097c5057a","text":"Why does holding a seat for many consecutive terms make reelection harder?","kind":"causal","source":"authored","sourceRef":"51","alsoIn":[]}
+{"qid":"r_70cfeccc97","text":"How does a sovereign default interact with the IMF facility and its austerity restrictions?","kind":"causal","source":"authored","sourceRef":"52","alsoIn":[]}
+{"qid":"r_f82bca3310","text":"How do union strikes reduce corporation production and push wages up?","kind":"causal","source":"authored","sourceRef":"53","alsoIn":[]}
+{"qid":"r_8bad17a560","text":"How does an embargo reduce a corporation's revenue through trade exposure?","kind":"causal","source":"authored","sourceRef":"54","alsoIn":[]}
+{"qid":"r_339b9f6a35","text":"How do subsidies move from the national budget into sector margins?","kind":"causal","source":"authored","sourceRef":"55","alsoIn":[]}
+{"qid":"r_b1a2056bd0","text":"If a party whip casts my vote for me, does the bill still shift my positions?","kind":"causal","source":"authored","sourceRef":"56","alsoIn":[]}
+{"qid":"r_05c22e6e90","text":"Why does a party with zero organization in a state still get some vote weight?","kind":"causal","source":"authored","sourceRef":"57","alsoIn":[]}
+{"qid":"r_c21c17e14e","text":"How does a coalition disband vote cascade into government formation and cabinet seats?","kind":"causal","source":"authored","sourceRef":"58","alsoIn":[]}
+{"qid":"r_ff31265aa6","text":"How does the turn order guarantee that final-turn votes are counted before an election is resolved?","kind":"causal","source":"authored","sourceRef":"59","alsoIn":[]}
+{"qid":"r_a92049431d","text":"How does regime legitimacy in a one-party state escalate through the four stages into forced conversion?","kind":"causal","source":"authored","sourceRef":"60","alsoIn":[]}
+{"qid":"r_f699fabb52","text":"How does air superiority over a region change the outcome of a land battle on a front there?","kind":"causal","source":"authored","sourceRef":"61","alsoIn":[]}
+{"qid":"r_91481404a2","text":"How does conscription stance dilute unit experience and what does that do to battle odds?","kind":"causal","source":"authored","sourceRef":"62","alsoIn":[]}
+{"qid":"r_950570c77c","text":"Where do I vote on a bill that is in my chamber?","kind":"navigation","source":"authored","sourceRef":"63","alsoIn":[]}
+{"qid":"r_fd052d7dcf","text":"Where does a party whip issue a whip directive?","kind":"navigation","source":"authored","sourceRef":"64","alsoIn":[]}
+{"qid":"r_605d095c7f","text":"Where can I see pending FOMC nominations and vote on confirmation as a senator?","kind":"navigation","source":"authored","sourceRef":"65","alsoIn":[]}
+{"qid":"r_c766cdfb6c","text":"Which page holds the campaign ops trees and budget for my race?","kind":"navigation","source":"authored","sourceRef":"66","alsoIn":[]}
+{"qid":"r_0a6bb475bc","text":"Where do I set the posture of a naval formation?","kind":"navigation","source":"authored","sourceRef":"67","alsoIn":[]}
+{"qid":"r_3f55400da2","text":"How do I declare a candidacy in a primary?","kind":"navigation","source":"authored","sourceRef":"68","alsoIn":[]}
+{"qid":"r_209482537a","text":"Where can I view my achievements?","kind":"navigation","source":"authored","sourceRef":"69","alsoIn":[]}
+{"qid":"r_1fd3aac52d","text":"Where is the logistics map and what does it show?","kind":"navigation","source":"authored","sourceRef":"70","alsoIn":[]}
+{"qid":"r_65595213df","text":"How do I mute one type of notification?","kind":"navigation","source":"authored","sourceRef":"71","alsoIn":[]}
+{"qid":"r_27045c556f","text":"Where do I file a war declaration?","kind":"navigation","source":"authored","sourceRef":"72","alsoIn":[]}
+{"qid":"r_b8111a083a","text":"Where can I view my own vote record?","kind":"navigation","source":"authored","sourceRef":"73","alsoIn":[]}
+{"qid":"r_8080c8eb8a","text":"How do I send mail to another player?","kind":"navigation","source":"authored","sourceRef":"74","alsoIn":[]}
+{"qid":"r_71f6e67d13","text":"Where do I see extraction contracts and offers?","kind":"navigation","source":"authored","sourceRef":"75","alsoIn":[]}
+{"qid":"r_6afb741903","text":"How do I subscribe to an index fund?","kind":"navigation","source":"authored","sourceRef":"76","alsoIn":[]}
+{"qid":"r_12ad3761f3","text":"Where do I find the chain of command for a conflict and who is allowed to do what?","kind":"navigation","source":"authored","sourceRef":"77","alsoIn":[]}
+{"qid":"r_4e0ff5acec","text":"Where can I check my character's rank and skill points as a general?","kind":"navigation","source":"authored","sourceRef":"78","alsoIn":[]}
