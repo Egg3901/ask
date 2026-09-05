@@ -152,6 +152,9 @@ function isClassMechanicsQuestion(question) {
 const HOLDER_VERB = /^(?:has|have|had|is|are|was|were|operates?|maintains?|fields?|deploys?|stations?|lacks?|keeps?|holds?|runs?|consists?|includes?|contains?|currently|now|still)$/i;
 const HOLDER_FORCE_NOUN = /^(?:forces?|army|armies|navy|navies|militar(?:y|ies)|fleets?|troops?|divisions?|brigades?|regiments?|battalions?|squadrons?)$/i;
 const TABLE_ROW = /^\s*\|/;
+// A roster table says who. A rules table says what. The header is the tell.
+const HOLDER_COLUMN = /\b(?:countr(?:y|ies)|nations?|powers?|players?|sides?|factions?|belligerents?)\b/i;
+const PROPER_POSSESSIVE = /\b[A-Z][A-Za-z'\u2019-]*['\u2019]s\b/;
 
 // "Guided-Missile Destroyer" is two ordinary words joined, not a proper noun.
 function isKnownWord(word) {
@@ -159,20 +162,27 @@ function isKnownWord(word) {
 }
 
 function namesHolder(sentence) {
-  const words = String(sentence).split(/[\s/]+/).map((w) => w.replace(/^[^A-Za-z]+|[^A-Za-z'\u2019-]+$/g, ""));
-  let unknownNames = 0;
+  const text = String(sentence);
+  if (PROPER_POSSESSIVE.test(text)) return true;              // "Northland's fleet"
+  if (HOLDER_CODE.test(text)) return true;                    // "the US has 12 carriers"
+  // In a table every cell starts with a capital, so a capitalized word proves
+  // nothing there. What proves it is the header: a table keyed by country,
+  // nation, player or side is a roster, and one keyed by hull or mission is
+  // rules. Judging cells instead refused a naval capability table whose cells
+  // began "No" and "Kills" (observed live 2026-09-05).
+  if (TABLE_ROW.test(text)) return HOLDER_COLUMN.test(text.split(/\|\s*\|/)[0] || text.slice(0, 120));
+  const words = text.split(/[\s/]+/).map((w) => w.replace(/^[^A-Za-z]+|[^A-Za-z'\u2019-]+$/g, ""));
   for (let i = 0; i < words.length; i += 1) {
     const word = words[i];
     if (!word || !/^[A-Z]/.test(word)) continue;
     if (isKnownWord(word)) continue;
-    if (/^[A-Z0-9_]{2,}$/.test(word)) continue;          // CAP, PATROL, SOE: mission acronyms
-    if (/['\u2019]s$/.test(word)) return true;              // "Northland's fleet"
-    unknownNames += 1;
+    if (/^[A-Z0-9_]{2,}$/.test(word)) continue;               // CAP, PATROL, SOE: mission acronyms
     const next = words[i + 1] || "";
+    // A name that acts or qualifies a force is a holder. A name that just sits
+    // in a sentence ("Mending: hulls regain integrity") is vocabulary.
     if (HOLDER_VERB.test(next) || HOLDER_FORCE_NOUN.test(next)) return true;
   }
-  // Nothing in a rules table is a name. A name in one is a roster.
-  return TABLE_ROW.test(sentence) && unknownNames > 0;
+  return false;
 }
 
 function isGenericMilitaryMechanicSentence(sentence, question) {
@@ -188,11 +198,9 @@ function isGenericMilitaryMechanicSentence(sentence, question) {
   if (GENERIC_HYPOTHETICAL.test(text) && !hasUnknownName) return true;
   // Nothing in a class question points at a holder, so the answer can only leak
   // by naming one itself or by dating itself to the live world.
-  if (classQuestion) return !namesHolder(text) && !HOLDER_CODE.test(text) && !LIVE_CLAIM.test(text);
   if (/\b(?:your|their|our|its|this|that)\s+(?:country|nation|force|forces|army|military)\b/i.test(text)) return false;
-  const subject = text.match(CAPITALIZED_WORD)?.[0];
-  if (subject && !isGenericNameWord(subject)) return false;
-  return ![...text.matchAll(CAPITALIZED_LOCATION)].some((match) => !isGenericNameWord(match[1]));
+  return !namesHolder(text) && !LIVE_CLAIM.test(text)
+    && ![...text.matchAll(CAPITALIZED_LOCATION)].some((match) => !isGenericNameWord(match[1]));
 }
 
 // Inventory words that also live in civilian vocabulary. "The market includes

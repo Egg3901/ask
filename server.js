@@ -662,7 +662,15 @@ const server = http.createServer(async (req, res) => {
         // data (it spends one live-data question), the house report format, and
         // a standalone shareable page at the end.
         const reportRequested = REPORT_RE.test(question);
-        const length = reportRequested ? "deep" : (prompt.LENGTHS[body.length] ? body.length : "standard");
+        // The question sets the length when it asks for coverage. A player who
+        // asks what every ship type does is asking for a list, and the standard
+        // target cannot hold one, so the answer used to stop a third of the way
+        // through. An explicit "concise" is still honoured: that is the player
+        // asking for the short version on purpose.
+        const requestedLength = prompt.LENGTHS[body.length] ? body.length : "standard";
+        const length = reportRequested ? "deep"
+          : (requestedLength !== "concise" && router.wantsCoverage(question)) ? "deep"
+          : requestedLength;
         // Visualizations are metered, not gated: every tier has some, and running
         // out is a daily allowance rather than a locked feature. A player who asks
         // for one past their allowance still gets a real prose answer, and the

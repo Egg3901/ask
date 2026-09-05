@@ -14,6 +14,13 @@ const MODELS = {
 
 const COMPLEX = /\b(?:why|compare|contrast|tradeoffs?|trade-offs?|interact|interaction|relationship|across|trace|diagnose|root cause|what caused|step by step|edge cases?|all the ways|combined effect|consequences?)\b/i;
 const CROSS_SYSTEM = /\b(?:affect|impact|feed into|depend on|change).{0,50}\b(?:economy|election|government|corporation|company|party|country|market|budget|inflation|growth|turn)\b/i;
+// "Go over each one", "every type of X", "list them all". The question is asking
+// for coverage of a set, and a set cannot be covered in the standard 220-word
+// target: the answer names two members and stops, which reads to the player as
+// not answering. Three reports on 2026-09-05 said exactly that ("Too concise
+// didn't answer fully", "Didn't explain what they do", "Should've answered").
+const COVERAGE = /\b(?:each one|each type|each kind|every type|every kind|all (?:the )?(?:types?|kinds?|options?)|go over|walk me through|run through|rundown|break ?down|one by one|for each|list (?:them|all|each|every|the))\b|\b(?:types|kinds|sorts) of\b|\b(?:different|various) (?:types?|kinds?|sorts?)\b|\b(?:vs\.?|versus)\b/i;
+
 const SPECIALIST = /\b(?:causal autopsy|causal chain|root cause|forensic explanation|fact-check|fact check|verify (?:the )?(?:previous|prior|last|earlier) answer|audit (?:the )?(?:previous|prior|last|earlier) answer)\b/i;
 
 // How hard to think, as a control separate from how much to write.
@@ -69,6 +76,7 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
   let tier;
   if (deepReasoning) { tier = "deep"; reasons.push("deep evidence synthesis"); }
   else if (multiPart || report) { tier = "deep"; if (report) reasons.push("report"); }
+  else if (wantsCoverage(text)) { tier = "pro"; reasons.push("enumeration"); }
   else if (visualizations) { tier = "pro"; reasons.push("visualization"); }
   else if (specialist || SPECIALIST.test(text)) { tier = "pro"; reasons.push("specialist evidence synthesis"); }
   else tier = score >= 4 ? "pro" : "flash";
@@ -88,6 +96,11 @@ function choose({ question = "", length = "standard", style = "standard", useMcp
     score,
     reasons,
   };
+}
+
+/** Does the question ask for a set to be covered rather than a point answered? */
+function wantsCoverage(question) {
+  return COVERAGE.test(String(question || ""));
 }
 
 /** Display label for a stored model id, including ids no longer in the catalog. */
@@ -116,4 +129,4 @@ function escalate(route, reason) {
   };
 }
 
-module.exports = { choose, label, escalate, MODELS, EFFORTS, CHAINS: models.CHAINS, TIERS: Object.keys(models.CHAINS) };
+module.exports = { choose, wantsCoverage, label, escalate, MODELS, EFFORTS, CHAINS: models.CHAINS, TIERS: Object.keys(models.CHAINS) };

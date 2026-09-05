@@ -284,7 +284,10 @@ OUTPUT STYLE — ${s.label}
 ${s.text}
 
 ${report ? REPORT : `LENGTH — ${l.label}
-${l.text} Aim for roughly ${l.words} words; never pad to reach it.`}
+${l.text} Aim for roughly ${l.words} words; never pad to reach it.
+The target is a guide, not a cap. If the question asks about several things, cover every one of them:
+give each less room rather than dropping any, and never stop partway through a set you started listing.
+Finish the answer. An answer cut off mid-list is worse than a shorter one that covers everything.`}
 
 ${report ? "" : FORMATTING}
 
