@@ -391,3 +391,24 @@ test("mechanics prose and a stat table are not force intelligence", () => {
     "Northland is at 43% readiness across its divisions.",
   );
 });
+
+test("a number beside a military word is not a roster without a holder", () => {
+  const question = "describe what different types of ships do in navies in game";
+  // Both refused in production on 1.17.4.
+  for (const rules of [
+    "Badly damaged (below `35` integrity) or exhausted (below `25` readiness) heads to `PORT`.",
+    "Repair is `12` per turn in port or stood down, `5` on station out of contact.",
+    "A hull below 35 supply loses 10% readiness per turn until it is resupplied.",
+  ]) {
+    assert.equal(guard.protectPublicAnswer(rules, question), rules, rules);
+  }
+  // Name the holder and it is intelligence again, whatever the grammar.
+  for (const leak of [
+    "Northland is at 43% readiness.",
+    "Northland is missing a Logistics Command.",
+    "The German army has 40 ships deployed near the front.",
+    "Soviet readiness sits at 61% across twelve divisions.",
+  ]) {
+    assert.notEqual(guard.protectPublicAnswer(leak, question), leak, leak);
+  }
+});

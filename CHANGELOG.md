@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.17.5 - 2026-09-05
+
+### Fixed
+- The roster guard now looks for a holder, not for a sentence shape. Two more rules answers were refused for saying "Repair is 12 per turn in port" and "Badly damaged (below 35 integrity) heads to PORT": a number near a military word plus any capitalized word was enough. What marks force intelligence is a country, a demonym, a country code, a possessive, a name that owns or operates something, or a name that is missing or short of one. Everything else is rules and gets answered.
+
 ## 1.17.4 - 2026-09-05
 
 ### Fixed

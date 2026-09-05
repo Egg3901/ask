@@ -156,9 +156,15 @@ function isClassMechanicsQuestion(question) {
 // "Repair is 12 per turn in port" read as a holder acting (observed live
 // 2026-09-05). A copula says something exists, not that somebody owns it.
 const HOLDER_VERB = /^(?:has|have|had|operates?|maintains?|fields?|deploys?|stations?|lacks?|keeps?|holds?|runs?|consists?|includes?|contains?|currently|now|still)$/i;
-// The one copula shape worth keeping: "Northland is at 43% readiness" is a
-// force-state claim about a named holder, and a rules sentence has no name in it.
-const FORCE_STATE_CLAIM = /\b(?:readiness|force strength|army strength|military strength|force composition|order of battle)\b/i;
+// A copula only carries force when its complement is a state claim: "Northland
+// is AT 43% readiness", "Northland is MISSING a Logistics Command". "Repair is
+// 12 per turn" and "Badly damaged (below 35 integrity)" are rules, and treating
+// any capitalized word before "is" as a holder refused both (live, 2026-09-05).
+const HOLDER_COPULA = /^(?:is|are|was|were)$/i;
+const STATE_COMPLEMENT = /^(?:missing|absent|at|down|below|short|without|running|out|lacking|under)$/i;
+// The holders in this game are enumerable. A statement that names a country or
+// a demonym alongside force is intelligence whatever its grammar.
+const COUNTRY_NAME = /\b(?:america|american|britain|british|england|english|france|french|germany|german|east germany|italy|italian|japan|japanese|china|chinese|russia|russian|soviet|ussr|poland|polish|ireland|irish|brazil|brazilian|spain|spanish|sweden|swedish|turkey|turkish|greece|greek|austria|austrian|finland|finnish|hungary|hungarian|romania|romanian|bulgaria|bulgarian|yugoslavia|yugoslav|czechoslovakia|czechoslovak|ukraine|ukrainian|belarus|nigeria|nigerian|korea|korean|vietnam|vietnamese|india|indian|canada|canadian|australia|australian|mexico|mexican|israel|israeli|egypt|egyptian|iran|iranian)\b/i;
 const HOLDER_FORCE_NOUN = /^(?:forces?|army|armies|navy|navies|militar(?:y|ies)|fleets?|troops?|divisions?|brigades?|regiments?|battalions?|squadrons?)$/i;
 const TABLE_ROW = /^\s*\|/;
 // A roster table says who. A rules table says what. The header is the tell.
@@ -172,9 +178,9 @@ function isKnownWord(word) {
 
 function namesHolder(sentence) {
   const text = String(sentence);
-  let unknownNames = 0;
   if (PROPER_POSSESSIVE.test(text)) return true;              // "Northland's fleet"
   if (HOLDER_CODE.test(text)) return true;                    // "the US has 12 carriers"
+  if (COUNTRY_NAME.test(text)) return true;                   // "the German army has 40 ships"
   // In a table every cell starts with a capital, so a capitalized word proves
   // nothing there. What proves it is the header: a table keyed by country,
   // nation, player or side is a roster, and one keyed by hull or mission is
@@ -191,9 +197,9 @@ function namesHolder(sentence) {
     // A name that acts or qualifies a force is a holder. A name that just sits
     // in a sentence ("Mending: hulls regain integrity") is vocabulary.
     if (HOLDER_VERB.test(next) || HOLDER_FORCE_NOUN.test(next)) return true;
-    unknownNames += 1;
+    if (HOLDER_COPULA.test(next) && STATE_COMPLEMENT.test(words[i + 2] || "")) return true;
   }
-  return unknownNames > 0 && FORCE_STATE_CLAIM.test(text) && /\d/.test(text);
+  return false;
 }
 
 function isGenericMilitaryMechanicSentence(sentence, question) {
