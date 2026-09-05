@@ -2,6 +2,21 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.17.4 - 2026-09-05
+
+### Fixed
+- Two more ways a rules answer was being read as force intelligence: a sentence opening on an ordinary capitalized word followed by "is" ("Repair is 12 per turn in port") counted as a country acting, and a table with a "Power" column counted as a table of great powers. Possession marks a holder, a copula does not, and a stat column is not a country. A named force-state claim ("Northland is at 43% readiness") still refuses.
+
+## 1.17.3 - 2026-09-05
+
+### Fixed
+- A question about a set now reads widely enough to cover the set. On the default evidence window the search landed in one file and the answer covered whatever that file happened to be about: asked three times what every naval vessel does, Ask returned the hull table, then the repair rules, then the approval model. Coverage questions get the wide window that deep answers get.
+
+## 1.17.2 - 2026-09-05
+
+### Fixed
+- A moderator asking for a country's live roster gets the roster. Force composition is the one thing that cannot be reconstructed from the code, so for a staff session it is read directly for every country the question names rather than left to the research model's tool choice.
+
 ## 1.17.1 - 2026-09-05
 
 ### Fixed
