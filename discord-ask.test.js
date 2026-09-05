@@ -81,12 +81,14 @@ test("a long Discord question is clamped at a word boundary, not rejected", () =
 test("a Discord report has the same consequences as a web downvote", () => {
   const server = require("node:fs").readFileSync(require.resolve("./server.js"), "utf8");
   const handler = server.slice(server.indexOf('"/api/discord-feedback"'), server.indexOf('"/api/discord-ask/check"'));
-  assert.match(handler, /evictCacheByQuestion/);
-  assert.match(handler, /corrections\.draft/);
+  // Consequences are routed through one shared helper; either the helper or
+  // the two direct calls it replaced satisfy the contract.
+  assert.match(handler, /downvoteConsequences\(|evictCacheByQuestion/);
+  assert.match(handler, /downvoteConsequences\(|corrections\.draft/);
   assert.match(handler, /discord report/);
   // The web owner-feedback path evicts too.
   const web = server.slice(server.indexOf('"/api/answer/feedback"'));
-  assert.match(web.slice(0, 1500), /evictCacheByQuestion/);
+  assert.match(web.slice(0, 1500), /downvoteConsequences\(|evictCacheByQuestion/);
 });
 
 test("a moderator asking from Discord is a moderator", () => {

@@ -37,6 +37,10 @@ const notify = require("./notify");
 const capabilities = require("./capabilities");
 const playbooks = require("./playbooks");
 const attribution = require("./attribution");
+const retrievalConfidence = require("./retrieval-confidence");
+const failureTaxonomy = require("./failure-taxonomy");
+const opsDiscord = require("./ops-discord");
+const docConflictNotifier = require("./doc-conflict-notifier");
 
 // Where the docs build writes its output. Ask reads only the per-game logo from
 // it, so a missing docs build degrades to a 404 mark, never a broken page.
@@ -88,6 +92,28 @@ async function readJson(req, cap = 16384) {
   } catch { return null; }
 }
 const norm = q => q.toLowerCase().replace(/\s+/g, " ").replace(/[?.!,]+$/, "").trim();
+
+// Every downvote, whichever surface it arrives on, has the same consequences:
+// the reported answer stops being served from the shared cache under any of
+// its variant keys, the cache entries for paraphrases of the question go with
+// it (semantic eviction runs off the request path and fails open), and the
+// report seeds a staff-review correction draft.
+function downvoteConsequences(question, reason, answerId) {
+  store.evictCacheByQuestion(question);
+  corrections.evictNearCache(question)
+    .then(r => { if (r?.evicted) console.log(`[cache] evicted ${r.evicted} near-duplicate cache entr${r.evicted === 1 ? "y" : "ies"} for a reported question`); })
+    .catch(() => {});
+  corrections.draft({ question, reason, sourceAnswerId: answerId }).catch(() => {});
+}
+
+// Staff session or the internal secret: the auth every console JSON feed uses,
+// so cron jobs can read what the console renders.
+function staffOrInternal(req, session) {
+  const bearer = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const supplied = Buffer.from(bearer), expected = Buffer.from(ASK_SECRET);
+  const internal = Boolean(ASK_SECRET) && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+  return internal || (session && session.context?.isAdmin === true);
+}
 
 // Constant-time check of the shared machine secret (Discord bot, map PNG).
 function askSecretOk(req) {
@@ -230,8 +256,7 @@ const server = http.createServer(async (req, res) => {
       if (ok && rating === "down") {
         const brief = store.answerBrief(Number(body?.answerId));
         if (brief?.question) {
-          store.evictCacheByQuestion(brief.question);
-          corrections.draft({ question: brief.question, reason: `shared-page report${body?.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`, sourceAnswerId: Number(body?.answerId) }).catch(() => {});
+          downvoteConsequences(brief.question, `shared-page report${body?.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`, Number(body?.answerId));
         }
       }
       return json(res, ok ? 200 : 404, { ok });
@@ -260,12 +285,7 @@ const server = http.createServer(async (req, res) => {
         const brief = store.answerBrief(answerId);
         const question = brief?.question || String(body.question || "");
         if (question) {
-          store.evictCacheByQuestion(question);
-          corrections.draft({
-            question,
-            reason: `discord report${body.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`,
-            sourceAnswerId: answerId,
-          }).catch(() => {});
+          downvoteConsequences(question, `discord report${body.reason ? `: ${String(body.reason).slice(0, 300)}` : ""}`, answerId);
           queued = true;
         }
       }
@@ -394,7 +414,7 @@ const server = http.createServer(async (req, res) => {
             reports: store.reportClusters(),
             modelStats: store.adminModelStats(),
             correctionRows: corrections.list(),
-            health: store.digest(Date.now() - 7 * 864e5),
+            health: store.digest(Date.now() - 7 * 864e5, { missOrder: url.searchParams.get("order") === "count" ? "count" : "priority" }),
             activity: store.activity({ days }),
             days,
             tab: url.searchParams.get("tab") || "overview",
@@ -423,7 +443,32 @@ const server = http.createServer(async (req, res) => {
       const internal = Boolean(ASK_SECRET) && supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
       if (!internal && (!session || session.context?.isAdmin !== true)) return json(res, session ? 403 : 401, { error: "Staff only." });
       const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 90);
-      return json(res, 200, store.digest(Date.now() - days * 864e5));
+      // ?order=count restores the raw-count miss ranking; the default is priority.
+      const missOrder = url.searchParams.get("order") === "count" ? "count" : "priority";
+      return json(res, 200, store.digest(Date.now() - days * 864e5, { missOrder }));
+    }
+
+    // Failure taxonomy: every flagged or reported answer in the window placed
+    // in exactly one bucket, with counts and the top questions per bucket.
+    // Rules decide from stored data; the answers they cannot place are sent
+    // to the helper model in the background (bounded, cached per answer), so
+    // the next load of this feed has them. Same auth as health.json.
+    if (req.method === "GET" && p === "/console/taxonomy.json") {
+      if (!staffOrInternal(req, session)) return json(res, session ? 403 : 401, { error: "Staff only." });
+      const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 90);
+      const since = Date.now() - days * 864e5;
+      const out = store.taxonomy(since, { perBucket: 10 });
+      failureTaxonomy.classifyPending({ store, llm, sinceMs: since, limit: 5, log: line => console.log(line) }).catch(() => {});
+      return json(res, 200, { days, ...out });
+    }
+
+    // Corrections waiting for staff. Drafts are generated from every report
+    // and never approved on their own; this is the queue made visible to
+    // whatever reads it, so it stops being invisible between console visits.
+    if (req.method === "GET" && p === "/console/corrections/pending.json") {
+      if (!staffOrInternal(req, session)) return json(res, session ? 403 : 401, { error: "Staff only." });
+      const drafts = corrections.pendingDrafts(100);
+      return json(res, 200, { pending: drafts.length, drafts });
     }
 
     // Replay-candidate feed: every downvoted or guard-flagged answer, shaped
@@ -591,9 +636,7 @@ const server = http.createServer(async (req, res) => {
         if (ok && rating === "down") {
           const brief = store.answerBrief(Number(b?.answerId));
           if (brief?.question) {
-            store.evictCacheByQuestion(brief.question);
-            corrections.draft({ question: brief.question, reason: `downvote${reason ? `: ${reason}` : ""}`, sourceAnswerId: Number(b?.answerId) })
-              .catch(() => {});
+            downvoteConsequences(brief.question, `downvote${reason ? `: ${reason}` : ""}`, Number(b?.answerId));
           }
         }
         return json(res, ok ? 200 : 404, { ok });
@@ -1000,6 +1043,15 @@ const server = http.createServer(async (req, res) => {
             hits = retrieve.mergeEvidence(hits, exact);
           }
         } catch { hits = null; }
+        // Post-retrieval confidence for this answer, from the scores of what
+        // was actually sent. Telemetry only: recorded on the row, never used
+        // to change the answer. The per-retriever lists are read only if the
+        // retriever exposes them; until then overlap is recorded as null.
+        const retrieverLists = retrieve.__debug && typeof retrieve.__debug.lists === "function" ? retrieve.__debug.lists() : null;
+        const retrievalSignal = retrievalConfidence.features(hits, {
+          maxChars: (deepAnswer || coverageQuestion) ? DEEP_MAX_CHARS : undefined,
+          dense: retrieverLists?.dense || null, lexical: retrieverLists?.lexical || null,
+        });
         if (hits?.files?.length) status(`Matched ${hits.files.length} source${hits.files.length === 1 ? "" : "s"} — reading…`);
 
         // What recently CHANGED, when the question is about a change.
@@ -1459,7 +1511,7 @@ const server = http.createServer(async (req, res) => {
             answer += `\n\n> **Support check:** I could not match much of this answer to the sources I actually read, so treat the specifics as unverified.`;
           }
         }
-        const validation = { plan: plan.id, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : []), ...(healedPaths.length ? ["retrieval_miss_healed"] : []), ...(groundingRevised ? ["grounding_revised"] : []), ...(route.escalated ? ["escalated_tier"] : []), ...(insufficiency ? ["insufficient_evidence"] : [])], grounding: groundingNotes, inventedPaths, missedPaths, ...(insufficiency ? { insufficiency } : {}), ...(attributionReport ? { attribution: { coverage: attributionReport.coverage, supported: attributionReport.supported, total: attributionReport.total, semantic: attributionReport.semantic, weak: attributionReport.weak.slice(0, 4), sentences: attributionReport.sentences.slice(0, 40).map(s => ({ score: s.score, cites: s.cites })) } } : {}) };
+        const validation = { plan: plan.id, retrieval: retrievalSignal, issues: [...guarded.issues, ...answerGuard.inspect(answer, plan), ...(canonicalContractApplied ? ["canonical_answer_contract"] : answerRepaired ? ["answer_contract_repaired"] : []), ...(refusedWithEvidence ? ["refused_with_live_evidence"] : []), ...(truncated ? ["truncated"] : []), ...(narratedEvidence ? ["narrated_evidence_bundle"] : []), ...(healedPaths.length ? ["retrieval_miss_healed"] : []), ...(groundingRevised ? ["grounding_revised"] : []), ...(route.escalated ? ["escalated_tier"] : []), ...(insufficiency ? ["insufficient_evidence"] : [])], grounding: groundingNotes, inventedPaths, missedPaths, ...(insufficiency ? { insufficiency } : {}), ...(attributionReport ? { attribution: { coverage: attributionReport.coverage, supported: attributionReport.supported, total: attributionReport.total, semantic: attributionReport.semantic, weak: attributionReport.weak.slice(0, 4), sentences: attributionReport.sentences.slice(0, 40).map(s => ({ score: s.score, cites: s.cites })) } } : {}) };
         const areas = cites.areasFor(hits?.files || []);
 
         if (cacheable && !inventedPaths.length && !missedPaths.length && !groundingNotes.length && !refusedWithEvidence && !truncated && !narratedEvidence && !insufficiency) {
@@ -1665,6 +1717,18 @@ checkEmbedding("boot");
 // a cold CPU model load (measured: a cold first batch blew its whole budget).
 setInterval(() => checkEmbedding("periodic"), 4 * 60 * 1000).unref();
 store.setEmbedHealth?.(embedHealth);
+
+// Doc-conflict notifier: new open conflicts go to the staff channel, batched,
+// at most one post an hour. Only where the ops Discord MCP is configured; the
+// table keeps filling either way and the digest still names the top ones.
+if (opsDiscord.configured()) {
+  const notifier = docConflictNotifier.create({ store, post: content => opsDiscord.post(content), log: line => console.warn(line) });
+  const conflictTick = () => notifier.tick()
+    .then(({ posted }) => { if (posted) console.log(`[conflicts] posted ${posted} new doc conflict(s) to the staff channel`); })
+    .catch(e => console.warn("[conflicts] tick failed:", String(e.message || e).slice(0, 120)));
+  setTimeout(conflictTick, 60 * 1000).unref();
+  setInterval(conflictTick, 5 * 60 * 1000).unref();
+}
 
 // Default to loopback so the box stays behind Caddy; Railway sets HOST=0.0.0.0 for public ingress.
 const BIND_HOST = process.env.HOST || "127.0.0.1";

@@ -8,6 +8,8 @@
 // The numbers come from /console/health.json (same rollup the console
 // renders), so the digest can never disagree with what staff see there.
 
+const opsDiscord = require("../ops-discord");
+
 const ASK_ORIGIN = process.env.ASK_INTERNAL_ORIGIN || "http://127.0.0.1:9749";
 const ASK_SECRET = process.env.ASK_SECRET || "";
 const DISCORD_MCP = process.env.DISCORD_MCP_URL || "http://127.0.0.1:9727/mcp";
@@ -15,6 +17,8 @@ const MCP_TOKEN = process.env.MCP_TOKEN || "";
 const CHANNEL = process.env.ASK_DIGEST_CHANNEL || "operations";
 
 function ms(v) { return v == null ? "n/a" : `${(v / 1000).toFixed(1)}s`; }
+function num(v, places = 2) { return v == null || !Number.isFinite(Number(v)) ? "n/a" : Number(v).toFixed(places); }
+function pct(v) { return v == null || !Number.isFinite(Number(v)) ? "n/a" : `${Math.round(Number(v) * 100)}%`; }
 
 async function fetchHealth() {
   const r = await fetch(`${ASK_ORIGIN}/console/health.json?days=7`, {
@@ -40,6 +44,32 @@ function format(h) {
   lines.push(`QA sampler: ${a.total || 0} graded, ${a.not_answered || 0} judged unanswered, ${a.refused || 0} refusals`);
   const c = h.corrections || {};
   lines.push(`Corrections: ${c.active || 0} active, **${c.draftsPending || 0} drafts waiting for review**`);
+  for (const d of (c.drafts || []).slice(0, 3)) {
+    lines.push(`· draft #${d.id}: "${String(d.question || "").slice(0, 90)}"${d.proposed ? " (proposal ready)" : ""}`);
+  }
+  // Retrieval confidence, recorded on every answer: the one signal dense
+  // enough to move week to week at this traffic level.
+  const r = h.retrieval;
+  if (r && r.n) {
+    lines.push(`Retrieval confidence (${r.n} answers): top hit p50 ${num(r.top1.p50)} (p10 ${num(r.top1.p10)}) · gap to fifth p50 ${num(r.gap15.p50)} · ${r.nHits.p50 ?? "n/a"} chunks · budget used p50 ${pct(r.budgetUsed.p50)}`);
+  }
+  // One line per failure bucket that had anything in it.
+  const t = h.taxonomy;
+  if (t && t.total) {
+    lines.push(`Failures by bucket (${t.total} flagged or reported, ${t.unknown} unplaced):`);
+    for (const [name, b] of Object.entries(t.buckets || {})) {
+      if (!b.count || name === "unknown") continue;
+      const example = (b.examples || [])[0];
+      lines.push(`· ${name} ×${b.count}${b.downvoted ? ` (${b.downvoted} reported)` : ""}${example ? `: "${String(example).slice(0, 70)}"` : ""}`);
+    }
+  }
+  // Judge calibration: does the automated verdict agree with the humans?
+  const k = h.calibration;
+  if (k && k.n) {
+    const m = k.matrix || {};
+    const prev = (k.history || []).find(row => row.kappa != null && row.since !== k.since);
+    lines.push(`Judge vs humans: kappa ${num(k.kappa)} over ${k.n} answers (rated only ${num(k.kappaRated)} over ${k.nRated}) · caught ${m.flaggedAndReported || 0} of ${(m.flaggedAndReported || 0) + (m.cleanButReported || 0)} reports · ${m.flaggedNotReported || 0} flags unconfirmed${prev ? ` · ${prev.week} was ${num(prev.kappa)}` : ""}`);
+  }
   if (h.embedding && h.embedding.ok === false) {
     lines.push(`**EMBEDDING DEAD** (${h.embedding.error || "unknown"}): vector retrieval degraded to keyword-only`);
   }
@@ -53,8 +83,10 @@ function format(h) {
   if (issues) lines.push(`Guard trips: ${issues}`);
   const misses = (h.retrievalMisses || []).slice(0, 5);
   if (misses.length) {
-    lines.push("Retrieval misses (files answers needed but never got):");
-    for (const m of misses) lines.push(`· \`${m.path}\` ×${m.misses}`);
+    lines.push("Retrieval misses (files answers needed but never got), by priority:");
+    for (const m of misses) {
+      lines.push(`· \`${m.path}\` ×${m.misses}${m.downvotes ? `, ${m.downvotes} reported` : ""}${m.meanCoverage != null ? `, coverage ${num(m.meanCoverage)}` : ""}${m.priority != null ? `, priority ${num(m.priority, 1)}` : ""}`);
+    }
   }
   const models = (h.models || []).filter(m => m.sampled > 0).slice(0, 4);
   if (models.length) {
@@ -68,31 +100,19 @@ function format(h) {
 }
 
 async function post(content) {
-  const r = await fetch(DISCORD_MCP, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      ...(MCP_TOKEN ? { Authorization: `Bearer ${MCP_TOKEN}` } : {}),
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0", id: 1, method: "tools/call",
-      params: { name: "discord_send", arguments: { channel: CHANNEL, content } },
-    }),
-    signal: AbortSignal.timeout(15000),
-  });
-  const raw = await r.text();
-  const frame = raw.split("\n").find(l => l.startsWith("data:"));
-  const parsed = JSON.parse(frame ? frame.slice(5).trim() : raw);
-  if (!r.ok || parsed?.error || parsed?.result?.isError) {
-    throw new Error(`discord_send failed: ${JSON.stringify(parsed?.error || parsed?.result || r.status).slice(0, 300)}`);
-  }
+  await opsDiscord.post(content, { url: DISCORD_MCP, token: MCP_TOKEN, channel: CHANNEL });
 }
 
-(async () => {
+async function main() {
   const health = await fetchHealth();
   const body = format(health);
   if (process.argv.includes("--dry-run")) { console.log(body); return; }
   await post(body);
   console.log(`[digest] posted to #${CHANNEL} (${body.length} chars)`);
-})().catch(e => { console.error("[digest] failed:", e.message); process.exit(1); });
+}
+
+if (require.main === module) {
+  main().catch(e => { console.error("[digest] failed:", e.message); process.exit(1); });
+}
+
+module.exports = { format, fetchHealth, post };

@@ -2,6 +2,19 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.19.1 - 2026-09-05
+
+### Changed
+- Reporting an answer now clears the cached answers to questions that mean the same thing, not only the exact wording. A wrong cached answer used to keep serving every player who phrased the question a little differently for up to a day after the first report.
+- The retrieval work queue is ranked by how much damage a missing file did, not by how many times it was missed: misses, multiplied by how many of those answers were reported, multiplied by how poorly the evidence supported them. A quiet gap that keeps producing unsupported answers now outranks a single loud complaint. The raw count order is still there under `?order=count`.
+
+### Added
+- Every answer records how confident retrieval was in what it sent: the top hit's score, its gap to the fifth, how many chunks were sent and how much of the budget they used. The console and the weekly digest show these as p10/p50/p90 over the week, so a retrieval regression is visible from all traffic rather than from the few answers that get a thumb.
+- Every flagged or reported answer is placed in exactly one failure bucket (retrieval miss, synthesis miss, refusal, guard false positive, canonical contract, latency or fall-through, unknown) from the data already on the row. Where the rules cannot decide, one helper-model call does, cached per answer so it is never asked twice. `/console/taxonomy.json` lists the counts and the top questions per bucket; the console and the digest carry one line per bucket.
+- Judge calibration: the automated grounding verdict is cross-tabulated against player and staff verdicts each week, with the confusion matrix and Cohen's kappa printed by `scripts/judge-calibration.mjs`, shown on the console, and stored so drift shows as a series.
+- Correction drafts waiting for staff are counted in the console card headers and the weekly digest, and listed at `/console/corrections/pending.json`. Nothing is approved automatically.
+- New wiki and docs conflicts the answers catch are posted to the staff channel, batched, at most once an hour, with what the page claims and what the code actually does. The table had been write-only.
+
 ## 1.19.0 - 2026-09-05
 
 ### Changed
