@@ -15,6 +15,12 @@ const games = require("./games");
 const DB_PATH = process.env.RAG_DB || "/root/projects/LSGD-ops-dash/rag/index.db";
 const OLLAMA = process.env.OLLAMA_EMBED_URL || "http://127.0.0.1:11434/api/embed";
 const MODEL = process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+// Prompt prefixes are a property of the embedding model, not of this code.
+// nomic-embed-text needs search_query: / search_document:; Qwen3-Embedding
+// wants an instruction on the query and bare documents. Both index builder
+// and server must agree, so these come from the environment.
+const QUERY_PREFIX = process.env.RAG_QUERY_PREFIX ?? "search_query: ";
+const DOC_PREFIX = process.env.RAG_DOC_PREFIX ?? "search_document: ";
 // Optional bearer for a gated remote embedder (the box proxy). Local ollama
 // ignores it.
 const EMBED_HEADERS = {
@@ -65,7 +71,7 @@ async function embedQuery(text) {
   const r = await fetch(OLLAMA, {
     method: "POST", headers: EMBED_HEADERS,
     // nomic requires a task prefix; documents were indexed as search_document.
-    body: JSON.stringify({ model: MODEL, input: "search_query: " + text }),
+    body: JSON.stringify({ model: MODEL, input: QUERY_PREFIX + text }),
     signal: AbortSignal.timeout(30000),
   });
   if (!r.ok) throw new Error("embed " + r.status);
@@ -101,7 +107,7 @@ async function embedEach(texts, { timeoutMs = 4000, concurrency = 4, deadlineMs 
       if (budget < 300) throw new Error("embed deadline exhausted");
       const r = await fetch(OLLAMA, {
         method: "POST", headers: EMBED_HEADERS,
-        body: JSON.stringify({ model: MODEL, input: "search_document: " + texts[index] }),
+        body: JSON.stringify({ model: MODEL, input: DOC_PREFIX + texts[index] }),
         signal: AbortSignal.timeout(budget),
       });
       if (!r.ok) throw new Error("embed " + r.status);
@@ -127,7 +133,7 @@ async function embedBatch(texts, { timeoutMs = 20000, slice = 16, deadlineMs = 0
     const group = texts.slice(offset, offset + slice);
     const r = await fetch(OLLAMA, {
       method: "POST", headers: EMBED_HEADERS,
-      body: JSON.stringify({ model: MODEL, input: group.map(t => "search_document: " + t) }),
+      body: JSON.stringify({ model: MODEL, input: group.map(t => DOC_PREFIX + t) }),
       signal: AbortSignal.timeout(budget),
     });
     if (!r.ok) throw new Error("embed " + r.status);
