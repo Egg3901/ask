@@ -480,3 +480,131 @@ test("watch CRUD enforces the cap and delivers events exactly once", () => {
   assert.equal(store.deleteAllWatches("ahd:watcher"), 4);
   assert.equal(store.listWatches("ahd:watcher").length, 0);
 });
+
+// ── Retrieval feedback loop ─────────────────────────────────────────────────
+
+const validationWith = (extra = {}) => JSON.stringify({ plan: "general", issues: [], grounding: [], inventedPaths: [], missedPaths: [], ...extra });
+const attributionOf = (coverage, total = 8) => ({ attribution: { coverage, total, supported: Math.round(coverage * total), semantic: true, weak: [], sentences: [] } });
+
+test("retrieval misses rank by misses x (1 + reports) x (1 - coverage), with the raw count still available", () => {
+  const since = Date.now() - 1;
+  // Three well-supported, unreported misses of one path...
+  for (let i = 0; i < 3; i++) recordAnswer({ question: `well supported miss ${i}`, validation: validationWith({ missedPaths: ["src/lib/turn/quiet.ts"], ...attributionOf(0.9) }) });
+  // ...against one poorly supported miss of another path that a player reported.
+  const loud = recordAnswer({ question: "poorly supported miss", validation: validationWith({ missedPaths: ["src/lib/turn/loud.ts"], ...attributionOf(0.2) }) });
+  store.feedback({ answerId: loud, userKey: "ahd:user-1", rating: "down", reason: "wrong" });
+  // And one with no attribution at all, which sits at the neutral 0.5.
+  recordAnswer({ question: "unmeasured miss", validation: validationWith({ missedPaths: ["src/lib/turn/unmeasured.ts"] }) });
+
+  const byPriority = store.retrievalMisses(since, 10);
+  assert.deepEqual(byPriority.map(r => r.path), ["src/lib/turn/loud.ts", "src/lib/turn/unmeasured.ts", "src/lib/turn/quiet.ts"]);
+  assert.equal(byPriority[0].priority, 1.6);
+  assert.equal(byPriority[0].downvotes, 1);
+  assert.equal(byPriority[0].meanCoverage, 0.2);
+  assert.equal(byPriority[1].priority, 0.5);
+  assert.equal(byPriority[1].meanCoverage, null);
+  assert.equal(byPriority[2].priority, 0.3);
+  assert.equal(byPriority[2].misses, 3);
+
+  const byCount = store.retrievalMisses(since, 10, { order: "count" });
+  assert.equal(byCount[0].path, "src/lib/turn/quiet.ts");
+  assert.equal(byCount[0].misses, 3);
+  assert.equal(store.digest(since, { missOrder: "count" }).missOrder, "count");
+  assert.equal(store.digest(since).retrievalMisses[0].path, "src/lib/turn/loud.ts");
+});
+
+test("retrieval confidence recorded on each answer rolls up as percentiles", () => {
+  const since = Date.now() - 1;
+  for (let i = 1; i <= 5; i++) {
+    recordAnswer({ question: `confidence ${i}`, validation: validationWith({ retrieval: { top1: i / 10, gap15: 0.05, overlap: null, nHits: i, budgetUsed: 0.5, chunkLenP50: 1000 } }) });
+  }
+  recordAnswer({ question: "no retrieval block", validation: validationWith() });
+  const d = store.retrievalDistribution(since);
+  assert.equal(d.n, 5);
+  assert.equal(d.top1.n, 5);
+  assert.equal(d.top1.p50, 0.3);
+  assert.equal(d.nHits.p90, 5);
+  assert.equal(d.overlap.n, 0);
+  assert.equal(store.digest(since).retrieval.n, 5);
+});
+
+test("the taxonomy buckets flagged and reported answers, and caches helper verdicts per answer id", () => {
+  const since = Date.now() - 1;
+  recordAnswer({ question: "clean answer", validation: validationWith({ issues: ["escalated_tier"] }) });
+  recordAnswer({ question: "path never supplied", validation: validationWith({ missedPaths: ["src/lib/turn/x.ts"] }) });
+  const bare = recordAnswer({ question: "reported with no other signal", validation: validationWith() });
+  store.feedback({ answerId: bare, userKey: "ahd:user-1", rating: "down", reason: "just wrong" });
+  recordAnswer({ question: "discord row is excluded", model: "discord-ask", validation: validationWith({ issues: ["truncated"] }) });
+
+  let t = store.taxonomy(since);
+  assert.equal(t.total, 2);
+  assert.equal(t.buckets.retrieval_miss.count, 1);
+  assert.equal(t.buckets.unknown.count, 1);
+  assert.equal(t.buckets.unknown.questions[0].answerId, bare);
+
+  assert.equal(store.putAnswerBucket({ answerId: bare, bucket: "synthesis_miss", method: "helper", model: "helper-chain", note: "misread" }), true);
+  assert.equal(store.putAnswerBucket({ answerId: bare, bucket: "not_a_bucket" }), false);
+  assert.equal(store.answerBuckets([bare]).get(bare).bucket, "synthesis_miss");
+  assert.equal(store.answerBuckets([]).size, 0);
+  t = store.taxonomy(since);
+  assert.equal(t.buckets.unknown.count, 0);
+  assert.equal(t.buckets.synthesis_miss.count, 1);
+  assert.equal(t.byHelper, 1);
+  const summary = store.digest(since).taxonomy;
+  assert.equal(summary.total, 2);
+  assert.deepEqual(summary.buckets.synthesis_miss.examples, ["reported with no other signal"]);
+});
+
+test("judge calibration cross-tabulates the automated verdict against human verdicts and stores the week", () => {
+  const since = Date.now() - 1;
+  const a = recordAnswer({ question: "flagged and reported", validation: validationWith({ issues: ["truncated"] }) });
+  store.feedback({ answerId: a, userKey: "ahd:user-1", rating: "down" });
+  recordAnswer({ question: "flagged, nobody minded", validation: validationWith({ grounding: ["x"] }) });
+  const c = recordAnswer({ question: "clean but reported", validation: validationWith() });
+  store.feedback({ answerId: c, userKey: "ahd:user-1", rating: "down" });
+  const d = recordAnswer({ question: "clean and liked", validation: validationWith() });
+  store.feedback({ answerId: d, userKey: "ahd:user-1", rating: "up" });
+  recordAnswer({ question: "clean, unrated", validation: validationWith() });
+
+  const cal = store.judgeCalibration(since);
+  assert.equal(cal.n, 5);
+  assert.deepEqual(cal.matrix, { flaggedAndReported: 1, flaggedNotReported: 1, cleanButReported: 1, cleanNotReported: 2 });
+  assert.equal(cal.nRated, 3);
+  assert.equal(cal.recall, 0.5);
+  assert.equal(cal.precision, 0.5);
+  assert.equal(store.saveCalibration(cal, { week: "2026-W36" }), true);
+  assert.equal(store.saveCalibration({ ...cal, kappa: 0.5 }, { week: "2026-W35" }), true);
+  const history = store.calibrationHistory(8);
+  assert.deepEqual(history.map(h => h.week), ["2026-W36", "2026-W35"]);
+  assert.equal(history[1].kappa, 0.5);
+  assert.deepEqual(history[0].matrix.all, cal.matrix);
+  // Re-running a week replaces its row rather than adding one.
+  store.saveCalibration({ ...cal, kappa: 0.1 }, { week: "2026-W36" });
+  assert.equal(store.calibrationHistory(8).length, 2);
+  assert.equal(store.calibrationHistory(1)[0].kappa, 0.1);
+  assert.equal(store.digest(since).calibration.history.length, 2);
+});
+
+test("pending correction drafts are counted and named in the digest", () => {
+  store.db.exec("DELETE FROM corrections");
+  const ins = store.db.prepare("INSERT INTO corrections(question,correction,source_answer_id,added_by,active,created) VALUES(?,?,?,?,?,?)");
+  ins.run("first draft", "[DRAFT] Needs staff review", 1, "auto", 0, 1000);
+  ins.run("second draft", "[DRAFT] Proposed (auto, unverified): x", 2, "auto", 0, 2000);
+  ins.run("active lesson", "truth", null, "staff", 1, 3000);
+  const d = store.digest(Date.now() - 864e5);
+  assert.equal(d.corrections.draftsPending, 2);
+  assert.equal(d.corrections.active, 1);
+  assert.deepEqual(d.corrections.drafts.map(x => [x.question, x.proposed]), [["first draft", false], ["second draft", true]]);
+});
+
+test("cache rows carry a vector once set and can be evicted by key", () => {
+  store.db.exec("DELETE FROM answer_cache");
+  store.S.putCache.run("game:ahd|plan:general|plain|standard|viz:0|q one", "a", "[]", "[]", "m", Date.now());
+  store.S.putCache.run("game:ahd|plan:general|plain|standard|viz:0|q two", "a", "[]", "[]", "m", Date.now());
+  assert.deepEqual(store.cacheRows().map(r => r.vec), [null, null]);
+  store.setCacheVec("game:ahd|plan:general|plain|standard|viz:0|q one", Float32Array.from([1, 0]));
+  const row = store.cacheRows().find(r => r.q.endsWith("q one"));
+  assert.equal(new Float32Array(row.vec.buffer, row.vec.byteOffset, 2)[0], 1);
+  assert.equal(store.evictCacheKeys(["game:ahd|plan:general|plain|standard|viz:0|q two", "missing"]), 1);
+  assert.equal(store.cacheRows().length, 1);
+});

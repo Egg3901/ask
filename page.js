@@ -2509,15 +2509,53 @@ function consolePage({ identity, context, users = [], selected = null, reports =
     <td>${num(m.flagged)}</td>
     <td>${num(m.up)} 👍 / ${num(m.down)} 👎</td>
   </tr>`).join("") || `<tr><td colspan="6" class="console-muted">No telemetry yet — recorded from the first answer after 2026-08-28.</td></tr>`;
+  const dec = (v, places = 2) => v == null || !Number.isFinite(Number(v)) ? "n/a" : Number(v).toFixed(places);
   const missRows = (health?.retrievalMisses || []).map(r => `<tr>
-    <td><code style="font-size:.72rem">${esc(r.path)}</code></td><td>${num(r.misses)}</td><td class="console-muted">${esc(when(r.last_ts))}</td>
-  </tr>`).join("") || `<tr><td colspan="3" class="console-muted">No misses recorded. Good.</td></tr>`;
+    <td><code style="font-size:.72rem">${esc(r.path)}</code></td><td>${num(r.misses)}</td><td>${num(r.downvotes)}</td>
+    <td>${esc(dec(r.meanCoverage))}</td><td>${esc(dec(r.priority, 1))}</td><td class="console-muted">${esc(when(r.last_ts))}</td>
+  </tr>`).join("") || `<tr><td colspan="6" class="console-muted">No misses recorded. Good.</td></tr>`;
+  const missOrder = health?.missOrder === "count" ? "count" : "priority";
+  const missOrderLinks = [["priority", "priority"], ["count", "raw count"]].map(([id, label]) =>
+    `<a class="range-btn${id === missOrder ? " on" : ""}" href="/console?days=${days}&tab=overview&order=${id}">${label}</a>`).join("");
   const issueRows = (health?.issues || []).map(i => `<tr><td>${esc(i.issue)}</td><td>${num(i.n)}</td></tr>`).join("")
     || `<tr><td colspan="2" class="console-muted">No guard trips.</td></tr>`;
-  const healthSection = health ? `<section class="console-card"><h2>Serving health (7 days)</h2>
+  // Post-retrieval confidence, recorded on every answer: the distribution
+  // over the window is what moves when retrieval degrades, long before the
+  // handful of thumbs do.
+  const RETRIEVAL_LABELS = { top1: "Top hit score", gap15: "Gap, top hit to fifth", overlap: "Dense / lexical overlap", nHits: "Chunks sent", budgetUsed: "Budget used", chunkLenP50: "Chunk length (median)" };
+  const retrieval = health?.retrieval || null;
+  const confidenceRows = retrieval ? Object.entries(RETRIEVAL_LABELS).map(([key, label]) => {
+    const d = retrieval[key] || { n: 0 };
+    const fmt = key === "nHits" || key === "chunkLenP50" ? v => (v == null ? "n/a" : num(v)) : key === "budgetUsed" ? v => (v == null ? "n/a" : `${Math.round(v * 100)}%`) : v => dec(v);
+    return `<tr><td>${esc(label)}</td><td>${esc(fmt(d.p10))}</td><td>${esc(fmt(d.p50))}</td><td>${esc(fmt(d.p90))}</td><td class="console-muted">${num(d.n)}</td></tr>`;
+  }).join("") : "";
+  // Failure buckets: every flagged or reported answer in exactly one place.
+  const taxonomy = health?.taxonomy || null;
+  const bucketRows = taxonomy ? Object.entries(taxonomy.buckets || {}).map(([name, b]) => `<tr>
+    <td><code style="font-size:.72rem">${esc(name)}</code></td><td>${num(b.count)}</td><td>${num(b.downvoted)}</td>
+    <td class="console-muted">${(b.examples || []).slice(0, 2).map(q => esc(q)).join("<br>") || "n/a"}</td>
+  </tr>`).join("") : "";
+  const calibration = health?.calibration || null;
+  const cm = calibration?.matrix || {};
+  const previousKappa = (calibration?.history || []).find(row => row.kappa != null && row.since !== calibration?.since);
+  const calibrationBlock = calibration && calibration.n ? `<h2 style="margin-top:18px">Judge calibration <span class="console-muted">· automated verdict against player and staff verdicts</span></h2>
+    <div class="console-stats">
+      <div class="console-stat"><small>Cohen's kappa</small><b>${esc(dec(calibration.kappa))}</b></div>
+      <div class="console-stat"><small>Kappa, rated only</small><b>${esc(dec(calibration.kappaRated))}</b></div>
+      <div class="console-stat"><small>Reports the judge caught</small><b>${num(cm.flaggedAndReported)} / ${num((cm.flaggedAndReported || 0) + (cm.cleanButReported || 0))}</b></div>
+      <div class="console-stat"><small>Flags no human confirmed</small><b>${num(cm.flaggedNotReported)}</b></div>
+      <div class="console-stat"><small>Previous week</small><b>${previousKappa ? esc(dec(previousKappa.kappa)) : "n/a"}</b></div>
+    </div>` : "";
+  const healthSection = health ? `<section class="console-card"><h2>Serving health (7 days) <span class="console-muted">· ${num(health.corrections?.draftsPending)} correction draft${Number(health.corrections?.draftsPending) === 1 ? "" : "s"} waiting for review</span></h2>
     <div style="overflow:auto"><table class="console-table"><thead><tr><th>Model</th><th>Served</th><th>Via fall-through</th><th>First token p50 / p90</th><th>Guard-flagged</th><th>Verdicts</th></tr></thead><tbody>${servingRows}</tbody></table></div>
-    <h2 style="margin-top:18px">Retrieval misses — files answers cited that retrieval never supplied</h2>
-    <div style="overflow:auto"><table class="console-table"><thead><tr><th>File</th><th>Misses</th><th>Last</th></tr></thead><tbody>${missRows}</tbody></table></div>
+    <h2 style="margin-top:18px">Retrieval confidence <span class="console-muted">· ${num(retrieval?.n)} answers, p10 / p50 / p90</span></h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>Feature</th><th>p10</th><th>p50</th><th>p90</th><th>n</th></tr></thead><tbody>${confidenceRows || `<tr><td colspan="5" class="console-muted">No retrieval telemetry yet.</td></tr>`}</tbody></table></div>
+    <h2 style="margin-top:18px">Failure buckets <span class="console-muted">· ${num(taxonomy?.total)} flagged or reported, ${num(taxonomy?.unknown)} unplaced · <a class="console-link" href="/console/taxonomy.json">taxonomy.json</a></span></h2>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>Bucket</th><th>Answers</th><th>Reported</th><th>Examples</th></tr></thead><tbody>${bucketRows || `<tr><td colspan="4" class="console-muted">Nothing flagged or reported.</td></tr>`}</tbody></table></div>
+    ${calibrationBlock}
+    <h2 style="margin-top:18px">Retrieval misses: files answers cited that retrieval never supplied <span class="console-range" style="margin-left:8px">${missOrderLinks}</span></h2>
+    <p class="console-muted" style="font-size:.7rem;margin:4px 0 8px">Priority is misses x (1 + reports) x (1 - mean evidence coverage), so a quiet gap that keeps producing unsupported answers outranks one loud complaint.</p>
+    <div style="overflow:auto"><table class="console-table"><thead><tr><th>File</th><th>Misses</th><th>Reported</th><th>Coverage</th><th>Priority</th><th>Last</th></tr></thead><tbody>${missRows}</tbody></table></div>
     <h2 style="margin-top:18px">Guard trips</h2>
     <div style="overflow:auto"><table class="console-table"><thead><tr><th>Issue</th><th>Count</th></tr></thead><tbody>${issueRows}</tbody></table></div>
   </section>` : "";
@@ -2683,7 +2721,7 @@ function consolePage({ identity, context, users = [], selected = null, reports =
     </div>
 
     <div data-panel="memory"${openTab === "memory" ? "" : " hidden"}>
-    <section class="console-card console-reports"><h2>Corrections (memory)</h2>
+    <section class="console-card console-reports"><h2>Corrections (memory) <span class="console-muted">· ${num(pendingDrafts)} draft${pendingDrafts === 1 ? "" : "s"} waiting for review · <a class="console-link" href="/console/corrections/pending.json">pending.json</a></span></h2>
       <p class="console-muted" style="font-size:.72rem">Staff-verified lessons. A future question semantically close to the recorded one gets the verified truth injected above the retrieved code.</p>
       <form id="corr-form" style="display:grid;gap:8px;margin:10px 0 16px">
         <input name="question" placeholder="Question this lesson applies to" required style="padding:8px;border:1px solid var(--border);border-radius:6px;background:transparent;color:inherit">

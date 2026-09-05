@@ -3,6 +3,9 @@
 // (the broker deliberately refuses to merge them by email).
 const path = require("node:path");
 const Database = require("better-sqlite3");
+const retrievalConfidence = require("./retrieval-confidence");
+const failureTaxonomy = require("./failure-taxonomy");
+const judgeCalibrationMath = require("./judge-calibration");
 
 const db = new Database(process.env.ASK_DB_PATH || path.join(__dirname, "ask.db"));
 db.pragma("journal_mode = WAL");
@@ -212,6 +215,39 @@ try { db.exec("ALTER TABLE asks ADD COLUMN review_by TEXT"); } catch { /* alread
 try { db.exec("ALTER TABLE asks ADD COLUMN review_ts INTEGER"); } catch { /* already migrated */ }
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_asks_review ON asks(review_ts, ts DESC)"); } catch {}
 try { db.exec("ALTER TABLE answer_cache ADD COLUMN model TEXT"); } catch { /* already migrated */ }
+// A question vector per cached answer, filled in lazily by the semantic
+// eviction pass on a downvote, so a report on one phrasing also stops the
+// cache serving its paraphrases. NULL until that pass first sees the row.
+try { db.exec("ALTER TABLE answer_cache ADD COLUMN vec BLOB"); } catch { /* already migrated */ }
+// When the conflict was posted to the staff channel. NULL means not yet.
+try { db.exec("ALTER TABLE doc_conflicts ADD COLUMN notified_ts INTEGER"); } catch { /* already migrated */ }
+db.exec(`
+-- Helper-model failure buckets for answers the deterministic rules could not
+-- place. One row per answer, written once: the model is never asked twice
+-- about the same answer, and a rule that can decide never consults it at all.
+CREATE TABLE IF NOT EXISTS answer_buckets(
+  answer_id INTEGER PRIMARY KEY,
+  bucket TEXT NOT NULL,
+  method TEXT,                   -- 'helper' (rules verdicts are recomputed, not stored)
+  model TEXT,
+  note TEXT,
+  created INTEGER NOT NULL);
+
+-- Weekly agreement between the automated grounding verdict and the humans,
+-- one row per ISO week, so drift in the judge is a series rather than a
+-- number someone remembers.
+CREATE TABLE IF NOT EXISTS calibration(
+  id INTEGER PRIMARY KEY,
+  week TEXT NOT NULL UNIQUE,
+  since INTEGER,
+  until INTEGER,
+  n INTEGER,
+  n_rated INTEGER,
+  kappa REAL,
+  kappa_rated REAL,
+  matrix TEXT,
+  created INTEGER NOT NULL);
+`);
 // Every answer predating request routing was produced by the single Flash
 // model, so backfilling is factual rather than inferred.
 db.exec("UPDATE asks SET model='deepseek-v4-flash' WHERE model IS NULL");
@@ -347,12 +383,35 @@ function evictCacheByQuestion(question) {
 // evidence never contained recorded that path in validation.missedPaths; this
 // rolls those up so the files retrieval repeatedly fails to hand over become a
 // ranked chunking/embedding fix list instead of scattered journalctl warnings.
-S.retrievalMisses = db.prepare(`SELECT je.value path, COUNT(*) misses, MAX(asks.ts) last_ts
+//
+// Ranked by priority, not by raw count: a path missed on answers players then
+// reported, with low evidence coverage on those answers, is a systemic gap
+// even when only one person said so; a path missed once on an answer that
+// was well supported anyway is not. priority = misses * (1 + reports) *
+// (1 - mean coverage), with unmeasured coverage taken as 0.5 so an answer
+// with no attribution neither inflates nor buries the path. The raw-count
+// order is still there under order: "count".
+S.retrievalMisses = db.prepare(`SELECT je.value path, COUNT(*) misses, MAX(asks.ts) last_ts,
+    COALESCE(SUM(CASE WHEN asks.feedback_rating='down' OR asks.review_rating='bad' THEN 1 ELSE 0 END),0) downvotes,
+    AVG(CASE WHEN json_type(asks.validation,'$.attribution.coverage') IN ('real','integer')
+      THEN json_extract(asks.validation,'$.attribution.coverage') END) coverage
   FROM asks, json_each(json_extract(asks.validation,'$.missedPaths')) je
   WHERE asks.ts>? AND json_valid(asks.validation)
-  GROUP BY je.value ORDER BY misses DESC, last_ts DESC LIMIT ?`);
-function retrievalMisses(sinceMs, limit = 30) {
-  try { return S.retrievalMisses.all(Number(sinceMs) || 0, limit); } catch { return []; }
+  GROUP BY je.value`);
+function retrievalMisses(sinceMs, limit = 30, { order = "priority" } = {}) {
+  let rows;
+  try { rows = S.retrievalMisses.all(Number(sinceMs) || 0); } catch { return []; }
+  const ranked = rows.map(r => {
+    const meanCoverage = r.coverage == null ? null : Number(Number(r.coverage).toFixed(3));
+    const severity = 1 - (meanCoverage == null ? 0.5 : meanCoverage);
+    return {
+      path: r.path, misses: r.misses, downvotes: r.downvotes, meanCoverage,
+      priority: Number((r.misses * (1 + r.downvotes) * severity).toFixed(3)), last_ts: r.last_ts,
+    };
+  });
+  if (order === "count") ranked.sort((a, b) => b.misses - a.misses || b.last_ts - a.last_ts);
+  else ranked.sort((a, b) => b.priority - a.priority || b.misses - a.misses || b.last_ts - a.last_ts);
+  return ranked.slice(0, Math.max(1, Number(limit) || 30));
 }
 
 // Validation issue counts over a window: how often each guard tripped.
@@ -401,7 +460,7 @@ function servingStats(sinceMs) {
 let _embedHealth = null;
 function setEmbedHealth(ref) { _embedHealth = ref; }
 
-function digest(sinceMs) {
+function digest(sinceMs, { missOrder = "priority" } = {}) {
   const since = Number(sinceMs) || 0;
   let answers = { total: 0, live: 0, down: 0, up: 0 };
   try {
@@ -435,9 +494,19 @@ function digest(sinceMs) {
     },
     audits: auditSummary(since),
     issues: issueCounts(since),
-    retrievalMisses: retrievalMisses(since, 10),
+    retrievalMisses: retrievalMisses(since, 10, { order: missOrder }),
+    missOrder,
+    // Post-retrieval confidence over the window, as p10/p50/p90 per feature.
+    // Recorded on every answer, so this moves with the traffic rather than
+    // with the handful of people who press a thumb.
+    retrieval: retrievalDistribution(since),
+    // Every flagged or reported answer in exactly one failure bucket.
+    taxonomy: taxonomySummary(since),
+    // Does the automated verdict agree with the humans? The current window
+    // live, plus the stored weekly series so drift is visible.
+    calibration: { ...judgeCalibration(since), history: calibrationHistory(8) },
     models: servingStats(since),
-    corrections: { active: activeCorrections, draftsPending: drafts },
+    corrections: { active: activeCorrections, draftsPending: drafts, drafts: pendingDrafts(5) },
     embedding: _embedHealth ? { ok: _embedHealth.ok, error: _embedHealth.error, checkedAt: _embedHealth.checkedAt } : null,
     docConflictsOpen: conflictsOpen,
     // The actual open conflicts, not just the count. This table spent weeks as
@@ -847,6 +916,147 @@ function recordConflicts(list, meta = {}) {
 }
 function conflicts(status = "open", limit = 50) { return S.listConflicts.all(status, limit); }
 
+// ── Doc-conflict notification ───────────────────────────────────────────────
+// Open conflicts nobody has been told about, oldest first, for the batched
+// staff-channel post. notified_ts is the record of the post, so the hour gate
+// survives a restart.
+S.unnotifiedConflicts = db.prepare(`SELECT id,source,page,claim,actual,evidence,seen,first_ts
+  FROM doc_conflicts WHERE notified_ts IS NULL AND status='open' ORDER BY first_ts ASC LIMIT ?`);
+S.markConflictNotified = db.prepare("UPDATE doc_conflicts SET notified_ts=? WHERE id=?");
+S.lastConflictNotified = db.prepare("SELECT MAX(notified_ts) ts FROM doc_conflicts");
+function unnotifiedConflicts(limit = 10) {
+  try { return S.unnotifiedConflicts.all(Math.max(1, Number(limit) || 10)); } catch { return []; }
+}
+function markConflictsNotified(ids, ts = Date.now()) {
+  const mark = db.transaction(list => { for (const id of list) S.markConflictNotified.run(Number(ts), Number(id)); });
+  try { mark(ids || []); } catch {}
+}
+function lastConflictNotifiedTs() {
+  try { return S.lastConflictNotified.get()?.ts || null; } catch { return null; }
+}
+
+// ── Retrieval confidence ────────────────────────────────────────────────────
+// validation.retrieval per answer, rolled up as percentiles over the window.
+S.retrievalFeatures = db.prepare(`SELECT json_extract(validation,'$.retrieval') r FROM asks
+  WHERE ts>? AND cached=0 AND json_valid(validation) AND json_type(validation,'$.retrieval')='object'`);
+function retrievalDistribution(sinceMs) {
+  let rows = [];
+  try { rows = S.retrievalFeatures.all(Number(sinceMs) || 0); } catch {}
+  const list = rows.map(r => safeJson(r.r)).filter(f => f && typeof f === "object" && !Array.isArray(f));
+  return { n: list.length, ...retrievalConfidence.distribution(list) };
+}
+
+// ── Failure taxonomy ────────────────────────────────────────────────────────
+// Rows with any failure signal at all (a human report, a guard trip, a
+// grounding note, an invented path, or low attribution coverage). A superset
+// of the taxonomy's candidates: the classifier applies the defect filter.
+const TAXONOMY_MODELS_EXCLUDED = "'discord-ask','ask-clarification','ask-watch'";
+S.taxonomyRows = db.prepare(`SELECT id,question,answer,validation,feedback_rating,feedback_reason,review_rating,fell_through,total_ms,ttft_ms,model,used_mcp,ts
+  FROM asks WHERE ts>? AND cached=0 AND model NOT IN (${TAXONOMY_MODELS_EXCLUDED})
+    AND (validation IS NULL OR json_valid(validation)) AND (
+    feedback_rating='down' OR review_rating='bad'
+    OR json_array_length(COALESCE(json_extract(validation,'$.issues'),'[]'))>0
+    OR json_array_length(COALESCE(json_extract(validation,'$.grounding'),'[]'))>0
+    OR json_array_length(COALESCE(json_extract(validation,'$.inventedPaths'),'[]'))>0
+    OR json_array_length(COALESCE(json_extract(validation,'$.missedPaths'),'[]'))>0
+    OR (json_type(validation,'$.attribution.coverage') IN ('real','integer') AND json_extract(validation,'$.attribution.coverage')<0.35)
+  ) ORDER BY ts DESC LIMIT 2000`);
+function taxonomyRows(sinceMs) {
+  try { return S.taxonomyRows.all(Number(sinceMs) || 0); } catch { return []; }
+}
+S.bucketsBetween = db.prepare("SELECT answer_id,bucket,method,model,note FROM answer_buckets WHERE answer_id BETWEEN ? AND ?");
+S.putBucket = db.prepare(`INSERT INTO answer_buckets(answer_id,bucket,method,model,note,created) VALUES(?,?,?,?,?,?)
+  ON CONFLICT(answer_id) DO UPDATE SET bucket=excluded.bucket,method=excluded.method,model=excluded.model,note=excluded.note,created=excluded.created`);
+/** Cached helper verdicts for these answer ids, as a Map id -> { bucket, method, model, note }. */
+function answerBuckets(ids) {
+  const wanted = new Set((ids || []).map(Number).filter(Number.isInteger));
+  if (!wanted.size) return new Map();
+  const out = new Map();
+  try {
+    for (const r of S.bucketsBetween.all(Math.min(...wanted), Math.max(...wanted))) {
+      if (wanted.has(r.answer_id)) out.set(r.answer_id, { bucket: r.bucket, method: r.method, model: r.model, note: r.note });
+    }
+  } catch {}
+  return out;
+}
+function putAnswerBucket({ answerId, bucket, method = "helper", model = null, note = null }) {
+  if (!Number.isInteger(Number(answerId)) || !failureTaxonomy.BUCKETS.includes(bucket)) return false;
+  try { S.putBucket.run(Number(answerId), bucket, method, model, note ? String(note).slice(0, 300) : null, Date.now()); return true; }
+  catch { return false; }
+}
+/** Full taxonomy for the window: counts per bucket and the top questions in each. */
+function taxonomy(sinceMs, { perBucket = 10 } = {}) {
+  const rows = taxonomyRows(sinceMs);
+  return { since: Number(sinceMs) || 0, ...failureTaxonomy.report(rows, { buckets: answerBuckets(rows.map(r => r.id)), perBucket }) };
+}
+/** The digest-sized version: counts plus three example questions per bucket. */
+function taxonomySummary(sinceMs) {
+  const full = taxonomy(sinceMs, { perBucket: 3 });
+  const buckets = {};
+  for (const [name, b] of Object.entries(full.buckets)) buckets[name] = { count: b.count, downvoted: b.downvoted, examples: b.questions.map(q => q.question) };
+  return { total: full.total, byRule: full.byRule, byHelper: full.byHelper, unknown: full.unknown, buckets };
+}
+
+// ── Judge calibration ───────────────────────────────────────────────────────
+S.calibrationRows = db.prepare(`SELECT validation,feedback_rating,review_rating FROM asks
+  WHERE ts>? AND cached=0 AND model NOT IN (${TAXONOMY_MODELS_EXCLUDED})`);
+S.saveCalibration = db.prepare(`INSERT INTO calibration(week,since,until,n,n_rated,kappa,kappa_rated,matrix,created)
+  VALUES(@week,@since,@until,@n,@n_rated,@kappa,@kappa_rated,@matrix,@created)
+  ON CONFLICT(week) DO UPDATE SET since=excluded.since,until=excluded.until,n=excluded.n,n_rated=excluded.n_rated,
+    kappa=excluded.kappa,kappa_rated=excluded.kappa_rated,matrix=excluded.matrix,created=excluded.created`);
+S.calibrationHistory = db.prepare("SELECT week,since,until,n,n_rated,kappa,kappa_rated,matrix,created FROM calibration ORDER BY week DESC LIMIT ?");
+/** Automated verdict vs human verdict over the window: confusion matrix and Cohen's kappa. */
+function judgeCalibration(sinceMs) {
+  let rows = [];
+  try { rows = S.calibrationRows.all(Number(sinceMs) || 0); } catch {}
+  return { since: Number(sinceMs) || 0, ...judgeCalibrationMath.crosstab(rows) };
+}
+function saveCalibration(result, { week = judgeCalibrationMath.weekOf(), until = Date.now() } = {}) {
+  try {
+    S.saveCalibration.run({
+      week, since: Number(result?.since) || null, until: Number(until), n: Number(result?.n) || 0, n_rated: Number(result?.nRated) || 0,
+      kappa: result?.kappa ?? null, kappa_rated: result?.kappaRated ?? null,
+      matrix: JSON.stringify({ all: result?.matrix || null, rated: result?.matrixRated || null }), created: Date.now(),
+    });
+    return true;
+  } catch { return false; }
+}
+function calibrationHistory(limit = 8) {
+  try { return S.calibrationHistory.all(Math.max(1, Number(limit) || 8)).map(r => ({ ...r, matrix: safeJson(r.matrix) })); } catch { return []; }
+}
+
+// ── Semantic cache eviction ─────────────────────────────────────────────────
+// The cache key is `game:…|plan:…|style|length|viz:…|<normalized question>`;
+// the question is everything after the fifth separator. Vectors are stored
+// on the row the first time the eviction pass embeds it, so each cached
+// question is embedded at most once in its lifetime.
+S.cacheRows = db.prepare("SELECT q,vec FROM answer_cache");
+S.setCacheVec = db.prepare("UPDATE answer_cache SET vec=? WHERE q=?");
+function cacheQuestionOf(key) {
+  const parts = String(key || "").split("|");
+  return parts.length >= 6 ? parts.slice(5).join("|") : String(key || "");
+}
+function cacheRows() { try { return S.cacheRows.all(); } catch { return []; } }
+function setCacheVec(key, vec) {
+  try { S.setCacheVec.run(vec ? Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength) : null, String(key)); } catch {}
+}
+function evictCacheKeys(keys) {
+  let n = 0;
+  const run = db.transaction(list => { for (const k of list) n += S.evictCache.run(String(k)).changes; });
+  try { run(keys || []); } catch {}
+  return n;
+}
+
+// ── Corrections awaiting review ─────────────────────────────────────────────
+// Reads the corrections table directly (this module owns the handle) so the
+// digest can name the drafts, not just count them.
+S.pendingDrafts = db.prepare(`SELECT id,question,source_answer_id,created,
+    CASE WHEN correction LIKE '[DRAFT] Proposed%' THEN 1 ELSE 0 END proposed
+  FROM corrections WHERE active=0 AND correction LIKE '[DRAFT]%' ORDER BY created ASC LIMIT ?`);
+function pendingDrafts(limit = 50) {
+  try { return S.pendingDrafts.all(Math.max(1, Number(limit) || 50)).map(r => ({ ...r, proposed: Boolean(r.proposed) })); } catch { return []; }
+}
+
 const userKey = id => `${id.provider}:${id.id}`;
 
 /** Quota window resets at 00:00 UTC, so "resets in" is a real wall-clock answer. */
@@ -1152,4 +1362,8 @@ function userReports(key) { return S.userReports.all(key); }
 
 module.exports = { db, S, userKey, usage, record, feedback, refundAnswer, answerOwner, queueNotify, pendingNotifies, markNotifySent, bumpNotifyAttempt, createWatch, listWatches, deleteWatch, deleteAllWatches, activeWatches, updateWatchState, addWatchEvent, takeWatchEvents, recordDiscordFeedback, recordDiscordAsk, discordUsage, conversations, turns, removeConv, resetAt, windowStart, safeJson, recordConflicts, conflicts, nextCost, history, MAX_FOLLOWUPS, FOLLOWUP_COST, share, unshare, markPrivate, isPrivate, shared, touchUser, adminUsers, adminUser, adminModelStats, reportClusters, estimateCost, putReport, getReport, userReports, recordAudit, recentAudits, auditSummary, answerBrief, evictCacheByQuestion, replayCandidates, setEmbedHealth, retrievalMisses, issueCounts, servingStats, digest, updateGrounding, evictCache,
   activity, activeKeys, markActive, dayKey, ACTIVE_WINDOW_DAYS,
-  reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed };
+  reviewQueue, reviewCounts, saveReview, clearReview, reviewRow, recentQuestions, markVizUsed,
+  unnotifiedConflicts, markConflictsNotified, lastConflictNotifiedTs,
+  retrievalDistribution, taxonomyRows, answerBuckets, putAnswerBucket, taxonomy, taxonomySummary,
+  judgeCalibration, saveCalibration, calibrationHistory,
+  cacheRows, setCacheVec, evictCacheKeys, cacheQuestionOf, pendingDrafts };

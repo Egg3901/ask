@@ -184,4 +184,70 @@ function recordEvalCandidate(entry) {
 
 function isDraft(row) { return row && row.active === 0 && String(row.correction || "").startsWith(DRAFT_TAG); }
 
-module.exports = { add, match, block, list, setActive, draft, propose, resolve, isDraft, DRAFT_TAG, MATCH_THRESHOLD, CANDIDATES_PATH };
+/** Drafts waiting for staff, oldest first, with whether a proposed body is ready. */
+function pendingDrafts(limit = 50) { return store.pendingDrafts(limit); }
+
+// ── Semantic cache eviction ─────────────────────────────────────────────────
+// The corrections embedding: the same model and normalisation the index and
+// the corrections table use, so MATCH_THRESHOLD means the same thing here.
+async function embed(text) { return norm(await retrieve.embedQuery(String(text || ""))); }
+
+// Several questions through the same path with bounded concurrency and a
+// deadline. A question that fails to embed is null and simply not compared.
+async function embedQueries(texts, { concurrency = 4, deadlineMs = 20000 } = {}) {
+  const out = new Array(texts.length).fill(null);
+  const deadline = Date.now() + deadlineMs;
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, texts.length) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= texts.length || Date.now() > deadline) return;
+      try { out[i] = await embed(texts[i]); } catch { out[i] = null; }
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+function cosine(a, b) {
+  let dot = 0;
+  for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+  return dot;
+}
+
+/**
+ * Downvote consequence, widened. The exact-key eviction stops the reported
+ * phrasing being served; this stops its paraphrases too, by evicting every
+ * cached answer whose question sits within MATCH_THRESHOLD cosine of the
+ * reported one. Cached rows are embedded the first time this pass sees them
+ * and the vector is stored, so the steady-state cost is one query embedding.
+ * Fails open: an embedder outage leaves the exact eviction as the whole effect.
+ */
+async function evictNearCache(question, { threshold = MATCH_THRESHOLD, maxEmbeds = 200 } = {}) {
+  try {
+    const q = String(question || "").trim();
+    if (q.length < 4) return { evicted: 0, embedded: 0, keys: [] };
+    const rows = store.cacheRows();
+    if (!rows.length) return { evicted: 0, embedded: 0, keys: [] };
+    const qv = await embed(q);
+    const missing = rows.filter(r => !r.vec).slice(0, maxEmbeds);
+    const vecs = await embedQueries(missing.map(r => store.cacheQuestionOf(r.q)));
+    let embedded = 0;
+    missing.forEach((r, i) => {
+      if (!vecs[i]) return;
+      store.setCacheVec(r.q, vecs[i]);
+      r.vec = Buffer.from(vecs[i].buffer, vecs[i].byteOffset, vecs[i].byteLength);
+      embedded++;
+    });
+    const doomed = [];
+    for (const r of rows) {
+      if (!r.vec) continue;
+      const v = new Float32Array(r.vec.buffer, r.vec.byteOffset, r.vec.byteLength / 4);
+      if (v.length !== qv.length) continue;
+      if (cosine(qv, v) >= threshold) doomed.push(r.q);
+    }
+    return { evicted: store.evictCacheKeys(doomed), embedded, keys: doomed };
+  } catch { return { evicted: 0, embedded: 0, keys: [] }; }
+}
+
+module.exports = { add, match, block, list, setActive, draft, propose, resolve, isDraft, pendingDrafts, embed, embedQueries, evictNearCache, DRAFT_TAG, MATCH_THRESHOLD, CANDIDATES_PATH };

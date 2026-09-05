@@ -821,3 +821,40 @@ test("live data and visualizations are on by default, and an explicit off still 
   // Not simply forced on: someone who turned them off keeps them off.
   assert.doesNotMatch(html, /live\.checked=true;\s*$/m);
 });
+
+test("the console's serving-health card shows retrieval confidence, failure buckets, judge calibration, miss priority and pending drafts", () => {
+  const health = {
+    models: [], issues: [], missOrder: "priority",
+    retrievalMisses: [{ path: "src/lib/turn/ports.ts", misses: 1, downvotes: 1, meanCoverage: 0.2, priority: 1.6, last_ts: Date.now() }],
+    retrieval: { n: 150, top1: { n: 150, p10: 0.41, p50: 0.63, p90: 0.81 }, gap15: { n: 150, p10: 0.02, p50: 0.11, p90: 0.3 }, overlap: { n: 0, p10: null, p50: null, p90: null }, nHits: { n: 150, p10: 4, p50: 8, p90: 16 }, budgetUsed: { n: 150, p10: 0.2, p50: 0.55, p90: 0.95 }, chunkLenP50: { n: 150, p10: 400, p50: 1100, p90: 2600 } },
+    taxonomy: { total: 24, unknown: 2, buckets: { retrieval_miss: { count: 5, downvoted: 1, examples: ["What does the port cost?"] }, guard_false_positive: { count: 13, downvoted: 13, examples: ["What do the ship types do?"] } } },
+    calibration: { since: 1, n: 164, nRated: 22, kappa: 0.21, kappaRated: 0.4, matrix: { flaggedAndReported: 5, flaggedNotReported: 12, cleanButReported: 11, cleanNotReported: 136 }, history: [{ week: "2026-W35", since: 0, kappa: 0.18 }] },
+    corrections: { active: 0, draftsPending: 3, drafts: [] },
+  };
+  const html = page.consolePage({ users: [], health, correctionRows: [
+    { id: 1, question: "q", correction: "[DRAFT] Needs staff review", active: 0, created: Date.now() },
+  ] });
+  assert.match(html, /Serving health \(7 days\) <span class="console-muted">· 3 correction drafts waiting for review/);
+  assert.match(html, /Retrieval confidence/);
+  assert.match(html, /Top hit score<\/td><td>0\.41<\/td><td>0\.63<\/td><td>0\.81<\/td>/);
+  assert.match(html, /Budget used<\/td><td>20%<\/td><td>55%<\/td><td>95%<\/td>/);
+  assert.match(html, /Dense \/ lexical overlap<\/td><td>n\/a<\/td>/);
+  assert.match(html, /Failure buckets/);
+  assert.match(html, /guard_false_positive<\/code><\/td><td>13<\/td><td>13<\/td>/);
+  assert.match(html, /href="\/console\/taxonomy\.json"/);
+  assert.match(html, /Judge calibration/);
+  assert.match(html, /Cohen's kappa<\/small><b>0\.21<\/b>/);
+  assert.match(html, /Reports the judge caught<\/small><b>5 \/ 16<\/b>/);
+  assert.match(html, /Previous week<\/small><b>0\.18<\/b>/);
+  assert.match(html, /order=count">raw count<\/a>/);
+  assert.match(html, /ports\.ts<\/code><\/td><td>1<\/td><td>1<\/td>\s*<td>0\.20<\/td><td>1\.6<\/td>/);
+  assert.match(html, /Corrections \(memory\) <span class="console-muted">· 1 draft waiting for review · <a class="console-link" href="\/console\/corrections\/pending\.json">/);
+});
+
+test("the console renders when the health rollup carries none of the new sections", () => {
+  const html = page.consolePage({ users: [], health: { models: [], issues: [], retrievalMisses: [] } });
+  assert.match(html, /No retrieval telemetry yet/);
+  assert.match(html, /Nothing flagged or reported/);
+  assert.doesNotMatch(html, /Judge calibration/);
+  assert.match(html, /0 correction drafts waiting for review/);
+});
