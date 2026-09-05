@@ -182,3 +182,24 @@ test("escalate respects a staff-forced quick effort", () => {
   assert.equal(forced.tier, "flash");
   assert.equal(router.escalate(forced, "thin"), forced);
 });
+
+test("a question that asks for a set routes up and is not answered in 220 words", () => {
+  // The 2026-09-05 reports: "Too concise didn't answer fully", "Didn't explain
+  // what they do", "Should've answered". All three asked for every member of a
+  // set and got a flash answer that covered the first two.
+  const coverage = [
+    "what do different naval vessels actually do in game? Go over each one",
+    "describe what different types of ships do in navies in game",
+    "what does every type of naval vessel do in game and how do they differ?",
+    "what is the benefit to aircraft carriers vs screening ships + submarines?",
+    "list all the ways a bill can die",
+  ];
+  for (const question of coverage) {
+    assert.equal(router.wantsCoverage(question), true, question);
+    assert.equal(router.choose({ question }).tier === "flash", false, question);
+  }
+  // A point question is still a point question.
+  for (const question of ["how does inflation work?", "what is the prime rate", "what type of bill is a budget?"]) {
+    assert.equal(router.wantsCoverage(question), false, question);
+  }
+});

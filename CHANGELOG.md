@@ -2,6 +2,15 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.16.0 - 2026-09-05
+
+### Changed
+- A question that asks for a set gets an answer that covers the set. "Go over each one", "what do the different types of X do", "A vs B vs C" and "list all the ways..." now route to the stronger model and use the long-answer target instead of the standard 220 words, so the answer stops naming two members and moving on. Asking for a concise answer still gets one.
+- Every answer is told that the word target is a guide and not a cap: cover everything the question asked about, give each item less room rather than dropping any, and never stop partway through a list.
+
+### Fixed
+- A capability table is no longer read as an order of battle. Cells that began "No" and "Kills" were being treated as country names, which refused a naval answer that was pure rules. What marks a roster is the header (country, nation, player, side), a possessive, a country code, or a claim about the live world, and that is now what the guard looks for.
+
 ## 1.15.3 - 2026-09-05
 
 ### Fixed

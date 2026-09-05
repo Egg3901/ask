@@ -361,3 +361,17 @@ test("a rules table of unit types survives, a roster table does not", () => {
   const roster = "| Country | Carriers |\n|---|---|\n| Northland | 3 |";
   assert.notEqual(guard.protectPublicAnswer(roster, question), roster);
 });
+
+
+test("a naval capability table is rules, not a roster", () => {
+  // Live answer to the 09-05 04:25 report ("what do different naval vessels
+  // actually do in game? Go over each one"), refused in production because
+  // table cells beginning "No" and "Kills" read as proper nouns.
+  const question = "what do different naval vessels actually do in game? Go over each one";
+  const answer = "## Carrier vs the rest\n\n| Hull | Reach inland | Role in play |\n|---|---|---|\n| Carrier | Yes \u2014 sole member of `CAN_FLY`, `strategic` trait, `NAVAL_REACH 1.00` | Only hull that lets your sea control starve a coastal land front |\n| Escort | No \u2014 `NAVAL_REACH 0.40` | Screens the carrier, kills ships, wins water |\n| Destroyer | No | Screens the carrier, kills ships, wins water |\n| Submarine | No | Kills ships, wins water, does not strike inland |\n\nThe land-front rule is strict: sea-control interdiction applies only on a coastal front.";
+  assert.equal(guard.protectPublicAnswer(answer, question), answer);
+
+  // Keyed by country instead of by hull, the same shape is an order of battle.
+  const roster = "| Country | Carriers | Destroyers |\n|---|---|---|\n| Northland | 3 | 12 |";
+  assert.notEqual(guard.protectPublicAnswer(roster, question), roster);
+});
