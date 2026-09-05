@@ -55,7 +55,11 @@ const CATALOG = {
     // low. Measured 2026-09-03 on the bridge: about 2.5s to first text on a
     // short prompt, one request per muse process, four in parallel. Inert
     // without MUSE_BRIDGE_KEY.
-    efforts: ["low", "medium", "high"],
+    // "minimal" restored 2026-09-05: the bridge had been mapping every
+    // sub-medium request to "low", which measured 12-16s to first token on
+    // production-sized prompts (bridge journal, n=32). "minimal" runs at
+    // roughly half that and is what Spark 1.2 served all week.
+    efforts: ["minimal", "low", "medium", "high"],
     note: "Muse Spark 1.3 contributor tier via the Lakeside Muse bridge (owner subscription). Owner-directed default lead from 2026-09-03. Inert until MUSE_BRIDGE_KEY is set; the chain skips it instantly without a key.",
   },
   "muse-spark-1.2-contributor": {
