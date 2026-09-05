@@ -296,7 +296,33 @@ function answerIssue(question, answer) {
 const CANONICAL_ANSWERS = [
   {
     match: /\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b[\s\S]{0,90}\b(?:logistics|supply(?: lines?)?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,90}\b(?:army|military|battle|front|war|conflict|formations?|troops?)\b|\b(?:logistics|supply(?: lines?)?)\b[\s\S]{0,100}\b(?:overextend(?:ed|ing)?|rapid advance|advancing|advance|compression|pocket)\b/i,
-    text: "Army logistics is the supply calculation at each front. A player-facing logistics unit is a formation with the Logistics trait, or a rear or support formation assigned to feed the front. Each side has one shared supply pool. Demand is the formations' upkeep burden. Throughput starts with the front's infrastructure, then gains from logistics-trait formations, air-mobile support, generals trained in supply, national logistics doctrine, and formations actually serving behind or supporting the line. Extra rear units stop helping once the logistical tail is larger than the force it feeds. The game turns throughput divided by demand into a 0 to 100 supply level: 85+ is SUPPLIED, 55 to 84 is STRAINED, 30 to 54 is SHORTAGE, and below 30 is CUT OFF. Lower supply directly reduces combat effectiveness and raises attrition. Front position matters too. An advance gradually overextends the winner; being compressed into a pocket hurts the loser more. This is derived from the current line, so supply recovers if the front moves back. A Logistics Command is the organizational structure intended for multi-region and overseas sustainment, but the current battle formula does not directly read the command type or its Normal, High, or Emergency supply-priority label. It reads the formations, usable rear and support depth, generals, doctrine, infrastructure, demand, and territorial position.",
+    text: `**Army logistics is the supply calculation at each front.** Each side has one shared pool: demand is what the formations cost to keep, throughput is what you can actually move.
+
+A player-facing logistics unit is a formation with the Logistics trait, or a rear or support formation assigned to feed the front.
+
+## What throughput is built from
+
+- the front's infrastructure
+- formations with the Logistics trait
+- air-mobile support
+- generals trained in supply
+- national logistics doctrine
+- formations actually serving behind or supporting the line
+
+Extra rear units stop helping once the logistical tail is larger than the force it feeds.
+
+## What the supply number means
+
+| Supply | Band | Effect |
+|---:|---|---|
+| 85 to 100 | SUPPLIED | full effectiveness |
+| 55 to 84 | STRAINED | effectiveness starts dropping |
+| 30 to 54 | SHORTAGE | clear penalty, attrition rising |
+| below 30 | CUT OFF | severe penalty and attrition |
+
+Position matters too. An advance gradually overextends the winner, and being compressed into a pocket hurts the loser more. Both are derived from the current line, so supply recovers if the front moves back.
+
+**One thing that does not count:** a Logistics Command is the structure intended for multi-region and overseas sustainment, but the battle formula does not directly read the command type or its Normal, High or Emergency priority label. It reads formations, usable rear and support depth, generals, doctrine, infrastructure, demand, and territorial position.`,
   },
   {
     match: /\b(?:head of government|prime minister|premier|chancellor|president)\b[\s\S]{0,100}\b(?:National Influence|NPI)\b|\b(?:National Influence|NPI)\b[\s\S]{0,100}\b(?:head of government|prime minister|premier|chancellor|president)\b/i,
@@ -317,7 +343,35 @@ const CANONICAL_ANSWERS = [
     // runs of the same question returned the repair rules, the approval model,
     // and "I don't know the current ship roster" (player reports, 2026-09-05).
     match: /\b(?:ship|ships|hull|hulls|vessel|vessels|naval (?:unit|units|formation|formations)|navy|navies)\b[\s\S]{0,80}\b(?:types?|kinds?|classes|differ|difference|differences|do|roster|list|each)\b|\b(?:types?|kinds?|classes)\b[\s\S]{0,60}\b(?:ship|ships|hull|hulls|vessel|vessels)\b|\b(?:carrier|carriers|destroyer|destroyers|submarine|submarines|frigate|frigates|amphibious)\b[\s\S]{0,60}\b(?:vs\.?|versus|compared? (?:to|with)|better|worse|differ)\b/i,
-    text: "There are five naval hull types, and they differ in combat value, crew, self air defence, and how much port capacity they take up. Carrier Strike Group: power 99, crew 7,500, speed 2, 3 berths, and self air defence 0.55. Guided-Missile Destroyer: power 64, crew 330, speed 2, 1 berth, self air defence 0.40. Attack Submarine: power 81, crew 130, speed 2, 1 berth, self air defence 0.04. Frigate Squadron: power 49, crew 600, speed 2, 1 berth, self air defence 0.28. Amphibious Group: power 70, crew 2,800, speed 1, 2 berths, self air defence 0.15. The carrier is the only hull that flies, and that is the point of it: only a carrier lets sea control cut an enemy army's supply, and only on a coastal front, worth up to 0.2 of their throughput inside an overall interdiction cap of 0.45. The carrier's high self air defence is that same air wing, because the game does not embark squadrons separately. The submarine is the opposite: it is almost useless against aircraft, but it is hard to find, which makes a submarine blockade cheap to mount and cheap to break. Berths are the real cost of a big fleet: three submarines take the same port capacity as one carrier, and demand over available capacity costs supply. What a hull does on a given turn is its standing mission, not its type. Blockade applies full lane pressure and makes the hull easy to see. Sea Control fights for the water at full combat weight. Sea Denial is the submarine posture, hard to find and weak in a stand-up fight. Escort screens the group and doubles that hull's anti-air contribution. Transit moves and fights badly. Return to Port rests and rearms, recovering 12 integrity a turn against 5 on station, scaled by supply from nothing at 35 supply up to full at 100, and nothing at all on a turn the hull fought.",
+    text: `**Five hull types.** They differ in combat value, crew, speed, how much port capacity they take, and how much of their own value shoots at aircraft.
+
+| Hull | Power | Crew | Speed | Berths | Self air defence |
+|---|---:|---:|---:|---:|---:|
+| Carrier Strike Group | 99 | 7,500 | 2 | 3 | 0.55 |
+| Attack Submarine | 81 | 130 | 2 | 1 | 0.04 |
+| Amphibious Group | 70 | 2,800 | 1 | 2 | 0.15 |
+| Guided-Missile Destroyer | 64 | 330 | 2 | 1 | 0.40 |
+| Frigate Squadron | 49 | 600 | 2 | 1 | 0.28 |
+
+## What actually separates them
+
+- **The carrier is the only hull that flies**, and that is the point of it. Only a carrier lets sea control cut an enemy army's supply, only on a coastal front, worth up to 0.2 of their throughput inside an overall interdiction cap of 0.45.
+- **The carrier's air defence is that same air wing.** The game does not embark squadrons separately, so the number is folded into the hull.
+- **The submarine is the opposite.** Almost useless against aircraft, but hard to find, which makes a submarine blockade cheap to mount and cheap to break.
+- **Berths are the real cost of a fleet.** Three submarines take the same port capacity as one carrier, and demand over available capacity costs you supply.
+
+## What a hull does is its mission, not its type
+
+| Standing order | What it does |
+|---|---|
+| Blockade | Full pressure on the lane, and everyone can see you |
+| Sea Control | Fights for the water at full combat weight |
+| Sea Denial | The submarine posture: hard to find, weak in a stand-up fight |
+| Escort | Screens the group and doubles that hull's anti-air contribution |
+| Transit | Moves, and fights badly while moving |
+| Return to Port | Rests and rearms |
+
+Repair is 12 integrity a turn in port against 5 on station, scaled by supply from nothing at 35 supply up to full at 100, and nothing at all on a turn the hull fought.`,
   },
   {
     match: /\bNaval and air command\b/i,
@@ -345,6 +399,37 @@ const CANONICAL_ANSWERS = [
   },
 ];
 
+// A contract answers from source-controlled prose, so there is no live adapter
+// to build a chart from. A contract that describes a comparable set can carry
+// its own dataset instead, and the same renderer draws it: "visualize the
+// difference in the types of naval hulls" was answered with the contract text
+// and no chart at all, which reads as a refusal (player report, 2026-09-05).
+const CANONICAL_DATASETS = [
+  {
+    match: /\b(?:ship|ships|hull|hulls|vessel|vessels)\b/i,
+    dataset: {
+      title: "Naval hulls by combat value",
+      metric: "power",
+      unit: "power",
+      recommended: "bar",
+      rows: [
+        { label: "Carrier Strike Group", value: 99 },
+        { label: "Attack Submarine", value: 81 },
+        { label: "Amphibious Group", value: 70 },
+        { label: "Guided-Missile Destroyer", value: 64 },
+        { label: "Frigate Squadron", value: 49 },
+      ],
+    },
+  },
+];
+
+/** The dataset a contract can be charted from, when the player asked for one. */
+function canonicalDataset(question) {
+  const text = normalizePlayerWording(question);
+  if (!canonicalAnswer(text)) return null;
+  return CANONICAL_DATASETS.find(item => item.match.test(text))?.dataset || null;
+}
+
 function canonicalAnswer(question) {
   const text = normalizePlayerWording(question);
   return CANONICAL_ANSWERS.filter(item => item.match.test(text)).map(item => item.text).join("\n\n");
@@ -356,4 +441,4 @@ function deliveryContract(question, retrievalQuestion, { contextual = false } = 
   return canonicalAnswer(contextual ? retrievalQuestion : question);
 }
 
-module.exports = { expand, guidance, answerIssue, canonicalAnswer, deliveryContract, normalizePlayerWording };
+module.exports = { expand, guidance, answerIssue, canonicalAnswer, canonicalDataset, deliveryContract, normalizePlayerWording };
