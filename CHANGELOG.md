@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.18.2 - 2026-09-05
+
+### Changed
+- Everyday answers on Muse Spark 1.3 start streaming sooner. The model had been asked to think harder than it needed to on every quick question, which measured at 12 to 16 seconds before the first word on typical questions; it now uses the lighter setting Spark 1.2 ran on all week.
+
 ## 1.18.1 - 2026-09-05
 
 ### Added
