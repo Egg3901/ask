@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.15.3 - 2026-09-05
+
+### Fixed
+- A rules table no longer reads as somebody's order of battle. An answer listing what each ship type costs in berths ("Carrier Strike Group | 3") was being replaced by the roster refusal, because a capitalized unit-type name next to a number looked like a country next to a force count. The guard now looks for the attribution instead of the capital letter: a name that acts ("Northland maintains"), owns ("Northland's fleet"), or qualifies a force ("the German army"), a country code, or a claim about the live world.
+- Markdown tables are judged whole rather than line by line, so a header that names the asset still counts against the rows underneath it.
+
 ## 1.15.2 - 2026-09-05
 
 ### Fixed
