@@ -27,10 +27,31 @@ const FORCE_OPERATION = new RegExp(
   String.raw`\b(?:operates?|maintains?|fields?|deploys?|stations?|consists? of)\b[^.!?\n]{0,70}\b${MILITARY_INVENTORY}\b`,
   "i",
 );
-const PRIVATE_MILITARY_QUESTION = new RegExp(
-  String.raw`\bhow many\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b(?:which|what)\b[^?\n]{0,45}\b${MILITARY_INVENTORY}\b[^?\n]{0,45}\b(?:does|do)\b[^?\n]{0,45}\b(?:have|field|deploy|station|operate|maintain|lack)\b|\bwhat is\b[^?\n]{0,75}\b(?:readiness|force strength|army strength|military strength|force composition|order of battle)\b|\b(?:does|do|is|are)\b[^?\n]{0,90}\b(?:have|field|deploy|station|operate|maintain|lack|missing|readiness)\b|\b(?:current|live|roster|force composition|order of battle)\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b(?:compare|rank)\b[^?\n]{0,100}\b(?:current|live)\b[^?\n]{0,70}\b(?:militar(?:y|ies)|arm(?:y|ies)|armed forces?)\b`,
-  "i",
-);
+const POSSESSION_VERB = String.raw`(?:have|has|had|own|owns|field|fields|deploy|deploys|station|stations|operate|operates|maintain|maintains|lack|lacks|missing)`;
+const FORCE_STATE = String.raw`(?:readiness|force strength|army strength|military strength|force composition|order of battle)`;
+// Every alternative must name a military thing. An earlier version had a
+// possession-shape alternative with no inventory term at all
+// ("does|do|is|are ... have|deploy|operate"), which refused any question of the
+// form "Does the Senate have a filibuster?" or "Are corporations able to
+// operate overseas?" with the fog-of-war message, before generation and at zero
+// cost, so it never even looked like a model failure (observed 2026-09-05).
+const PRIVATE_MILITARY_QUESTION = new RegExp([
+  // "How many battalions does Northland currently deploy?"
+  String.raw`\bhow many\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b`,
+  // "Which carrier groups does the UK have?"
+  String.raw`\b(?:which|what)\b[^?\n]{0,45}\b${MILITARY_INVENTORY}\b[^?\n]{0,45}\b(?:does|do)\b[^?\n]{0,45}\b${POSSESSION_VERB}\b`,
+  // "What is Northland's readiness?"
+  String.raw`\bwhat(?:'?s| is)\b[^?\n]{0,75}\b${FORCE_STATE}\b`,
+  // "Does Northland have a Logistics Command?", either word order.
+  String.raw`\b(?:does|do|is|are)\b[^?\n]{0,60}\b${POSSESSION_VERB}\b[^?\n]{0,60}\b${MILITARY_INVENTORY}\b`,
+  String.raw`\b(?:does|do|is|are)\b[^?\n]{0,60}\b${MILITARY_INVENTORY}\b[^?\n]{0,60}\b${POSSESSION_VERB}\b`,
+  // "Is the US army at high readiness?"
+  String.raw`\b(?:does|do|is|are)\b[^?\n]{0,80}\b${FORCE_STATE}\b`,
+  // "What is on the current roster of the DDR's divisions?"
+  String.raw`\b(?:current|live|roster|force composition|order of battle)\b[^?\n]{0,90}\b${MILITARY_INVENTORY}\b`,
+  // "Compare the current militaries of the US, UK, and East Germany."
+  String.raw`\b(?:compare|rank)\b[^?\n]{0,100}\b(?:current|live)\b[^?\n]{0,70}\b(?:militar(?:y|ies)|arm(?:y|ies)|armed forces?)\b`,
+].join("|"), "i");
 const GENERIC_MILITARY_MECHANIC = new RegExp(
   String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
   "i",
@@ -97,10 +118,22 @@ function containsPrivateMilitaryIntelligence(answer, question = "") {
   });
 }
 
+// The same civilian-vocabulary problem the answer side already solves: a
+// question about "units of oil" or "shipping equipment" trips the inventory
+// list without being about the military at all. Ambiguous words only count as
+// military when the question carries military context.
+function questionHasMilitaryMeaning(question) {
+  const text = String(question || "");
+  if (UNAMBIGUOUS_INVENTORY.test(text)) return true;
+  if (!AMBIGUOUS_INVENTORY.test(text)) return true;
+  return MILITARY_CONTEXT.test(text);
+}
+
 function asksForPrivateMilitaryIntelligence(question) {
   const text = String(question || "");
   if (PUBLIC_NUCLEAR_RECORD.test(text)) return false;
-  return FORCE_INVENTORY.test(text) || PRIVATE_MILITARY_QUESTION.test(text);
+  if (!FORCE_INVENTORY.test(text) && !PRIVATE_MILITARY_QUESTION.test(text)) return false;
+  return questionHasMilitaryMeaning(text);
 }
 
 function protectPublicAnswer(answer, question = "") {
