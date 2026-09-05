@@ -30,6 +30,7 @@ const LINES = {
   trace_race: "One specific race's tally and candidates, for a disputed or named contest.",
   trace_election: "A whole election cycle's structure and results across races; trace_race for one contest's detail.",
   trace_approval: "A politician's approval history over turns.",
+  trace_character: "One character's record and standing. Non-staff askers are pinned to themselves; staff may look up anyone.",
   corporation_rankings: "The canonical ranked leaderboard of public corporations. Never hand-build a ranking from traces.",
   analytics_catalog: "Always read the catalog before analytics_query: it names the datasets, metrics, and valid dimensions.",
   analytics_query: "Aggregates, counts, and distributions, only after the catalog names the dataset and metric.",
@@ -42,6 +43,19 @@ const LINES = {
   top_players: "The public player leaderboard for rank and best-player questions.",
   parties: "Party list, leadership, and membership by country.",
   community_search: "Player norms, sentiment, and feature discussion from Discord. Lowest authority; never establishes a mechanic.",
+  // Offered only in an authenticated staff session. Without a line here the
+  // scout was handed military_roster and never called it: a moderator asking
+  // for a live roster got "no roster is visible" while holding the tool that
+  // returns one (observed 2026-09-05).
+  military_roster: "Staff only. Authoritative live force composition, readiness and deployments. wars carries no roster data.",
+  extraction_market: "Staff only. Extraction and commodity market internals behind the public price.",
+  trace_account: "Staff only. One account's private balances and movements, for support and enforcement.",
+  trace_bonds: "Staff only. Private bond holdings behind the public bond market.",
+  trace_ledger: "Staff only. The private transaction ledger: where money moved, not where it appears to have moved.",
+  trace_actions: "Staff only. One character's action history, for support and enforcement.",
+  alt_rank: "Staff only. Alt-account likelihood ranking. Evidence for an investigation, never a verdict on its own.",
+  alt_ring_audit: "Staff only. The connected-account ring behind alt_rank; read both before naming anyone.",
+  audit_query: "Staff only. The forensic audit log. Read it before asserting what a player did or did not do.",
 };
 
 /**

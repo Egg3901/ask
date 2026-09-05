@@ -35,6 +35,13 @@ test("covers the full offered surface with compact lines", () => {
     "top_players", "parties", "community_search",
   ];
   for (const name of expected) assert.ok(toolPlaybook.LINES[name], `missing line for ${name}`);
+  // Every live tool a staff session is offered needs guidance too. A tool with
+  // no line is a tool the scout does not reach for, which is how a moderator
+  // ended up being told no roster was visible while holding military_roster.
+  for (const name of require("./investigate").MODERATOR_LIVE_ALLOWLIST) {
+    if (name === "search_code" || name === "grep_code") continue;
+    assert.ok(toolPlaybook.LINES[name], `missing line for staff tool ${name}`);
+  }
   // Under 140 chars rendered keeps the whole block around 30 readable lines.
   for (const [name, line] of Object.entries(toolPlaybook.LINES)) {
     assert.ok(`- ${name}: ${line}`.length < 140, `${name} line too long`);
