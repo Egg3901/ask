@@ -296,3 +296,42 @@ test("possession questions about actual military assets are still refused", () =
     assert.equal(guard.asksForPrivateMilitaryIntelligence(question), true, question);
   }
 });
+
+test("player-reported naval mechanics questions get their answer, not the roster refusal", () => {
+  // The two most recent player reports (2026-09-05), both downvoted as
+  // "Refusal" and "Answer shut down due to pulling from live data".
+  const pairs = [
+    [
+      "I’m not asking for public data, what is the benefit of the different types of ships in the game for navies?",
+      "Carriers project air power at range and give the fleet its air cover. Screening ships have 3 anti-submarine points each and protect the capital ships. Submarines cost 40% less and hunt convoys, but they cannot contest air superiority.",
+    ],
+    [
+      "what is the benefit to aircraft carriers vs screening ships + submarines?",
+      "A carrier group provides the air cover a fleet needs to contest a sea zone. Screening ships are cheaper and each one adds 2 defence to the group. Submarines have the best cost per hit against convoys but no air cover of their own.",
+    ],
+    [
+      "how do army logistics work in game?",
+      "A Logistics Command supplies the divisions in its region. Supply falls when a front advances past 3 regions from the nearest port, and unsupplied divisions lose 10% readiness per turn.",
+    ],
+    [
+      "how does naval combat work?",
+      "Fleets engage when they share a sea zone. Carriers strike first, screening ships absorb losses, and submarines add a surprise round against convoys.",
+    ],
+  ];
+  for (const [question, answer] of pairs) {
+    assert.equal(guard.protectPublicAnswer(answer, question), answer, question);
+  }
+});
+
+test("a class-mechanics question does not make a named holder's forces publishable", () => {
+  const leaks = [
+    ["what is the benefit to aircraft carriers vs submarines?", "Northland maintains two carrier groups near the coast, so submarines are the cheaper counter."],
+    ["how does naval combat work?", "The US Navy currently has 12 carriers and the USSR has none."],
+    ["how do carriers work?", "The US has 12 carriers and the UK has 4."],
+    ["how does supply work?", "East has no Logistics Command assigned to the region."],
+    ["how do fleets work?", "Northland's fleet consists of three carrier groups."],
+  ];
+  for (const [question, answer] of leaks) {
+    assert.notEqual(guard.protectPublicAnswer(answer, question), answer, answer);
+  }
+});
