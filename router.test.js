@@ -157,7 +157,8 @@ test("deep answers get a wider evidence window and more of the thread", () => {
   // Every benched model scored 1-2 on grounding for the deep cross-system
   // question because four chunks could not cover three systems.
   assert.match(server, /const deepAnswer = route\.tier === "deep"/);
-  assert.match(server, /deepAnswer \? \{ topK: DEEP_TOP_K, maxChars: DEEP_MAX_CHARS \} : \{\}/);
+  // A coverage question gets the same window: the set is what has to be covered.
+  assert.match(server, /\(deepAnswer \|\| coverageQuestion\) \? \{ topK: DEEP_TOP_K, maxChars: DEEP_MAX_CHARS \} : \{\}/);
   assert.match(server, /deepAnswer \? DEEP_HISTORY_TURNS : 3/);
 
   const retrieve = fs.readFileSync(require.resolve("./retrieve"), "utf8");
