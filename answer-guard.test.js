@@ -375,3 +375,19 @@ test("a naval capability table is rules, not a roster", () => {
   const roster = "| Country | Carriers | Destroyers |\n|---|---|---|\n| Northland | 3 | 12 |";
   assert.notEqual(guard.protectPublicAnswer(roster, question), roster);
 });
+
+
+test("mechanics prose and a stat table are not force intelligence", () => {
+  // Live answer to the same reported question on 1.17.3, refused because the
+  // table had a "Power" column (a stat, not a great power) and because
+  // "Repair is 12 per turn" read as a named holder acting.
+  const question = "what do different naval vessels actually do in game? Go over each one";
+  const answer = "| Vessel | Power | Crew | Speed | Self air defence (`ORGANIC_AA`) | Port footprint (`BERTH_COST`) |\n|---|---|---|---|---|---|\n| Carrier Strike Group | 99 | 7500 | 2 | 0.55 | 3 |\n\n**Losses and repair.** No hull is ever deleted when sunk. It stays with its general and theater at `0` integrity and rebuilds in place through personnel and materiel. Repair is `12` per turn in port or stood down, `5` on station out of contact, scaled by supply from `minSupply: 35` to full, and zero on any turn the formation fought.";
+  assert.equal(guard.protectPublicAnswer(answer, question), answer);
+
+  // A force-state claim about a name is still a leak, copula or not.
+  assert.notEqual(
+    guard.protectPublicAnswer("Northland is at 43% readiness across its divisions.", question),
+    "Northland is at 43% readiness across its divisions.",
+  );
+});
