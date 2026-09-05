@@ -2,6 +2,16 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.17.3 - 2026-09-05
+
+### Fixed
+- A question about a set now reads widely enough to cover the set. On the default evidence window the search landed in one file and the answer covered whatever that file happened to be about: asked three times what every naval vessel does, Ask returned the hull table, then the repair rules, then the approval model. Coverage questions get the wide window that deep answers get.
+
+## 1.17.2 - 2026-09-05
+
+### Fixed
+- A moderator asking for a country's live roster gets the roster. Force composition is the one thing that cannot be reconstructed from the code, so for a staff session it is now read directly for every country the question names rather than left to the research model's tool choice.
+
 ## 1.17.1 - 2026-09-05
 
 ### Fixed
