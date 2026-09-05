@@ -52,3 +52,16 @@ test("genuinely different tied names stay ambiguous and carry their countries", 
   const trace = await live.resolveCorporation("Prim Mart", callTool);
   assert.deepEqual(trace.ambiguous, ["Prime Mart (US)", "Prima Mart (AT)"]);
 });
+
+test("every country a staff roster question names is resolved, longest name first", () => {
+  assert.deepEqual(live.namedCountryIds("What units does the UK currently field?"), ["UK"]);
+  // "east germany" is DD and must not also produce DE, and bare codes count.
+  assert.deepEqual(
+    live.namedCountryIds("current live military roster for the US, UK, RU and east germany"),
+    ["DD", "US", "UK", "RU"],
+  );
+  assert.deepEqual(live.namedCountryIds("roster for East Germany"), ["DD"]);
+  // Nothing named falls back to the asker's own country, and never to nothing.
+  assert.deepEqual(live.namedCountryIds("how do carriers work?", "DE"), ["DE"]);
+  assert.deepEqual(live.namedCountryIds("how do carriers work?"), []);
+});
