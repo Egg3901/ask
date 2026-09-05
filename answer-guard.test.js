@@ -254,3 +254,45 @@ test("civilian sentences with ambiguous inventory words are not military intelli
     "They have 300 aircraft available.",
   );
 });
+
+test("ordinary questions are not refused as fog-of-war requests", () => {
+  // The possession shape alone ("does X have Y") is not a military question.
+  // These all returned the fog-of-war refusal before generation, at zero cost,
+  // so they read to players as Ask being unable to answer anything about war
+  // or, in fact, about anything phrased as a yes/no possession question.
+  const allowed = [
+    "How does war work?",
+    "Does declaring war have a stability cost?",
+    "Do wars have an approval penalty?",
+    "What happens to approval when a war drags on?",
+    "Do parties have platforms?",
+    "Does the Senate have a filibuster?",
+    "Is there a way to maintain a coalition?",
+    "How do I deploy a bill to the floor?",
+    "Are corporations able to operate overseas?",
+    "Is my corporation able to maintain its dividend?",
+    "Do I have enough equipment to build a factory?",
+    "How many units of oil does a refinery consume?",
+    "What is the current unit price of steel?",
+  ];
+  for (const question of allowed) {
+    assert.equal(guard.asksForPrivateMilitaryIntelligence(question), false, question);
+    assert.equal(guard.protectPublicAnswer("Answered normally.", question), "Answered normally.", question);
+  }
+});
+
+test("possession questions about actual military assets are still refused", () => {
+  const refused = [
+    "Does Northland have a Logistics Command?",
+    "Does the DDR field any submarines?",
+    "How many divisions does France have?",
+    "Is the US army at high readiness?",
+    "What is the readiness of the US army?",
+    "What is East Germany's order of battle?",
+    "How many troops does the USSR have stationed in Poland?",
+    "What is the current deployment of the French fleet?",
+  ];
+  for (const question of refused) {
+    assert.equal(guard.asksForPrivateMilitaryIntelligence(question), true, question);
+  }
+});

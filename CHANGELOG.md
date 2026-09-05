@@ -2,6 +2,12 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.15.1 - 2026-09-05
+
+### Fixed
+- Questions phrased as "does X have Y" are answered again. The guard that keeps live military rosters out of public answers was matching that phrasing on its own, with no military asset needed, so "does declaring war have a stability cost?", "does the Senate have a filibuster?" and "are corporations able to operate overseas?" all came back as a privacy refusal instead of an answer. The guard now needs an actual military asset in the question, and words that are also civilian (units, equipment, personnel, ships) only count when the question is about the military.
+- War is an ordinary subject: how wars start, how battles resolve, supply, war weariness, the cost of declaring, what happens at peace, and the public record of who fought whom. Only live force composition, readiness and deployments stay fog of war.
+
 ## 1.15.0 - 2026-08-31
 
 ### Added
