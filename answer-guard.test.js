@@ -335,3 +335,29 @@ test("a class-mechanics question does not make a named holder's forces publishab
     assert.notEqual(guard.protectPublicAnswer(answer, question), answer, answer);
   }
 });
+
+test("a rules table of unit types survives, a roster table does not", () => {
+  // The live answer to the 09-05 03:49 report ("what do the diff types of ship
+  // do in game for navies"), which was replaced by the refusal in production.
+  const question = "what do the diff types of ship do in game for navies";
+  const answer = [
+    "The game defines five naval hulls. Their hard difference in the rules is **berth weight** — how much port capacity they eat:",
+    "",
+    "| Hull | Berths |",
+    "|---|---|",
+    "| Carrier Strike Group | 3 |",
+    "| Amphibious Group | 2 |",
+    "| Guided-Missile Destroyer | 1 |",
+    "| Frigate Squadron | 1 |",
+    "| Attack Submarine | 1 |",
+    "",
+    "In play that means footprint is what matters: three subs cost what one carrier costs to base.",
+    "Hulls regain integrity between fights only, at 12 in port and 5 on station.",
+  ].join("\n");
+  assert.equal(guard.protectPublicAnswer(answer, question), answer);
+
+  // The same shape with a country in it is an order of battle. A markdown table
+  // is judged whole, so the header's inventory word still applies to the rows.
+  const roster = "| Country | Carriers |\n|---|---|\n| Northland | 3 |";
+  assert.notEqual(guard.protectPublicAnswer(roster, question), roster);
+});

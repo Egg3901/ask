@@ -91,6 +91,8 @@ const GENERIC_NAME_WORDS = new Set([
   "send", "fly", "order", "build", "buy", "place", "hold", "run", "add", "note", "remember",
   "supplied", "unsupplied", "supplies", "losses", "loss", "damage", "combat", "engage",
   "attack", "attacker", "defender", "defence", "defense", "cost", "costs", "price", "range",
+  "group", "strike", "amphibious", "guided", "hull", "berth", "assault", "support",
+  "reserve", "home", "allied", "neutral", "heavy", "light", "medium", "type", "role",
 ]);
 
 // GENERIC_NAME_WORDS is written in the singular where a plural reads oddly, so
@@ -140,6 +142,39 @@ function isClassMechanicsQuestion(question) {
     && !QUESTION_FILLER.has(match[0].toLowerCase().replace(/['\u2019]/g, "")));
 }
 
+// Under a class question the only thing that can leak is force attributed to a
+// holder, so look for the attribution rather than for capital letters. An
+// unknown capitalized word is a holder when it acts ("Northland maintains",
+// "East has"), when it owns ("Northland's fleet"), or when it qualifies a force
+// ("The German army"). It is not a holder when it is part of a unit type name,
+// which is why a table row like "| Carrier Strike Group | 3 |" was being read
+// as somebody's order of battle (observed live 2026-09-05).
+const HOLDER_VERB = /^(?:has|have|had|is|are|was|were|operates?|maintains?|fields?|deploys?|stations?|lacks?|keeps?|holds?|runs?|consists?|includes?|contains?|currently|now|still)$/i;
+const HOLDER_FORCE_NOUN = /^(?:forces?|army|armies|navy|navies|militar(?:y|ies)|fleets?|troops?|divisions?|brigades?|regiments?|battalions?|squadrons?)$/i;
+const TABLE_ROW = /^\s*\|/;
+
+// "Guided-Missile Destroyer" is two ordinary words joined, not a proper noun.
+function isKnownWord(word) {
+  return String(word).split("-").filter(Boolean).every((part) => isGenericNameWord(part));
+}
+
+function namesHolder(sentence) {
+  const words = String(sentence).split(/[\s/]+/).map((w) => w.replace(/^[^A-Za-z]+|[^A-Za-z'\u2019-]+$/g, ""));
+  let unknownNames = 0;
+  for (let i = 0; i < words.length; i += 1) {
+    const word = words[i];
+    if (!word || !/^[A-Z]/.test(word)) continue;
+    if (isKnownWord(word)) continue;
+    if (/^[A-Z0-9_]{2,}$/.test(word)) continue;          // CAP, PATROL, SOE: mission acronyms
+    if (/['\u2019]s$/.test(word)) return true;              // "Northland's fleet"
+    unknownNames += 1;
+    const next = words[i + 1] || "";
+    if (HOLDER_VERB.test(next) || HOLDER_FORCE_NOUN.test(next)) return true;
+  }
+  // Nothing in a rules table is a name. A name in one is a roster.
+  return TABLE_ROW.test(sentence) && unknownNames > 0;
+}
+
 function isGenericMilitaryMechanicSentence(sentence, question) {
   const text = sentence.trim();
   if (PUBLIC_NUCLEAR_RECORD.test(text) && PUBLIC_NUCLEAR_RECORD.test(question)) return true;
@@ -153,7 +188,7 @@ function isGenericMilitaryMechanicSentence(sentence, question) {
   if (GENERIC_HYPOTHETICAL.test(text) && !hasUnknownName) return true;
   // Nothing in a class question points at a holder, so the answer can only leak
   // by naming one itself or by dating itself to the live world.
-  if (classQuestion) return !hasUnknownName && !HOLDER_CODE.test(text) && !LIVE_CLAIM.test(text);
+  if (classQuestion) return !namesHolder(text) && !HOLDER_CODE.test(text) && !LIVE_CLAIM.test(text);
   if (/\b(?:your|their|our|its|this|that)\s+(?:country|nation|force|forces|army|military)\b/i.test(text)) return false;
   const subject = text.match(CAPITALIZED_WORD)?.[0];
   if (subject && !isGenericNameWord(subject)) return false;
@@ -176,8 +211,23 @@ function sentenceHasMilitaryMeaning(sentence, question) {
   return MILITARY_CONTEXT.test(sentence) || MILITARY_CONTEXT.test(String(question || ""));
 }
 
+// A markdown table is one statement split over lines: the header holds the
+// inventory word and the rows hold the numbers, so splitting on newlines hides
+// "| Carriers |" over "| Northland | 3 |" from every quantity pattern.
+function statements(answer) {
+  const out = [];
+  let table = [];
+  for (const line of String(answer || "").split(/\n/)) {
+    if (TABLE_ROW.test(line)) { table.push(line.trim()); continue; }
+    if (table.length) { out.push(table.join(" ")); table = []; }
+    for (const part of line.split(/(?<=[.!?])\s+/)) if (part.trim()) out.push(part);
+  }
+  if (table.length) out.push(table.join(" "));
+  return out;
+}
+
 function containsPrivateMilitaryIntelligence(answer, question = "") {
-  return String(answer || "").split(/(?<=[.!?])\s+|\n+/).some((sentence) => {
+  return statements(answer).some((sentence) => {
     if (isGenericMilitaryMechanicSentence(sentence, question)) return false;
     const tripped = FORCE_INVENTORY.test(sentence) || FORCE_POSSESSION.test(sentence)
       || FORCE_QUANTITY.test(sentence) || FORCE_ABSENCE.test(sentence) || FORCE_OPERATION.test(sentence);
