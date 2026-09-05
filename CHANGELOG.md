@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.19.3 - 2026-09-05
+
+### Changed
+- The search index can be built with a different embedding model without a code change: the prompt prefixes the model expects on questions and on documents now come from the environment, and default to the current model's.
+
 ## 1.19.2 - 2026-09-05
 
 ### Added
