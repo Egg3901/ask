@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const auth = require("./auth");
 const prompt = require("./prompt");
 const games = require("./games");
-const { normalizeDiscordAsk, discordSession } = require("./discord-ask");
+const { normalizeDiscordAsk, discordSession, elevate } = require("./discord-ask");
 
 test("Discord questions are translated into the full Ask request contract", () => {
   const out = normalizeDiscordAsk({
@@ -87,4 +87,32 @@ test("a Discord report has the same consequences as a web downvote", () => {
   // The web owner-feedback path evicts too.
   const web = server.slice(server.indexOf('"/api/answer/feedback"'));
   assert.match(web.slice(0, 1500), /evictCacheByQuestion/);
+});
+
+test("a moderator asking from Discord is a moderator", () => {
+  const session = discordSession({ discordId: "42", discordUsername: "mod" });
+  assert.equal(session.context.isModerator, false);
+
+  const elevated = elevate(session, { role: "moderator", isAdmin: false, isModerator: true });
+  assert.equal(elevated.context.isModerator, true);
+  assert.equal(elevated.entitlement.staff, true);
+  // Identity is untouched: elevation grants a role, it does not change who asked.
+  assert.deepEqual(elevated.identity, session.identity);
+  assert.equal(elevated.context.username, session.context.username);
+
+  const admin = elevate(session, { role: "admin", isAdmin: true, isModerator: false });
+  assert.equal(admin.context.isAdmin, true);
+});
+
+test("elevation is refused to everyone who is not staff", () => {
+  const session = discordSession({ discordId: "42", discordUsername: "player" });
+  for (const context of [
+    null,
+    undefined,
+    { role: "player", isAdmin: false, isModerator: false },
+    { role: "admin", isAdmin: true, isBanned: true },          // banned wins
+    { isAdmin: "true", isModerator: "yes" },                    // strings are not true
+  ]) {
+    assert.equal(elevate(session, context), session, JSON.stringify(context));
+  }
 });

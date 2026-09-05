@@ -79,4 +79,33 @@ function discordSession(body = {}) {
   };
 }
 
-module.exports = { normalizeDiscordAsk, discordSession, clampQuestion, MAX_QUESTION };
+/**
+ * Give a Discord session the role its owner already has in the game.
+ *
+ * The bot cannot assert this: a claim carried over a shared secret is not a
+ * check, and the bot is one compromised token away from minting moderators. The
+ * role therefore comes from the AHD account linked to the Discord id, read
+ * server-side. Only the role and the entitlement it earns are taken; everything
+ * else about the session is left exactly as the public path built it, so an
+ * ordinary player's Discord session is byte-for-byte unchanged.
+ *
+ * A banned account is not elevated and not otherwise touched here.
+ */
+function elevate(session, playerContext) {
+  if (!session || !playerContext || playerContext.isBanned === true) return session;
+  const isAdmin = playerContext.isAdmin === true;
+  const isModerator = playerContext.isModerator === true;
+  if (!isAdmin && !isModerator) return session;
+  return {
+    ...session,
+    context: {
+      ...session.context,
+      isAdmin,
+      isModerator,
+      role: playerContext.role || (isAdmin ? "admin" : "moderator"),
+    },
+    entitlement: auth.entitlementFor(playerContext),
+  };
+}
+
+module.exports = { normalizeDiscordAsk, discordSession, elevate, clampQuestion, MAX_QUESTION };
