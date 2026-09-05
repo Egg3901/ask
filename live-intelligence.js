@@ -5,6 +5,7 @@
 // player context, peer inference, FX-aware summaries, and chart data stay here.
 
 const analyticsPlanner = require("./analytics-planner");
+const answerGuard = require("./answer-guard");
 
 const SECTOR_TYPES = [
   "financial", "media", "manufacturing", "chemical_industries", "healthcare",
@@ -38,6 +39,32 @@ function namedCountryId(question, fallback = null) {
   if (match) return COUNTRY_IDS[match];
   const inherited = String(fallback || "").trim();
   return COUNTRY_IDS[inherited.toLowerCase()] || (/^[A-Za-z]{2,3}$/.test(inherited) ? inherited.toUpperCase() : null);
+}
+
+/**
+ * Every country the question names, then the asker's own if it names none.
+ * Longest name first and the match is consumed, so "east germany" resolves to
+ * DD alone rather than to DD and then DE. Bare country codes count: a staff
+ * question is as likely to say "RU and DD" as "Russia and East Germany".
+ */
+function namedCountryIds(question, fallback = null) {
+  let text = String(question || "").toLowerCase();
+  const found = [];
+  for (const name of Object.keys(COUNTRY_IDS).sort((a, b) => b.length - a.length)) {
+    const pattern = new RegExp(`\\b${name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "ig");
+    if (!pattern.test(text)) continue;
+    text = text.replace(new RegExp(pattern.source, "ig"), " ");
+    if (!found.includes(COUNTRY_IDS[name])) found.push(COUNTRY_IDS[name]);
+  }
+  const codes = new Set(Object.values(COUNTRY_IDS));
+  for (const token of String(question || "").match(/\b[A-Z]{2,3}\b/g) || []) {
+    if (codes.has(token) && !found.includes(token)) found.push(token);
+  }
+  if (!found.length) {
+    const inherited = namedCountryId(question, fallback);
+    if (inherited) found.push(inherited);
+  }
+  return found;
 }
 
 function mapMetric(question, scope) {
@@ -578,6 +605,19 @@ async function retrieve({ question, context = {}, callTool, plan = null }) {
       if (viz) visualizations.push(viz);
     }
   }
+  // Staff only. The roster tool is offered to the scout, but a tool nobody calls
+  // answers nothing: an elevated moderator asking for the UK's live roster was
+  // told none was visible while holding the one lookup that returns it
+  // (2026-09-05). Force composition cannot be reconstructed from code, so for
+  // staff it is fetched deterministically rather than left to tool choice.
+  const staffAccess = context?.isAdmin === true || context?.isModerator === true;
+  if (staffAccess && answerGuard.asksForPrivateMilitaryIntelligence(text)) {
+    for (const country of namedCountryIds(text, focusCountry).slice(0, 3)) {
+      const roster = await call("military_roster", { country });
+      if (roster) parts.push(`PRIVATE LIVE MILITARY ROSTER (${country}) — moderator access:\n${cap(roster, 9000)}`);
+    }
+  }
+
   // Candidate maps are a specialised election lookup. Do not attach a generic
   // country economy chart just because the word "map" appears in the request.
   if (COUNTRY_WORDS.test(text) && !fxPair && !candidateMapRequested && !aggregateMapRequested && !plan?.suppressGenericCountryEconomy) {
@@ -835,4 +875,4 @@ Lead with the candidate favored by the live evidence, but distinguish a projecti
   };
 }
 
-module.exports = { retrieve, resolveCorporation, namedCorporation, namedCorporations, namedSectorType, namedSectorState, namedFxPair, candidateMapFilters, geoAggregateMetric, activeWindowHours };
+module.exports = { retrieve, resolveCorporation, namedCountryIds, namedCorporation, namedCorporations, namedSectorType, namedSectorState, namedFxPair, candidateMapFilters, geoAggregateMetric, activeWindowHours };
