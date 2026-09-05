@@ -1,0 +1,7 @@
+{
+  "note": "Named retrieval configs. env is applied to process.env BEFORE retrieve.js is loaded (it reads RAG_TOP_K and RAG_MAX_CHARS at module load). retriever: hybrid drives search()/searchMulti(); dense and bm25 drive the per-retriever lists from retrieve.__debug.isolated() through the production finish() so the char budget applies identically. RAG_DB is always the snapshot unless overridden on the command line.",
+  "flash": { "retriever": "hybrid", "env": { "RAG_TOP_K": "8", "RAG_MAX_CHARS": "22000" } },
+  "deep": { "retriever": "hybrid", "env": { "RAG_TOP_K": "16", "RAG_MAX_CHARS": "60000" } },
+  "dense": { "retriever": "dense", "env": { "RAG_TOP_K": "8", "RAG_MAX_CHARS": "22000" } },
+  "bm25": { "retriever": "bm25", "env": { "RAG_TOP_K": "8", "RAG_MAX_CHARS": "22000" } }
+}
