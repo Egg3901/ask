@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.19.2 - 2026-09-05
+
+### Added
+- A second way of combining keyword and semantic search results, switched off by default. It scores both kinds of match on the same scale, keeps an exactly named symbol near the top, spreads the evidence across the parts of a multi-part question, and trims duplicate passages before the model reads them. It is here so it can be measured against the current method on the same questions before it is ever turned on.
+
 ## 1.19.1 - 2026-09-05
 
 ### Changed
