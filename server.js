@@ -674,8 +674,9 @@ const server = http.createServer(async (req, res) => {
         // through. An explicit "concise" is still honoured: that is the player
         // asking for the short version on purpose.
         const requestedLength = prompt.LENGTHS[body.length] ? body.length : "standard";
+        const coverageQuestion = router.wantsCoverage(question);
         const length = reportRequested ? "deep"
-          : (requestedLength !== "concise" && router.wantsCoverage(question)) ? "deep"
+          : (requestedLength !== "concise" && coverageQuestion) ? "deep"
           : requestedLength;
         // Visualizations are metered, not gated: every tier has some, and running
         // out is a daily allowance rather than a locked feature. A player who asks
@@ -974,7 +975,12 @@ const server = http.createServer(async (req, res) => {
         const contractQuestion = contextualFollowup ? retrievalQuestion : question;
         status(deepAnswer ? "Decomposing into sub-queries, searching code, docs & wiki…" : "Vector-searching code & docs…");
         try {
-          const retrieveOpts = deepAnswer ? { topK: DEEP_TOP_K, maxChars: DEEP_MAX_CHARS } : {};
+          // A question about a set needs the breadth of the set. On the default
+          // eight chunks the retrieval lands in one file and the answer covers
+          // whatever that file happens to be about: three runs of "what does
+          // every naval vessel do" returned the hull table, the repair tests,
+          // and the approval model, one each (2026-09-05).
+          const retrieveOpts = (deepAnswer || coverageQuestion) ? { topK: DEEP_TOP_K, maxChars: DEEP_MAX_CHARS } : {};
           // Pro and deep questions get model-written sub-queries so retrieval
           // covers every system the question spans, not just the one the single
           // embedding lands nearest. decompose() fails open to [] and
