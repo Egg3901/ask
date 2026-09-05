@@ -1326,6 +1326,17 @@ const server = http.createServer(async (req, res) => {
           privateEvidence,
         });
         let answer = visualization.ensure(guarded.answer, liveVisualizations, { required: guarded.required, question });
+        // "Visualize the difference between the hull types" got the contract
+        // text and no chart, because a contract answers from source-controlled
+        // prose and has no live adapter behind it to draw. A contract that
+        // describes a comparable set carries its own dataset, and the same
+        // renderer draws it (player report, 2026-09-05). After the guard, so
+        // the plan's own visual rules still decide whether a chart belongs.
+        if (mechanicsContractApplied && visualizations && !/```/.test(answer)) {
+          const contractDataset = queryAliases.canonicalDataset(question);
+          const contractChart = contractDataset ? visualization.chart(contractDataset, question) : null;
+          if (contractChart) answer = `${contractChart}\n\n${answer}`.trim();
+        }
         // Deep answers are where models invent connective tissue between systems
         // (measured on the bench: plausible macroeconomics the code does not
         // show, even with the wide retrieval window). A cheap second model lists

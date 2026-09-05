@@ -2,6 +2,14 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.19.0 - 2026-09-05
+
+### Changed
+- Long answers are laid out instead of poured into one paragraph. The ship-type and army-logistics answers now lead with a table, use headings, and put the numbers in columns rather than in a run-on sentence.
+
+### Fixed
+- "Visualize the difference between the hull types" gets a chart. A canonical answer has no live data feed behind it to draw, so it now carries its own figures and the same renderer draws them; asking to visualize one no longer returns text alone.
+
 ## 1.18.2 - 2026-09-05
 
 ### Changed

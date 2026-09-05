@@ -272,17 +272,34 @@ test("the ship-type catalogue is answered from the contract, not from whatever r
   ];
   for (const question of asked) {
     const answer = aliases.canonicalAnswer(question);
-    assert.match(answer, /five naval hull types/, question);
+    assert.match(answer, /Five hull types/i, question);
     // Every hull is named, with the numbers from src/lib/navair/config.ts.
     for (const hull of ["Carrier Strike Group", "Guided-Missile Destroyer", "Attack Submarine", "Frigate Squadron", "Amphibious Group"]) {
       assert.ok(answer.includes(hull), `${hull} missing for: ${question}`);
     }
-    assert.match(answer, /power 99/);
-    assert.match(answer, /3 berths/);
+    // The numbers come from src/lib/navair/config.ts, in a table.
+    assert.match(answer, /\| 99 \| 7,500 \| 2 \| 3 \| 0\.55 \|/);
+    assert.match(answer, /\| Sea Denial \|/);
   }
 
   // Neighbouring naval topics keep their own contracts.
-  assert.doesNotMatch(aliases.canonicalAnswer("how do i blockade with navies"), /five naval hull types/);
-  assert.doesNotMatch(aliases.canonicalAnswer("how do carriers build air superiority?"), /five naval hull types/);
-  assert.doesNotMatch(aliases.canonicalAnswer("how do army logistics work in game?"), /five naval hull types/);
+  assert.doesNotMatch(aliases.canonicalAnswer("how do i blockade with navies"), /Five hull types/i);
+  assert.doesNotMatch(aliases.canonicalAnswer("how do carriers build air superiority?"), /Five hull types/i);
+  assert.doesNotMatch(aliases.canonicalAnswer("how do army logistics work in game?"), /Five hull types/i);
+});
+
+test("a contract that describes a comparable set can be charted", () => {
+  const asked = "visualize the difference in the types of naval hulls in game";
+  const dataset = aliases.canonicalDataset(asked);
+  assert.ok(dataset, "the hull contract carries a dataset");
+  assert.equal(dataset.rows.length, 5);
+  assert.deepEqual(dataset.rows.map(r => r.value), [99, 81, 70, 64, 49]);
+
+  const block = require("./visualization").chart(dataset, asked);
+  assert.match(block, /```mermaid/);
+  assert.match(block, /Carrier Strike Group/);
+
+  // Only where a contract exists, and only where a set is being compared.
+  assert.equal(aliases.canonicalDataset("how do i blockade with navies"), null);
+  assert.equal(aliases.canonicalDataset("what is the prime rate"), null);
 });
