@@ -92,6 +92,8 @@ const GENERIC_NAME_WORDS = new Set([
   "supplied", "unsupplied", "supplies", "losses", "loss", "damage", "combat", "engage",
   "attack", "attacker", "defender", "defence", "defense", "cost", "costs", "price", "range",
   "group", "strike", "amphibious", "guided", "hull", "berth", "assault", "support",
+  "repair", "repairs", "theater", "theatre", "integrity", "materiel", "sunk", "general",
+  "generals", "condition", "posture", "veterancy", "technology", "upkeep", "sustainment",
   "reserve", "home", "allied", "neutral", "heavy", "light", "medium", "type", "role",
 ]);
 
@@ -149,11 +151,18 @@ function isClassMechanicsQuestion(question) {
 // ("The German army"). It is not a holder when it is part of a unit type name,
 // which is why a table row like "| Carrier Strike Group | 3 |" was being read
 // as somebody's order of battle (observed live 2026-09-05).
-const HOLDER_VERB = /^(?:has|have|had|is|are|was|were|operates?|maintains?|fields?|deploys?|stations?|lacks?|keeps?|holds?|runs?|consists?|includes?|contains?|currently|now|still)$/i;
+// Possession and operation only. "is" and "are" were in here and they made every
+// mechanics sentence that opens on a capitalized common noun a roster line:
+// "Repair is 12 per turn in port" read as a holder acting (observed live
+// 2026-09-05). A copula says something exists, not that somebody owns it.
+const HOLDER_VERB = /^(?:has|have|had|operates?|maintains?|fields?|deploys?|stations?|lacks?|keeps?|holds?|runs?|consists?|includes?|contains?|currently|now|still)$/i;
+// The one copula shape worth keeping: "Northland is at 43% readiness" is a
+// force-state claim about a named holder, and a rules sentence has no name in it.
+const FORCE_STATE_CLAIM = /\b(?:readiness|force strength|army strength|military strength|force composition|order of battle)\b/i;
 const HOLDER_FORCE_NOUN = /^(?:forces?|army|armies|navy|navies|militar(?:y|ies)|fleets?|troops?|divisions?|brigades?|regiments?|battalions?|squadrons?)$/i;
 const TABLE_ROW = /^\s*\|/;
 // A roster table says who. A rules table says what. The header is the tell.
-const HOLDER_COLUMN = /\b(?:countr(?:y|ies)|nations?|powers?|players?|sides?|factions?|belligerents?)\b/i;
+const HOLDER_COLUMN = /\b(?:countr(?:y|ies)|nations?|players?|sides?|factions?|belligerents?)\b/i;
 const PROPER_POSSESSIVE = /\b[A-Z][A-Za-z'\u2019-]*['\u2019]s\b/;
 
 // "Guided-Missile Destroyer" is two ordinary words joined, not a proper noun.
@@ -163,6 +172,7 @@ function isKnownWord(word) {
 
 function namesHolder(sentence) {
   const text = String(sentence);
+  let unknownNames = 0;
   if (PROPER_POSSESSIVE.test(text)) return true;              // "Northland's fleet"
   if (HOLDER_CODE.test(text)) return true;                    // "the US has 12 carriers"
   // In a table every cell starts with a capital, so a capitalized word proves
@@ -181,8 +191,9 @@ function namesHolder(sentence) {
     // A name that acts or qualifies a force is a holder. A name that just sits
     // in a sentence ("Mending: hulls regain integrity") is vocabulary.
     if (HOLDER_VERB.test(next) || HOLDER_FORCE_NOUN.test(next)) return true;
+    unknownNames += 1;
   }
-  return false;
+  return unknownNames > 0 && FORCE_STATE_CLAIM.test(text) && /\d/.test(text);
 }
 
 function isGenericMilitaryMechanicSentence(sentence, question) {
