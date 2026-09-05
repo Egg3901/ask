@@ -4,20 +4,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const guard = require("./answer-guard");
 
-test("public answers remove live military intelligence paraphrases", () => {
-  const sensitive = [
-    "Northland currently operates three armored corps.",
-    "Northland's army consists of twelve infantry battalions.",
-    "Northland is at 43% readiness.",
-    "The Airlift Wing is absent from Northland forces.",
-    "Northland is missing a Logistics Command.",
-    "Northland maintains two carrier groups near the coast.",
-  ];
-  for (const answer of sensitive) {
-    assert.notEqual(guard.protectPublicAnswer(answer), answer, answer);
-  }
-});
-
 test("private military questions are refused before a euphemistic answer can pass", () => {
   const answer = guard.protectPublicAnswer(
     "They are well prepared.",
@@ -31,30 +17,6 @@ test("a current named-country military comparison is refused before streaming", 
   const question = "Compare the current militaries of the US, UK, Russia, and East Germany.";
   assert.equal(guard.asksForPrivateMilitaryIntelligence(question), true);
   assert.match(guard.protectPublicAnswer("", question), /public|fog of war|private military/i);
-});
-
-test("public answers preserve generic quantified military mechanics", () => {
-  const mechanics = "A division contains three brigades in the formation model.";
-  assert.equal(guard.protectPublicAnswer(mechanics, "How are divisions composed?"), mechanics);
-  const commandMechanic = "A Logistics Command adds regional supply throughput.";
-  assert.equal(guard.protectPublicAnswer(commandMechanic, "What does a Logistics Command do?"), commandMechanic);
-  const requirement = "You need to have a Logistics Command assigned to support regional supply.";
-  assert.equal(guard.protectPublicAnswer(requirement, "What does a Logistics Command do?"), requirement);
-  const hypothetical = "If your country has no Logistics Command, regional supply throughput falls.";
-  assert.equal(guard.protectPublicAnswer(hypothetical, "What does a Logistics Command do?"), hypothetical);
-  const missionMechanic = "A country's air-superiority figure is built by formations stationed in the region on CAP or PATROL. It builds by 12 and decays by 15 per turn.";
-  assert.equal(guard.protectPublicAnswer(
-    missionMechanic,
-    "Which air missions build air superiority, where do they count, and how quickly does it build or decay?",
-  ), missionMechanic);
-  const workedExample = "With hostile weight at 0, one wing on CAP builds the channel by 12 per turn.";
-  assert.equal(guard.protectPublicAnswer(
-    workedExample,
-    "Which air missions build air superiority, where do they count, and how quickly does it build or decay?",
-  ), workedExample);
-
-  const namedLeak = "East has no Logistics Command assigned to the region.";
-  assert.notEqual(guard.protectPublicAnswer(namedLeak, "How does regional supply work?"), namedLeak);
 });
 
 test("ticket 1234 air-superiority typo still preserves a mechanics answer", () => {
@@ -94,14 +56,6 @@ test("trusted canonical mechanics contracts cross the final delivery guard uncha
   assert.deepEqual(delivered.issues, []);
 });
 
-test("a mechanics question does not make named live formations publishable", () => {
-  const answer = "Station Northland's three fighter wings in the contested region.";
-  assert.notEqual(
-    guard.protectPublicAnswer(answer, "How do we increase air superiority?"),
-    answer,
-  );
-});
-
 test("a follow-up uses its condensed mechanics context for the privacy guard", () => {
   const answer = "The defense officeholder can open the Commands tab and select Open naval and air command.";
   const result = guard.enforce({
@@ -112,16 +66,6 @@ test("a follow-up uses its condensed mechanics context for the privacy guard", (
   });
   assert.equal(result.answer, answer);
   assert.ok(!result.issues.includes("private_military_intelligence_removed"));
-});
-
-test("the final answer guard replaces military intelligence and records the issue", () => {
-  const result = guard.enforce({
-    answer: "Northland maintains two carrier groups near the coast.",
-    question: "What is happening near the coast?",
-    plan: { display: { kind: "prose" }, visual: "optional" },
-  });
-  assert.doesNotMatch(result.answer, /Northland|carrier groups/i);
-  assert.ok(result.issues.includes("private_military_intelligence_removed"));
 });
 
 test("the final answer guard preserves private intelligence for moderator access", () => {
@@ -234,181 +178,96 @@ test("a fenced JSON tool call is a leak, not an answer", () => {
   assert.equal(guard.looksLikeToolLeak('Cloture needs three fifths of the votes cast.'), false);
 });
 
-test("civilian sentences with ambiguous inventory words are not military intelligence", () => {
-  const question = "How does the game calculate a corporation stock price each turn?";
-  const answer = "The market cap includes 500,000 units of outstanding stock. Each corporation has equipment and personnel costs in its ledger. Price moves with earnings per share.";
-  assert.equal(guard.protectPublicAnswer(answer, question), answer);
-  // Real military leaks still refuse: unambiguous inventory stands alone...
-  assert.equal(
-    guard.protectPublicAnswer("The US currently has 12 armored divisions stationed in Europe.", question),
-    guard.protectPublicAnswer("", "what is the live military roster for the US?"),
-  );
-  // ...and ambiguous words still refuse when the sentence carries military context.
-  assert.notEqual(
-    guard.protectPublicAnswer("The German army has 40 ships deployed near the front.", question),
-    "The German army has 40 ships deployed near the front.",
-  );
-  // A military question keeps full protection even for ambiguous words.
-  assert.notEqual(
-    guard.protectPublicAnswer("They have 300 aircraft available.", "what aircraft does the UK have deployed right now?"),
-    "They have 300 aircraft available.",
-  );
-});
 
-test("ordinary questions are not refused as fog-of-war requests", () => {
-  // The possession shape alone ("does X have Y") is not a military question.
-  // These all returned the fog-of-war refusal before generation, at zero cost,
-  // so they read to players as Ask being unable to answer anything about war
-  // or, in fact, about anything phrased as a yes/no possession question.
-  const allowed = [
-    "How does war work?",
-    "Does declaring war have a stability cost?",
-    "Do wars have an approval penalty?",
-    "What happens to approval when a war drags on?",
-    "Do parties have platforms?",
-    "Does the Senate have a filibuster?",
-    "Is there a way to maintain a coalition?",
-    "How do I deploy a bill to the floor?",
-    "Are corporations able to operate overseas?",
-    "Is my corporation able to maintain its dividend?",
-    "Do I have enough equipment to build a factory?",
-    "How many units of oil does a refinery consume?",
-    "What is the current unit price of steel?",
-  ];
-  for (const question of allowed) {
-    assert.equal(guard.asksForPrivateMilitaryIntelligence(question), false, question);
-    assert.equal(guard.protectPublicAnswer("Answered normally.", question), "Answered normally.", question);
-  }
-});
 
-test("possession questions about actual military assets are still refused", () => {
+
+
+
+
+
+// ── fog of war ──────────────────────────────────────────────────────────────
+// The contract, after a day of false refusals: enforce it at the request and at
+// the tool gate, never by reading the answer for military-looking words.
+
+test("a request for a live roster is refused before anything is generated", () => {
   const refused = [
-    "Does Northland have a Logistics Command?",
-    "Does the DDR field any submarines?",
     "How many divisions does France have?",
-    "Is the US army at high readiness?",
+    "What is the current live military roster for the US, UK, RU and DD?",
+    "Does Northland have a Logistics Command?",
     "What is the readiness of the US army?",
-    "What is East Germany's order of battle?",
-    "How many troops does the USSR have stationed in Poland?",
-    "What is the current deployment of the French fleet?",
+    "Which carrier groups does the UK have?",
+    "Compare the current militaries of the US, UK, Russia, and East Germany.",
+    "Is the US army at high readiness?",
   ];
   for (const question of refused) {
     assert.equal(guard.asksForPrivateMilitaryIntelligence(question), true, question);
+    assert.match(guard.protectPublicAnswer("", question), /public|private military|fog of war/i);
   }
 });
 
-test("player-reported naval mechanics questions get their answer, not the roster refusal", () => {
-  // The two most recent player reports (2026-09-05), both downvoted as
-  // "Refusal" and "Answer shut down due to pulling from live data".
-  const pairs = [
-    [
-      "I’m not asking for public data, what is the benefit of the different types of ships in the game for navies?",
-      "Carriers project air power at range and give the fleet its air cover. Screening ships have 3 anti-submarine points each and protect the capital ships. Submarines cost 40% less and hunt convoys, but they cannot contest air superiority.",
-    ],
-    [
-      "what is the benefit to aircraft carriers vs screening ships + submarines?",
-      "A carrier group provides the air cover a fleet needs to contest a sea zone. Screening ships are cheaper and each one adds 2 defence to the group. Submarines have the best cost per hit against convoys but no air cover of their own.",
-    ],
-    [
-      "how do army logistics work in game?",
-      "A Logistics Command supplies the divisions in its region. Supply falls when a front advances past 3 regions from the nearest port, and unsupplied divisions lose 10% readiness per turn.",
-    ],
-    [
-      "how does naval combat work?",
-      "Fleets engage when they share a sea zone. Carriers strike first, screening ships absorb losses, and submarines add a surprise round against convoys.",
-    ],
+test("ordinary and mechanics questions are never refused", () => {
+  const allowed = [
+    "How does war work?",
+    "Does declaring war have a stability cost?",
+    "Does the Senate have a filibuster?",
+    "Are corporations able to operate overseas?",
+    "How many units of oil does a refinery consume?",
+    "what do different naval vessels actually do in game? Go over each one",
+    "describe what different types of ships do in navies in game",
+    "what is the benefit to aircraft carriers vs screening ships + submarines?",
+    "how do army logistics work in game?",
   ];
-  for (const [question, answer] of pairs) {
-    assert.equal(guard.protectPublicAnswer(answer, question), answer, question);
+  for (const question of allowed) {
+    assert.equal(guard.asksForPrivateMilitaryIntelligence(question), false, question);
   }
 });
 
-test("a class-mechanics question does not make a named holder's forces publishable", () => {
-  const leaks = [
-    ["what is the benefit to aircraft carriers vs submarines?", "Northland maintains two carrier groups near the coast, so submarines are the cheaper counter."],
-    ["how does naval combat work?", "The US Navy currently has 12 carriers and the USSR has none."],
-    ["how do carriers work?", "The US has 12 carriers and the UK has 4."],
-    ["how does supply work?", "East has no Logistics Command assigned to the region."],
-    ["how do fleets work?", "Northland's fleet consists of three carrier groups."],
-  ];
-  for (const [question, answer] of leaks) {
-    assert.notEqual(guard.protectPublicAnswer(answer, question), answer, answer);
-  }
-});
-
-test("a rules table of unit types survives, a roster table does not", () => {
-  // The live answer to the 09-05 03:49 report ("what do the diff types of ship
-  // do in game for navies"), which was replaced by the refusal in production.
-  const question = "what do the diff types of ship do in game for navies";
-  const answer = [
-    "The game defines five naval hulls. Their hard difference in the rules is **berth weight** — how much port capacity they eat:",
-    "",
-    "| Hull | Berths |",
-    "|---|---|",
-    "| Carrier Strike Group | 3 |",
-    "| Amphibious Group | 2 |",
-    "| Guided-Missile Destroyer | 1 |",
-    "| Frigate Squadron | 1 |",
-    "| Attack Submarine | 1 |",
-    "",
-    "In play that means footprint is what matters: three subs cost what one carrier costs to base.",
-    "Hulls regain integrity between fights only, at 12 in port and 5 on station.",
-  ].join("\n");
-  assert.equal(guard.protectPublicAnswer(answer, question), answer);
-
-  // The same shape with a country in it is an order of battle. A markdown table
-  // is judged whole, so the header's inventory word still applies to the rows.
-  const roster = "| Country | Carriers |\n|---|---|\n| Northland | 3 |";
-  assert.notEqual(guard.protectPublicAnswer(roster, question), roster);
-});
-
-
-test("a naval capability table is rules, not a roster", () => {
-  // Live answer to the 09-05 04:25 report ("what do different naval vessels
-  // actually do in game? Go over each one"), refused in production because
-  // table cells beginning "No" and "Kills" read as proper nouns.
-  const question = "what do different naval vessels actually do in game? Go over each one";
-  const answer = "## Carrier vs the rest\n\n| Hull | Reach inland | Role in play |\n|---|---|---|\n| Carrier | Yes \u2014 sole member of `CAN_FLY`, `strategic` trait, `NAVAL_REACH 1.00` | Only hull that lets your sea control starve a coastal land front |\n| Escort | No \u2014 `NAVAL_REACH 0.40` | Screens the carrier, kills ships, wins water |\n| Destroyer | No | Screens the carrier, kills ships, wins water |\n| Submarine | No | Kills ships, wins water, does not strike inland |\n\nThe land-front rule is strict: sea-control interdiction applies only on a coastal front.";
-  assert.equal(guard.protectPublicAnswer(answer, question), answer);
-
-  // Keyed by country instead of by hull, the same shape is an order of battle.
-  const roster = "| Country | Carriers | Destroyers |\n|---|---|---|\n| Northland | 3 | 12 |";
-  assert.notEqual(guard.protectPublicAnswer(roster, question), roster);
-});
-
-
-test("mechanics prose and a stat table are not force intelligence", () => {
-  // Live answer to the same reported question on 1.17.3, refused because the
-  // table had a "Power" column (a stat, not a great power) and because
-  // "Repair is 12 per turn" read as a named holder acting.
-  const question = "what do different naval vessels actually do in game? Go over each one";
-  const answer = "| Vessel | Power | Crew | Speed | Self air defence (`ORGANIC_AA`) | Port footprint (`BERTH_COST`) |\n|---|---|---|---|---|---|\n| Carrier Strike Group | 99 | 7500 | 2 | 0.55 | 3 |\n\n**Losses and repair.** No hull is ever deleted when sunk. It stays with its general and theater at `0` integrity and rebuilds in place through personnel and materiel. Repair is `12` per turn in port or stood down, `5` on station out of contact, scaled by supply from `minSupply: 35` to full, and zero on any turn the formation fought.";
-  assert.equal(guard.protectPublicAnswer(answer, question), answer);
-
-  // A force-state claim about a name is still a leak, copula or not.
-  assert.notEqual(
-    guard.protectPublicAnswer("Northland is at 43% readiness across its divisions.", question),
-    "Northland is at 43% readiness across its divisions.",
-  );
-});
-
-test("a number beside a military word is not a roster without a holder", () => {
+test("the answer text is delivered as written, whatever it looks like", () => {
+  // Every one of these was refused in production on some version today, and
+  // every one is rules. Reading prose for military words is what did that.
   const question = "describe what different types of ships do in navies in game";
-  // Both refused in production on 1.17.4.
-  for (const rules of [
-    "Badly damaged (below `35` integrity) or exhausted (below `25` readiness) heads to `PORT`.",
+  const answers = [
     "Repair is `12` per turn in port or stood down, `5` on station out of contact.",
-    "A hull below 35 supply loses 10% readiness per turn until it is resupplied.",
-  ]) {
-    assert.equal(guard.protectPublicAnswer(rules, question), rules, rules);
+    "Badly damaged (below `35` integrity) or exhausted (below `25` readiness) heads to `PORT`.",
+    "| Vessel | Power | Crew |\n|---|---|---|\n| Carrier Strike Group | 99 | 7500 |",
+    "| Escort | No — `NAVAL_REACH 0.40` | Screens the carrier, kills ships, wins water |",
+    "Carriers project air power at range. Screening ships have 3 anti-submarine points each.",
+    "A division contains three brigades in the formation model.",
+  ];
+  for (const answer of answers) {
+    assert.equal(guard.protectPublicAnswer(answer, question), answer, answer.slice(0, 50));
   }
-  // Name the holder and it is intelligence again, whatever the grammar.
-  for (const leak of [
-    "Northland is at 43% readiness.",
-    "Northland is missing a Logistics Command.",
-    "The German army has 40 ships deployed near the front.",
-    "Soviet readiness sits at 61% across twelve divisions.",
-  ]) {
-    assert.notEqual(guard.protectPublicAnswer(leak, question), leak, leak);
-  }
+});
+
+test("a public answer that read a moderator-only tool is withheld", () => {
+  // Structural: the tool is not offered to a public session, so this asserts a
+  // fact about the run. It cannot fire on wording.
+  const withheld = guard.enforce({
+    answer: "The UK fields 20 units at 54 average readiness.",
+    question: "what does the UK field?",
+    privacyGuardEnabled: true,
+    privateEvidence: true,
+  });
+  assert.match(withheld.answer, /public|private military/i);
+  assert.deepEqual(withheld.issues, ["private_military_evidence_withheld"]);
+
+  // The same answer for a moderator is delivered.
+  const staff = guard.enforce({
+    answer: "The UK fields 20 units at 54 average readiness.",
+    question: "what does the UK field?",
+    privacyGuardEnabled: false,
+    privateEvidence: true,
+  });
+  assert.match(staff.answer, /20 units/);
+});
+
+test("the server asserts on the tool actually used, not on the answer", () => {
+  const source = require("node:fs").readFileSync(require.resolve("./server"), "utf8");
+  assert.match(source, /investigate\.MODERATOR_ONLY_TOOLS\.has/);
+  assert.match(source, /privateEvidence,/);
+  // The moderator-only set is derived, so a tool added to one list cannot be
+  // forgotten in the other.
+  const investigate = require("./investigate");
+  assert.equal(investigate.MODERATOR_ONLY_TOOLS.has("military_roster"), true);
+  assert.equal(investigate.MODERATOR_ONLY_TOOLS.has("wars"), false);
 });

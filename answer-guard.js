@@ -9,24 +9,7 @@ const MAP_BLOCK = /```ahd-map\s*\n([\s\S]*?)```/i;
 const MILITARY_INVENTORY = String.raw`(?:logistics? commands?|airlift wings?|commands?|units?|formations?|divisions?|brigades?|battalions?|regiments?|corps|squadrons?|wings?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|personnel|equipment|readiness|deployments?|force strength|army strength|military strength|tanks?|aircraft|ships?|submarines?|missiles?|nuclear weapons?|warheads?|carriers?|destroyers?|cruisers?|frigates?|battleships?|corvettes?|warships?|bombers?|fighters?)`;
 // Unlike conventional rosters, national warhead totals are deliberately published
 // on World > Conflicts. Do not turn that designed public record into a privacy refusal.
-const PUBLIC_NUCLEAR_RECORD = /\b(?:warheads?|nuclear (?:weapon )?stockpile|nuclear powers? strip)\b/i;
-const FORCE_POSSESSION = new RegExp(
-  String.raw`\b(?:has|have|had|lacks?|without|no|zero|fields?|fielded|deploys?|deployed|stations?|stationed|includes?|contains?)\b[^.!?\n]{0,90}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,60}\b(?:on (?:its|their|the) roster|in (?:its|their|the) forces?|available|deployed|stationed)\b`,
-  "i",
-);
-const FORCE_INVENTORY = /\b(?:live (?:military )?roster|current (?:military )?roster|force composition|order of battle|current deployments?|live readiness|live force strength)\b/i;
-const FORCE_QUANTITY = new RegExp(
-  String.raw`\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozens?|\d+(?:\.\d+)?%?)\b[^.!?\n]{0,35}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,35}\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozens?|\d+(?:\.\d+)?%?)\b`,
-  "i",
-);
-const FORCE_ABSENCE = new RegExp(
-  String.raw`\b(?:lacks?|missing|without|no|zero)\b[^.!?\n]{0,70}\b${MILITARY_INVENTORY}\b|\b${MILITARY_INVENTORY}\b[^.!?\n]{0,45}\b(?:absent|missing|unavailable)\b`,
-  "i",
-);
-const FORCE_OPERATION = new RegExp(
-  String.raw`\b(?:operates?|maintains?|fields?|deploys?|stations?|consists? of)\b[^.!?\n]{0,70}\b${MILITARY_INVENTORY}\b`,
-  "i",
-);
+const PUBLIC_NUCLEAR_RECORD = /\b(?:warheads?|nuclear (?:weapon )?stockpile|nuclear powers? strip)\b/i;const FORCE_INVENTORY = /\b(?:live (?:military )?roster|current (?:military )?roster|force composition|order of battle|current deployments?|live readiness|live force strength)\b/i;
 const POSSESSION_VERB = String.raw`(?:have|has|had|own|owns|field|fields|deploy|deploys|station|stations|operate|operates|maintain|maintains|lack|lacks|missing)`;
 const FORCE_STATE = String.raw`(?:readiness|force strength|army strength|military strength|force composition|order of battle)`;
 // Every alternative must name a military thing. An earlier version had a
@@ -52,219 +35,17 @@ const PRIVATE_MILITARY_QUESTION = new RegExp([
   // "Compare the current militaries of the US, UK, and East Germany."
   String.raw`\b(?:compare|rank)\b[^?\n]{0,100}\b(?:current|live)\b[^?\n]{0,70}\b(?:militar(?:y|ies)|arm(?:y|ies)|armed forces?)\b`,
 ].join("|"), "i");
-const GENERIC_MILITARY_MECHANIC = new RegExp(
-  String.raw`^(?:a|an|each|every)\s+${MILITARY_INVENTORY}\b[^.!?\n]{0,50}\b(?:adds?|provides?|consumes?|requires?|contains?|consists? of|can|may|moves?|supplies|supports?|costs?|takes?)\b`,
-  "i",
-);
-const GENERIC_MECHANICS_QUESTION = /\b(?:how|what|why|when|where|can)\b[^?\n]{0,100}\b(?:work|works|do|mechanics?|composed?|formed?|assigned?|supply|supplied|throughput|save|saved|persist|revert|reset|change)\b|\bwhich\b[^?\n]{0,70}\b(?:missions?|formations?|units?)\b[^?\n]{0,50}\b(?:build|count|contribute|add|provide|affect)\b/i;
-const GENERIC_MECHANIC_INSTRUCTION = /^(?:open|go|set|move|assign|choose|use|put|keep|select|station|send|fly|order)\b/i;
-const LIVE_INSTRUCTION_TARGET = /\b(?:[A-Z][A-Za-z'-]+|[A-Z]{2,3})['’]s\b|\b(?:current|currently|live|existing|available|deployed|stationed)\b/i;
-const CAPITALIZED_WORD = /^[A-Z][A-Za-z'-]*/;
-const CAPITALIZED_LOCATION = /\b(?:from|in|near|for|within|of)\s+([A-Z][A-Za-z'-]+)\b/g;
-const CAPITALIZED_ANYWHERE = /\b[A-Z][A-Za-z'-]*\b/g;
-const GENERIC_HYPOTHETICAL = /^(?:if|when|unless|without|with|to)\b|\b(?:must|needs? to|has to|can|may|should)\b/i;
-const GENERIC_NAME_WORDS = new Set([
-  "a", "an", "the", "each", "every", "you", "to", "in", "under", "when", "if", "for", "with", "without",
-  "logistics", "airlift", "command", "commands", "unit", "units", "formation", "formations",
-  "division", "divisions", "brigade", "brigades", "battalion", "battalions", "regiment", "regiments",
-  "corps", "squadron", "squadrons", "wing", "wings", "fleet", "fleets", "carrier", "task", "naval",
-  "air", "troop", "troops", "personnel", "equipment", "readiness", "deployment", "deployments", "force",
-  "forces", "army", "military", "tank", "tanks", "aircraft", "ship", "ships", "submarine", "submarines",
-  "missile", "missiles", "nuclear", "house", "divided",
-  // Classes of military thing. A sentence can open with any of these
-  // ("Carriers project air power at range...") and still be pure mechanics:
-  // they name a kind of asset, never a country or a player that holds one.
-  "destroyer", "cruiser", "frigate", "battleship", "corvette", "escort", "screen", "screening",
-  "convoy", "patrol", "blockade", "torpedo", "artillery", "infantry", "armor", "armour",
-  "armored", "armoured", "mechanized", "mechanised", "fighter", "bomber", "interceptor",
-  "helicopter", "warhead", "marine", "paratrooper", "garrison", "supply", "logistic",
-  "front", "port", "base", "radar", "sonar", "warship", "vessel", "boat", "mission",
-  "battle", "war", "conflict", "country", "nation", "state", "player", "turn", "game",
-  "navy", "navies", "fleet", "army", "armies", "air", "sea", "land", "ground", "capital",
-  // Ordinary sentence openers. The name scan reads a capitalized word as a
-  // possible country or player, so every word a mechanics answer can legitimately
-  // start a sentence with has to be listed as not-a-name.
-  "it", "they", "them", "this", "that", "these", "those", "there", "here", "both", "all",
-  "most", "some", "any", "none", "only", "after", "before", "once", "while", "unless",
-  "because", "and", "but", "or", "so", "also", "then", "next", "first", "second", "third",
-  "use", "using", "open", "go", "set", "move", "assign", "choose", "put", "keep", "select",
-  "send", "fly", "order", "build", "buy", "place", "hold", "run", "add", "note", "remember",
-  "supplied", "unsupplied", "supplies", "losses", "loss", "damage", "combat", "engage",
-  "attack", "attacker", "defender", "defence", "defense", "cost", "costs", "price", "range",
-  "group", "strike", "amphibious", "guided", "hull", "berth", "assault", "support",
-  "repair", "repairs", "theater", "theatre", "integrity", "materiel", "sunk", "general",
-  "generals", "condition", "posture", "veterancy", "technology", "upkeep", "sustainment",
-  "reserve", "home", "allied", "neutral", "heavy", "light", "medium", "type", "role",
-]);
 
-// GENERIC_NAME_WORDS is written in the singular where a plural reads oddly, so
-// look a word up both ways. Without this "Carriers" is an unknown proper noun
-// while "carrier" is ordinary vocabulary, which is how a naval mechanics answer
-// ends up classified as somebody's roster.
-function isGenericNameWord(word) {
-  const raw = String(word).toLowerCase().replace(/['\u2019]s$/, "");
-  if (GENERIC_NAME_WORDS.has(raw)) return true;
-  return GENERIC_NAME_WORDS.has(raw.replace(/ies$/, "y").replace(/(?:es|s)$/, ""));
-}
 const PRIVATE_MILITARY_REFUSAL = "This answer is public, so I can't publish live military rosters, unit or command composition, readiness, deployments, or force strength. I can explain the mechanics or summarize the public war record instead.";
 
-// "What is the benefit of aircraft carriers vs screening ships and submarines?"
-// asks how a class of asset works. It names no country, asks for nothing live,
-// and its answer is rules, not a roster. Both of the two most recent player
-// reports (2026-09-05, "Refusal" and "Answer shut down due to pulling from live
-// data") were this shape and got the fog-of-war message.
-// A country code is a holder even though it is written in capitals, unlike the
-// mission acronyms (CAP, PATROL, SOE) the name scan deliberately ignores.
-const HOLDER_CODE = /\b(?:US|USA|UK|GB|GBR|RU|USSR|SU|DD|DDR|GDR|BRD|FRG|FR|DE|GER|PRC|CN|JP|IT|ES|CA|AU|IN|PL|CS|HU|RO|BG|YU|KP|KR|VN|EG|IL|IR|TR|BR|MX|AR|ZA|NL|BE|SE|NO|DK|FI|CH|AT|PT|GR|IE|NATO)\b/;
-// "Currently", "right now", "as of turn 540": a claim about the running world
-// rather than about the rules. Mechanics answers do not need one.
-const LIVE_CLAIM = /\b(?:currently|right now|at present|as of|this turn|at the moment)\b|\b(?:current|live)\s+(?:roster|deployment|force|forces|strength|composition|readiness)\b/i;
-const LIVE_QUESTION_MARKER = /\b(?:current|currently|live|right now|today|at the moment|as of|this turn|now)\b/i;
-
-// Words a player capitalizes because they started a sentence or wrote "I", not
-// because they named anybody. Only the question scan uses these: the sentence
-// scan on the answer stays strict.
-const QUESTION_FILLER = new Set([
-  "i", "we", "my", "our", "you", "your", "it", "its", "they", "their", "he", "she",
-  "what", "whats", "how", "why", "when", "where", "which", "who", "whose",
-  "do", "does", "did", "is", "are", "was", "were", "can", "could", "should", "would", "will",
-  "if", "in", "on", "at", "for", "and", "or", "but", "so", "also", "the", "a", "an", "as",
-  "explain", "tell", "give", "show", "list", "compare", "help", "please", "hi", "hey", "ok",
-  "im", "ive", "id", "dont", "doesnt", "cant", "need", "want", "just", "any", "some",
-]);
-
-function isClassMechanicsQuestion(question) {
-  const text = String(question || "");
-  if (!text.trim()) return false;
-  if (LIVE_QUESTION_MARKER.test(text)) return false;
-  if (FORCE_INVENTORY.test(text) || PRIVATE_MILITARY_QUESTION.test(text)) return false;
-  // Any proper noun or country code in the question can be a holder, and an
-  // acronym is a country far more often than it is a game term here.
-  return ![...text.matchAll(CAPITALIZED_ANYWHERE)].some((match) => !isGenericNameWord(match[0])
-    && !QUESTION_FILLER.has(match[0].toLowerCase().replace(/['\u2019]/g, "")));
-}
-
-// Under a class question the only thing that can leak is force attributed to a
-// holder, so look for the attribution rather than for capital letters. An
-// unknown capitalized word is a holder when it acts ("Northland maintains",
-// "East has"), when it owns ("Northland's fleet"), or when it qualifies a force
-// ("The German army"). It is not a holder when it is part of a unit type name,
-// which is why a table row like "| Carrier Strike Group | 3 |" was being read
-// as somebody's order of battle (observed live 2026-09-05).
-// Possession and operation only. "is" and "are" were in here and they made every
-// mechanics sentence that opens on a capitalized common noun a roster line:
-// "Repair is 12 per turn in port" read as a holder acting (observed live
-// 2026-09-05). A copula says something exists, not that somebody owns it.
-const HOLDER_VERB = /^(?:has|have|had|operates?|maintains?|fields?|deploys?|stations?|lacks?|keeps?|holds?|runs?|consists?|includes?|contains?|currently|now|still)$/i;
-// A copula only carries force when its complement is a state claim: "Northland
-// is AT 43% readiness", "Northland is MISSING a Logistics Command". "Repair is
-// 12 per turn" and "Badly damaged (below 35 integrity)" are rules, and treating
-// any capitalized word before "is" as a holder refused both (live, 2026-09-05).
-const HOLDER_COPULA = /^(?:is|are|was|were)$/i;
-const STATE_COMPLEMENT = /^(?:missing|absent|at|down|below|short|without|running|out|lacking|under)$/i;
-// The holders in this game are enumerable. A statement that names a country or
-// a demonym alongside force is intelligence whatever its grammar.
-const COUNTRY_NAME = /\b(?:america|american|britain|british|england|english|france|french|germany|german|east germany|italy|italian|japan|japanese|china|chinese|russia|russian|soviet|ussr|poland|polish|ireland|irish|brazil|brazilian|spain|spanish|sweden|swedish|turkey|turkish|greece|greek|austria|austrian|finland|finnish|hungary|hungarian|romania|romanian|bulgaria|bulgarian|yugoslavia|yugoslav|czechoslovakia|czechoslovak|ukraine|ukrainian|belarus|nigeria|nigerian|korea|korean|vietnam|vietnamese|india|indian|canada|canadian|australia|australian|mexico|mexican|israel|israeli|egypt|egyptian|iran|iranian)\b/i;
-const HOLDER_FORCE_NOUN = /^(?:forces?|army|armies|navy|navies|militar(?:y|ies)|fleets?|troops?|divisions?|brigades?|regiments?|battalions?|squadrons?)$/i;
-const TABLE_ROW = /^\s*\|/;
-// A roster table says who. A rules table says what. The header is the tell.
-const HOLDER_COLUMN = /\b(?:countr(?:y|ies)|nations?|players?|sides?|factions?|belligerents?)\b/i;
-const PROPER_POSSESSIVE = /\b[A-Z][A-Za-z'\u2019-]*['\u2019]s\b/;
-
-// "Guided-Missile Destroyer" is two ordinary words joined, not a proper noun.
-function isKnownWord(word) {
-  return String(word).split("-").filter(Boolean).every((part) => isGenericNameWord(part));
-}
-
-function namesHolder(sentence) {
-  const text = String(sentence);
-  if (PROPER_POSSESSIVE.test(text)) return true;              // "Northland's fleet"
-  if (HOLDER_CODE.test(text)) return true;                    // "the US has 12 carriers"
-  if (COUNTRY_NAME.test(text)) return true;                   // "the German army has 40 ships"
-  // In a table every cell starts with a capital, so a capitalized word proves
-  // nothing there. What proves it is the header: a table keyed by country,
-  // nation, player or side is a roster, and one keyed by hull or mission is
-  // rules. Judging cells instead refused a naval capability table whose cells
-  // began "No" and "Kills" (observed live 2026-09-05).
-  if (TABLE_ROW.test(text)) return HOLDER_COLUMN.test(text.split(/\|\s*\|/)[0] || text.slice(0, 120));
-  const words = text.split(/[\s/]+/).map((w) => w.replace(/^[^A-Za-z]+|[^A-Za-z'\u2019-]+$/g, ""));
-  for (let i = 0; i < words.length; i += 1) {
-    const word = words[i];
-    if (!word || !/^[A-Z]/.test(word)) continue;
-    if (isKnownWord(word)) continue;
-    if (/^[A-Z0-9_]{2,}$/.test(word)) continue;               // CAP, PATROL, SOE: mission acronyms
-    const next = words[i + 1] || "";
-    // A name that acts or qualifies a force is a holder. A name that just sits
-    // in a sentence ("Mending: hulls regain integrity") is vocabulary.
-    if (HOLDER_VERB.test(next) || HOLDER_FORCE_NOUN.test(next)) return true;
-    if (HOLDER_COPULA.test(next) && STATE_COMPLEMENT.test(words[i + 2] || "")) return true;
-  }
-  return false;
-}
-
-function isGenericMilitaryMechanicSentence(sentence, question) {
-  const text = sentence.trim();
-  if (PUBLIC_NUCLEAR_RECORD.test(text) && PUBLIC_NUCLEAR_RECORD.test(question)) return true;
-  if (GENERIC_MILITARY_MECHANIC.test(text)) return true;
-  const normalizedQuestion = queryAliases.normalizePlayerWording(question);
-  const classQuestion = isClassMechanicsQuestion(question);
-  if (!classQuestion && !GENERIC_MECHANICS_QUESTION.test(normalizedQuestion)) return false;
-  if (GENERIC_MECHANIC_INSTRUCTION.test(text) && !LIVE_INSTRUCTION_TARGET.test(text)) return true;
-  const hasUnknownName = [...text.matchAll(CAPITALIZED_ANYWHERE)]
-    .some((match) => !/^[A-Z0-9_]{2,}$/.test(match[0]) && !isGenericNameWord(match[0]));
-  if (GENERIC_HYPOTHETICAL.test(text) && !hasUnknownName) return true;
-  // Nothing in a class question points at a holder, so the answer can only leak
-  // by naming one itself or by dating itself to the live world.
-  if (/\b(?:your|their|our|its|this|that)\s+(?:country|nation|force|forces|army|military)\b/i.test(text)) return false;
-  return !namesHolder(text) && !LIVE_CLAIM.test(text)
-    && ![...text.matchAll(CAPITALIZED_LOCATION)].some((match) => !isGenericNameWord(match[1]));
-}
-
-// Inventory words that also live in civilian vocabulary. "The market includes
-// 500,000 units" tripped FORCE_POSSESSION and replaced a stock-price answer
-// with the military refusal (observed live 2026-08-31). These only count as
-// military when the sentence or the question carries military context; the
-// unambiguous inventory (divisions, fleets, warheads, carrier groups...)
-// still triggers on its own.
+// Inventory words that also live in civilian vocabulary. "How many units of oil
+// does a refinery consume?" is not a roster question. These only count as
+// military when the question carries military context; the unambiguous
+// inventory (divisions, fleets, warheads, carrier groups...) counts on its own.
 const AMBIGUOUS_INVENTORY = /\b(?:units?|equipment|personnel|commands?|wings?|ships?|aircraft|corps)\b/i;
 const UNAMBIGUOUS_INVENTORY = /\b(?:logistics? commands?|airlift wings?|formations?|divisions?|brigades?|battalions?|regiments?|squadrons?|fleets?|carrier groups?|task forces?|naval assets?|air assets?|troops?|readiness|deployments?|force strength|army strength|military strength|tanks?|submarines?|missiles?|nuclear weapons?|warheads?|destroyers?|cruisers?|frigates?|battleships?|corvettes?|warships?|bombers?|carriers?|fighters?)\b/i;
 const MILITARY_CONTEXT = /\b(?:militar\w*|arm(?:y|ies)|nav(?:y|ies)|naval|air force|war|wars|combat|battle|front|deploy\w*|garrison\w*|invasion|offensive|defen[cs]e|troops?|soldiers?|roster|readiness|conflict|armou?red|infantry|mechani[sz]ed|artillery|fighters?|bombers?|warships?|station\w*)\b/i;
 
-function sentenceHasMilitaryMeaning(sentence, question) {
-  if (UNAMBIGUOUS_INVENTORY.test(sentence)) return true;
-  if (!AMBIGUOUS_INVENTORY.test(sentence)) return true;
-  return MILITARY_CONTEXT.test(sentence) || MILITARY_CONTEXT.test(String(question || ""));
-}
-
-// A markdown table is one statement split over lines: the header holds the
-// inventory word and the rows hold the numbers, so splitting on newlines hides
-// "| Carriers |" over "| Northland | 3 |" from every quantity pattern.
-function statements(answer) {
-  const out = [];
-  let table = [];
-  for (const line of String(answer || "").split(/\n/)) {
-    if (TABLE_ROW.test(line)) { table.push(line.trim()); continue; }
-    if (table.length) { out.push(table.join(" ")); table = []; }
-    for (const part of line.split(/(?<=[.!?])\s+/)) if (part.trim()) out.push(part);
-  }
-  if (table.length) out.push(table.join(" "));
-  return out;
-}
-
-function containsPrivateMilitaryIntelligence(answer, question = "") {
-  return statements(answer).some((sentence) => {
-    if (isGenericMilitaryMechanicSentence(sentence, question)) return false;
-    const tripped = FORCE_INVENTORY.test(sentence) || FORCE_POSSESSION.test(sentence)
-      || FORCE_QUANTITY.test(sentence) || FORCE_ABSENCE.test(sentence) || FORCE_OPERATION.test(sentence);
-    if (!tripped) return false;
-    return sentenceHasMilitaryMeaning(sentence, question);
-  });
-}
-
-// The same civilian-vocabulary problem the answer side already solves: a
-// question about "units of oil" or "shipping equipment" trips the inventory
-// list without being about the military at all. Ambiguous words only count as
-// military when the question carries military context.
 function questionHasMilitaryMeaning(question) {
   const text = String(question || "");
   if (UNAMBIGUOUS_INVENTORY.test(text)) return true;
@@ -279,10 +60,27 @@ function asksForPrivateMilitaryIntelligence(question) {
   return questionHasMilitaryMeaning(text);
 }
 
+/**
+ * Fog of war is enforced where it can be enforced: at the request, and at the
+ * tool gate.
+ *
+ * There is no prose scan here any more. Reading the answer for military-looking
+ * words refused six mechanics answers in one day — a table cell that began
+ * "No", a "Power" column, "Repair is 12 per turn", "Badly damaged (below 35
+ * integrity)" — and each fix needed a longer word list than the last. The list
+ * has to contain every word English can start a sentence with, so it loses.
+ *
+ * What actually protects a roster is that a public asker is never offered the
+ * tool that returns one: military_roster is moderator-only in investigate.js.
+ * A public answer therefore cannot contain live force data, whatever its prose
+ * looks like. The question guard below still refuses a request for a roster
+ * before generation, and enforce() refuses any answer that did read a
+ * moderator-only tool, which is a fact about the run rather than a guess about
+ * the words.
+ */
 function protectPublicAnswer(answer, question = "") {
   const text = String(answer || "").trim();
-  if (!asksForPrivateMilitaryIntelligence(question) && !containsPrivateMilitaryIntelligence(text, question)) return text;
-  return PRIVATE_MILITARY_REFUSAL;
+  return asksForPrivateMilitaryIntelligence(question) ? PRIVATE_MILITARY_REFUSAL : text;
 }
 
 function stripVisuals(answer) {
@@ -402,12 +200,18 @@ function matchingDataset(datasets, metric) {
 // Prevent a model from presenting a plausible-looking but unsupported chart.
 // Canonical maps and chart data are produced by the live adapters, never copied
 // from a model response.
-function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyQuestion = question, privacyGuardEnabled = true, trustedStaticAnswer = false }) {
+function enforce({ answer, datasets = [], plan, visualizationsEnabled = false, question = "", privacyQuestion = question, privacyGuardEnabled = true, trustedStaticAnswer = false, privateEvidence = false }) {
   let text = String(answer || "").trim();
   const issues = [];
   // Canonical contracts are static source-controlled prose. They cannot contain
   // retrieved live roster data, so reclassifying them as model output only creates
   // false refusals when several safe mechanics are answered together.
+  // A public answer built on a moderator-only tool would be a real leak. It
+  // should be impossible — the tool is not offered to a public session — so this
+  // is a structural assertion rather than a filter, and it cannot fire on prose.
+  if (privacyGuardEnabled && privateEvidence) {
+    return { answer: PRIVATE_MILITARY_REFUSAL, issues: ["private_military_evidence_withheld"], required: false };
+  }
   if (privacyGuardEnabled && !trustedStaticAnswer) {
     const protectedAnswer = protectPublicAnswer(text, privacyQuestion);
     if (protectedAnswer !== text) {
@@ -478,6 +282,6 @@ function inspect(answer, plan) {
 module.exports = {
   enforce, inspect, stripVisuals, looksLikeToolLeak, detectRefusal,
   detectBundleNarration, looksTruncated, datasetMatchesQuestion,
-  containsPrivateMilitaryIntelligence, asksForPrivateMilitaryIntelligence,
+  asksForPrivateMilitaryIntelligence,
   protectPublicAnswer,
 };
