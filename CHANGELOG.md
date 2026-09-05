@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.17.1 - 2026-09-05
+
+### Fixed
+- A moderator asking for a live roster now gets one. The private tools were offered to staff sessions but carried no line in the research playbook, so the scout never reached for them: the answer came back "no roster is visible" while holding the tool that returns it. Every tool a staff session is offered now says when to use it, and a test keeps that true for tools added later.
+
 ## 1.17.0 - 2026-09-05
 
 ### Added
