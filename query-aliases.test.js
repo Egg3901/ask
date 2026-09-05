@@ -258,3 +258,31 @@ test("canonical mechanic answers satisfy their own contracts", () => {
     assert.equal(aliases.answerIssue(question, answer), "", question);
   }
 });
+
+test("the ship-type catalogue is answered from the contract, not from whatever retrieval found", () => {
+  // Four player reports on 2026-09-05 asked what the ship types do. Retrieval
+  // answered from a neighbouring file each time: the repair rules, the naval
+  // approval model, and finally "I don't know the current ship roster".
+  const asked = [
+    "what do different naval vessels actually do in game? Go over each one",
+    "describe what different types of ships do in navies in game",
+    "what does every type of naval vessel do in game and how do they differ?",
+    "what is the benefit to aircraft carriers vs screening ships + submarines?",
+    "what do the diff types of ship do in game for navies",
+  ];
+  for (const question of asked) {
+    const answer = aliases.canonicalAnswer(question);
+    assert.match(answer, /five naval hull types/, question);
+    // Every hull is named, with the numbers from src/lib/navair/config.ts.
+    for (const hull of ["Carrier Strike Group", "Guided-Missile Destroyer", "Attack Submarine", "Frigate Squadron", "Amphibious Group"]) {
+      assert.ok(answer.includes(hull), `${hull} missing for: ${question}`);
+    }
+    assert.match(answer, /power 99/);
+    assert.match(answer, /3 berths/);
+  }
+
+  // Neighbouring naval topics keep their own contracts.
+  assert.doesNotMatch(aliases.canonicalAnswer("how do i blockade with navies"), /five naval hull types/);
+  assert.doesNotMatch(aliases.canonicalAnswer("how do carriers build air superiority?"), /five naval hull types/);
+  assert.doesNotMatch(aliases.canonicalAnswer("how do army logistics work in game?"), /five naval hull types/);
+});
