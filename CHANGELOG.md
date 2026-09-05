@@ -2,6 +2,11 @@
 
 All notable changes to Ask. Newest first.
 
+## 1.18.1 - 2026-09-05
+
+### Added
+- "What do the different ship types do?" is answered from the ship catalogue itself: all five hulls with their combat value, crew, speed, port cost and self air defence, what the carrier is for, why a submarine blockade is cheap, and what each standing order does. It was being answered from whichever neighbouring file the search happened to land in, which is how the same question returned the repair rules one run and "I don't know the current ship roster" the next.
+
 ## 1.18.0 - 2026-09-05
 
 ### Changed
